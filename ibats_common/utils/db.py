@@ -8,6 +8,7 @@
 @desc    : 数据库相关工具
 """
 import pandas as pd
+import numpy as np
 from sqlalchemy import MetaData, Table
 from sqlalchemy.orm.session import Session
 from sqlalchemy.orm import sessionmaker
@@ -213,7 +214,6 @@ def execute_sql(engine, sql_str, commit=False):
 
 if __name__ == "__main__":
     from sqlalchemy import create_engine
-    import numpy as np
     engine = create_engine("mysql://mg:Dcba1234@localhost/md_integration?charset=utf8",
                            echo=False, encoding="utf-8")
     table_name = 'test_only'
