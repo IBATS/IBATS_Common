@@ -190,8 +190,13 @@ def date_2_str(dt, format=STR_FORMAT_DATE):
 def datetime_2_str(dt, format=STR_FORMAT_DATETIME):
     if dt is not None and type(dt) in (date, datetime, Timestamp):
         dt_str = dt.strftime(format)
+        # print(type(dt), '->', dt_str)
+    elif isinstance(dt, pd.core.indexes.datetimes.DatetimeIndex):
+        dt_str = [x.strftime(STR_FORMAT_DATETIME) for x in dt]
+        # print(type(dt), '-->', dt_str)
     else:
         dt_str = dt
+        # print(type(dt), '没有转换', dt)
     return dt_str
 
 
