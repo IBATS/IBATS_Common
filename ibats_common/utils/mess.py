@@ -135,7 +135,9 @@ def log_param_when_exception(func):
     return handler
 
 
-def try_n_times(times=3, sleep_time=3, logger: logging.Logger=None, exception=Exception, exception_sleep_time=0):
+def try_n_times(times=3, sleep_time=3, logger: logging.Logger=None,
+                exception=Exception, exception_sleep_time=0,
+                exception_exclusion_set=None):
     """
     尝试最多 times 次，异常捕获记录后继续尝试
     :param times:
@@ -158,9 +160,13 @@ def try_n_times(times=3, sleep_time=3, logger: logging.Logger=None, exception=Ex
 
                 try:
                     ret_data = func(*arg, **kwargs)
-                except exception:
+                except exception as exp:
                     if logger is not None:
                         logger.exception("第 %d 次调用 %s(%s, %s) 出错", n, func.__name__, arg, kwargs)
+                    if exception_exclusion_set is not None:
+                        for exp_ex in exception_exclusion_set:
+                            if isinstance(exp, exp_ex):
+                                raise exp from exp
                     if exception_sleep_time is not None and exception_sleep_time > 0:
                         time.sleep(exception_sleep_time)
                     continue
@@ -1293,3 +1299,17 @@ if __name__ == "__main__":
     #     raise Exception('some error')
     #
     # foo(1, 2, 3, 4, e=5, f=6)
+
+    # 测试 try_n_times
+    @try_n_times(exception_exclusion_set={ValueError}, logger=logger)
+    def foo(n):
+        if n == 2:
+            raise KeyError("key could't be %d" % n)
+        elif n == 3:
+            raise ValueError("value could't be %d" % n)
+        else:
+            return n
+
+    for n in range(5):
+        logger.debug('invoke n=%d', n)
+        foo(n)
