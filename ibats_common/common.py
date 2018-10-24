@@ -135,7 +135,7 @@ class Action(IntEnum):
 
 
 @unique
-class PositionDate(IntEnum):
+class PositionDateType(IntEnum):
     """今日持仓历史持仓标示"""
     Today = 1  # 今日持仓
     History = 2  # 历史持仓

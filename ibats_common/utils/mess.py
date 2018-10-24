@@ -22,6 +22,7 @@ import logging
 import warnings
 from functools import reduce
 import xlrd
+import math
 
 logger = logging.getLogger(__name__)
 STR_FORMAT_DATE = '%Y-%m-%d'
@@ -29,6 +30,22 @@ STR_FORMAT_DATETIME = '%Y-%m-%d %H:%M:%S'
 STR_FORMAT_DATETIME2 = '%Y-%m-%d %H:%M:%S.%f'
 PATTERN_DATE_FORMAT_RESTRICT = re.compile(r"\d{4}(\D)*\d{2}(\D)*\d{2}")
 PATTERN_DATE_FORMAT = re.compile(r"\d{4}(\D)*\d{1,2}(\D)*\d{1,2}")
+
+
+def floor(x, precision=0):
+    """带小数位精度控制的 floor"""
+    if precision == 0:
+        return math.floor(x)
+    else:
+        return math.floor(x * (10 ** precision)) / (10 ** precision)
+
+
+def ceil(x, precision=0):
+    """带小数位精度控制的 ceil"""
+    if precision == 0:
+        return math.ceil(x)
+    else:
+        return math.ceil(x * (10 ** precision)) / (10 ** precision)
 
 
 def is_any(iterable, func):

@@ -13,13 +13,13 @@ with open("README.md", "r", encoding='utf-8') as rm:
     long_description = rm.read()
 
 setup(name='IBATSCommon',
-      version='0.1.7',
+      version='0.1.11',
       description='IBATS（Integration Backtest Analysis Trade System）的公共模块，所有Feeder, Trader均集成这个模块，并使用其提供的一些公共工具',
       long_description=long_description,
       long_description_content_type='text/markdown',
       author='MG',
       author_email='mmmaaaggg@163.com',
-      url='https://github.com/IBATS/IBATSCommon',
+      url='https://github.com/IBATS/IBATS_Common',
       packages=find_packages(),
       python_requires='>=3.6',
       classifiers=(
