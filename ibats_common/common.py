@@ -60,44 +60,8 @@ class RunMode(IntEnum):
 @unique
 class Direction(IntEnum):
     """买卖方向"""
-    Short = 0  # 空头
+    Short = -1  # 空头
     Long = 1  # 多头
-
-    @staticmethod
-    def create_by_direction(direction_str):
-        # if isinstance(direction_str, str):
-        #     if direction_str == D_Buy_str:
-        #         return Direction.Long
-        #     elif direction_str == D_Sell_str:
-        #         return Direction.Short
-        #     else:
-        #         raise ValueError('Direction不支持 %s' % direction_str)
-        # else:
-        #     if direction_str == D_Buy:
-        #         return Direction.Long
-        #     elif direction_str == D_Sell:
-        #         return Direction.Short
-        #     else:
-        #         raise ValueError('Direction不支持 %s' % direction_str)
-        pass
-
-    @staticmethod
-    def create_by_posi_direction(posi_direction):
-        # if isinstance(posi_direction, str):
-        #     if posi_direction == PD_Long_str:
-        #         return Direction.Long
-        #     elif posi_direction == PD_Short_str:
-        #         return Direction.Short
-        #     else:
-        #         raise ValueError('Direction不支持 %s' % posi_direction)
-        # else:
-        #     if posi_direction == PD_Long:
-        #         return Direction.Long
-        #     elif posi_direction == PD_Short:
-        #         return Direction.Short
-        #     else:
-        #         raise ValueError('Direction不支持 %s' % posi_direction)
-        pass
 
 
 @unique
@@ -139,29 +103,6 @@ class PositionDateType(IntEnum):
     """今日持仓历史持仓标示"""
     Today = 1  # 今日持仓
     History = 2  # 历史持仓
-
-    @staticmethod
-    def create_by_position_date(position_date):
-        """
-        将 Api 中 position_date 变为 PositionDate 类型
-        :param position_date:
-        :return:
-        """
-        # if isinstance(position_date, str):
-        #     if position_date == PSD_Today_str:
-        #         return PositionDate.Today
-        #     elif position_date == PSD_History_str:
-        #         return PositionDate.History
-        #     else:
-        #         raise ValueError('PositionDate 不支持 %s' % position_date)
-        # else:
-        #     if position_date == PSD_Today:
-        #         return PositionDate.Today
-        #     elif position_date == PSD_History:
-        #         return PositionDate.History
-        #     else:
-        #         raise ValueError('PositionDate 不支持 %s' % position_date)
-        pass
 
 
 @unique
