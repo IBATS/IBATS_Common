@@ -59,7 +59,7 @@ class ConfigBase:
 config = ConfigBase()
 
 
-def update_config(config_update: ConfigBase):
+def update_config(config_new: ConfigBase):
     global config
-    config = config_update
-    logger.info('更新默认配置信息 %s < %s', ConfigBase, config_update)
+    config = config_new
+    logger.info('更新默认配置信息 %s < %s', ConfigBase, config_new.__class__)
