@@ -13,6 +13,7 @@ import time
 import pandas as pd
 import logging
 from abc import ABC, abstractmethod
+from functools import partial
 
 logger = logging.getLogger(__package__)
 
@@ -89,11 +90,18 @@ md_agent_class_dic = {
 
 def register_md_agent(agent: MdAgentBase, run_mode: RunMode, exchange_name: ExchangeName = ExchangeName.Default,
                       is_default=True) -> MdAgentBase:
+    """注册 MdAgent"""
     md_agent_class_dic[run_mode][exchange_name] = agent
     if is_default:
         md_agent_class_dic[run_mode][ExchangeName.Default] = agent
     logger.info('注册 %s md agent[%s] = %s', run_mode, exchange_name, agent.__class__.__name__)
     return agent
+
+
+def md_agent(run_mode: RunMode, exchange_name: ExchangeName = ExchangeName.Default, is_default=True) -> MdAgentBase:
+    """用来注册 MdAgent 的装饰器"""
+    func = partial(register_md_agent, run_mode=run_mode, exchange_name=exchange_name, is_default=is_default)
+    return func
 
 
 if __name__ == "__main__":

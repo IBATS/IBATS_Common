@@ -10,6 +10,7 @@
 import logging
 from abc import abstractmethod, ABC
 from datetime import datetime
+from functools import partial
 from ibats_common.common import RunMode, ExchangeName
 
 logger = logging.getLogger(__package__)
@@ -95,8 +96,16 @@ trader_agent_class_dic = {
 
 def register_trader_agent(agent: TraderAgentBase, run_mode: RunMode, exchange_name: ExchangeName=ExchangeName.Default,
                           is_default=True) -> TraderAgentBase:
+    """注册 TraderAgent"""
     trader_agent_class_dic[run_mode][exchange_name] = agent
     if is_default:
         trader_agent_class_dic[run_mode][ExchangeName.Default] = agent
     logger.info('注册 %s trade agent[%s] = %s', run_mode, exchange_name, agent.__class__.__name__)
     return agent
+
+
+def trader_agent(run_mode: RunMode, exchange_name: ExchangeName = ExchangeName.Default, is_default=True
+                 ) -> TraderAgentBase:
+    """用来注册 TraderAgent 的装饰器"""
+    func = partial(register_trader_agent, run_mode=run_mode, exchange_name=exchange_name, is_default=is_default)
+    return func
