@@ -7,7 +7,7 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
-from enum import IntEnum, unique
+from enum import IntEnum, unique, Enum
 
 
 @unique
@@ -55,6 +55,16 @@ class RunMode(IntEnum):
     """
     Realtime = 0
     Backtest = 1
+
+
+@unique
+class ExchangeName(IntEnum):
+    """
+    交易所名称
+    """
+    Default = 0
+    HuoBi = 1
+    BitMex = 2
 
 
 @unique
