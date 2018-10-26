@@ -21,7 +21,7 @@ class TraderAgentBase(ABC):
     交易代理（抽象类），回测交易代理，实盘交易代理的父类
     """
 
-    def __init__(self, stg_run_id, run_mode_params: dict):
+    def __init__(self, stg_run_id, run_mode_params: dict, **kwargs):
         """
         stg_run_id 作为每一次独立的执行策略过程的唯一标识
         :param stg_run_id:
@@ -94,7 +94,15 @@ trader_agent_class_dic = {
 }
 
 
-def register_trader_agent(agent: TraderAgentBase, run_mode: RunMode, exchange_name: ExchangeName=ExchangeName.Default,
+def trader_agent_factory(run_mode: RunMode, stg_run_id, run_mode_params,
+                         exchange_name: ExchangeName = ExchangeName.Default, **kwargs) -> TraderAgentBase:
+    """工厂类用来生成相应 TraderAgentBase 实例"""
+    trader_agent_class = trader_agent_class_dic[run_mode][exchange_name]
+    trader_agent_obj = trader_agent_class(stg_run_id, run_mode_params, **kwargs)
+    return trader_agent_obj
+
+
+def register_trader_agent(agent: TraderAgentBase, run_mode: RunMode, exchange_name: ExchangeName = ExchangeName.Default,
                           is_default=True) -> TraderAgentBase:
     """注册 TraderAgent"""
     trader_agent_class_dic[run_mode][exchange_name] = agent

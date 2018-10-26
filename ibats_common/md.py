@@ -20,20 +20,8 @@ logger = logging.getLogger(__package__)
 
 class MdAgentBase(Thread, ABC):
 
-    @staticmethod
-    def factory(run_mode: RunMode, instrument_id_list, md_period: PeriodType, name=None, **kwargs):
-        # if run_mode == RunMode.Backtest:
-        #     md_agent = MdAgentBacktest(instrument_id_list, md_period, name, **kwargs)
-        # elif run_mode == RunMode.Realtime:
-        #     md_agent = MdAgentRealtime(instrument_id_list, md_period, name, **kwargs)
-        # else:
-        #     raise ValueError("run_mode:%s exception", run_mode)
-        md_agent_class = md_agent_class_dic[run_mode]
-        md_agent = md_agent_class(instrument_id_list, md_period, name, **kwargs)
-        return md_agent
-
     def __init__(self, instrument_id_set, md_period: PeriodType, name=None,
-                 init_load_md_count=None, init_md_date_from=None, init_md_date_to=None, **kwargs):
+                 init_load_md_count=None, init_md_date_from=None, init_md_date_to=None):
         if name is None:
             name = md_period
         super().__init__(name=name, daemon=True)
@@ -88,6 +76,14 @@ md_agent_class_dic = {
 }
 
 
+def md_agent_factory(run_mode: RunMode, instrument_id_list, md_period: PeriodType, name=None,
+                     exchange_name: ExchangeName = ExchangeName.Default, **kwargs) -> MdAgentBase:
+    """工厂类用来生成相应 MdAgentBase 实例"""
+    md_agent_class = md_agent_class_dic[run_mode][exchange_name]
+    md_agent_obj = md_agent_class(instrument_id_list, md_period, name, **kwargs)
+    return md_agent_obj
+
+
 def register_md_agent(agent: MdAgentBase, run_mode: RunMode, exchange_name: ExchangeName = ExchangeName.Default,
                       is_default=True) -> MdAgentBase:
     """注册 MdAgent"""
@@ -104,22 +100,26 @@ def md_agent(run_mode: RunMode, exchange_name: ExchangeName = ExchangeName.Defau
     return func
 
 
+def _test_only():
+    instrument_id_list = {'jm1711', 'rb1712', 'pb1801', 'IF1710'}
+    md_agent_obj = md_agent_factory(RunMode.Realtime, instrument_id_list, md_period=PeriodType.Min1,
+                                    init_load_md_count=100)
+    md_df = md_agent_obj.load_history()
+    print(md_df.shape)
+    md_agent_obj.connect()
+    md_agent_obj.subscribe(instrument_id_list)
+    md_agent_obj.start()
+    for n in range(120):
+        time.sleep(1)
+
+    md_agent_obj.keep_running = False
+    md_agent_obj.join()
+    md_agent_obj.release()
+    print("all finished")
+
+
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.DEBUG,
         format='%(asctime)s %(levelname)s %(name)s %(filename)s.%(funcName)s:%(lineno)d|%(message)s')
-
-    instrument_id_list = set(['jm1711', 'rb1712', 'pb1801', 'IF1710'])
-    md_agent = MdAgentBase.factory(RunMode.Realtime, instrument_id_list, md_period=PeriodType.Min1,
-                                   init_load_md_count=100)
-    md_df = md_agent.load_history()
-    print(md_df.shape)
-    md_agent.connect()
-    md_agent.subscribe(instrument_id_list)
-    md_agent.start()
-    for n in range(120):
-        time.sleep(1)
-    md_agent.keep_running = False
-    md_agent.join()
-    md_agent.release()
-    print("all finished")
+    _test_only()

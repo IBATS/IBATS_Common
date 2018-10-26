@@ -48,6 +48,7 @@ class PeriodType(IntEnum):
             raise ValueError('不支持 %s 周期' % period_type)
         return min_count
 
+
 @unique
 class RunMode(IntEnum):
     """
