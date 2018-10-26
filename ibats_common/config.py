@@ -11,6 +11,11 @@ logger = logging.getLogger()
 
 class ConfigBase:
 
+    DB_SCHEMA_IBATS = 'ibats'
+    DB_URL_DIC = {
+        DB_SCHEMA_IBATS: 'mysql://mg:****@localhost/' + DB_SCHEMA_IBATS,
+    }
+
     # evn configuration
     LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s %(filename)s.%(funcName)s:%(lineno)d|%(message)s'
 
