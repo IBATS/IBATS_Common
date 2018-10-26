@@ -431,7 +431,7 @@ def get_folder_path(target_folder_name=None, create_if_not_found=True):
         target_folder_name = 'cache'
     if target_folder_name not in CACHE_FOLDER_PATH_DIC:
         cache_folder_path_tmp = None
-        print(u'查找数据目录path:', end="")
+        logger.debug('查找数据目录path:')
         parent_folder_path = os.path.abspath(os.curdir)
         par_path = parent_folder_path
         while not os.path.ismount(par_path):
@@ -441,7 +441,7 @@ def get_folder_path(target_folder_name=None, create_if_not_found=True):
                 # print d # .strip()
                 if dir_name == target_folder_name:
                     cache_folder_path_tmp = os.path.join(par_path, dir_name)
-                    print('<', cache_folder_path_tmp, '>')
+                    logger.debug('<%s>', cache_folder_path_tmp)
                     break
             if cache_folder_path_tmp is not None:
                 break
@@ -449,7 +449,7 @@ def get_folder_path(target_folder_name=None, create_if_not_found=True):
         if cache_folder_path_tmp is None:
             if create_if_not_found:
                 cache_folder_path_tmp = os.path.abspath(os.path.join(parent_folder_path, target_folder_name))
-                print('<', cache_folder_path_tmp, '> 创建缓存目录')
+                logger.debug('<%s> 创建缓存目录', cache_folder_path_tmp)
                 os.makedirs(cache_folder_path_tmp)
                 CACHE_FOLDER_PATH_DIC[target_folder_name] = cache_folder_path_tmp
         else:
