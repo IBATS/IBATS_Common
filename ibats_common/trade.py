@@ -104,8 +104,7 @@ def register_trader_agent(agent: TraderAgentBase, run_mode: RunMode, exchange_na
     return agent
 
 
-def trader_agent(run_mode: RunMode, exchange_name: ExchangeName = ExchangeName.Default, is_default=True
-                 ) -> TraderAgentBase:
+def trader_agent(run_mode: RunMode, exchange_name: ExchangeName = ExchangeName.Default, is_default=True):
     """用来注册 TraderAgent 的装饰器"""
     func = partial(register_trader_agent, run_mode=run_mode, exchange_name=exchange_name, is_default=is_default)
     return func

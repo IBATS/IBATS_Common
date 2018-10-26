@@ -98,7 +98,7 @@ def register_md_agent(agent: MdAgentBase, run_mode: RunMode, exchange_name: Exch
     return agent
 
 
-def md_agent(run_mode: RunMode, exchange_name: ExchangeName = ExchangeName.Default, is_default=True) -> MdAgentBase:
+def md_agent(run_mode: RunMode, exchange_name: ExchangeName = ExchangeName.Default, is_default=True):
     """用来注册 MdAgent 的装饰器"""
     func = partial(register_md_agent, run_mode=run_mode, exchange_name=exchange_name, is_default=is_default)
     return func
