@@ -8,7 +8,6 @@
 @desc    : 
 """
 from redis import StrictRedis, ConnectionPool
-from redis.client import PubSub
 from ibats_common.common import PeriodType
 
 _redis_client_dic = {}
@@ -37,6 +36,8 @@ def get_channel(market=None, period: PeriodType=PeriodType.Min1, symbol=''):
 def get_redis(host, port, db=0) -> StrictRedis:
     """
     get StrictRedis object
+    :param host:
+    :param port:
     :param db:
     :return:
     """
