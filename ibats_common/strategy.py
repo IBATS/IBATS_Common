@@ -8,13 +8,12 @@ import warnings
 import json
 import numpy as np
 import pandas as pd
-from ibats_common.config import config
 import logging
 from queue import Empty
 import time
 from datetime import date, datetime, timedelta
 from abc import ABC
-from ibats_common.backend import engine_ibats
+from ibats_common.backend import engines
 from ibats_common.utils.db import with_db_session
 from ibats_common.md import MdAgentBase
 from ibats_common.common import PeriodType, RunMode, ContextKey, Direction, BacktestTradeMode
@@ -22,6 +21,7 @@ from ibats_common.utils.mess import try_2_date
 from ibats_common.backend.orm import StgRunInfo
 from ibats_common.trade import trader_agent_class_dic
 
+engine_ibats = engines.engine_ibats
 logger_stg_base = logging.getLogger('StgBase')
 
 

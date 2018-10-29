@@ -8,12 +8,13 @@ from sqlalchemy import MetaData, Table, Column, Integer, String, DateTime, Boole
 from sqlalchemy.dialects.mysql import DOUBLE, TINYINT
 from sqlalchemy.ext.declarative import declarative_base
 from pandas import Timedelta
-from ibats_common.backend import engine_ibats
+from ibats_common.backend import engines
 from ibats_common.utils.db import with_db_session
 from ibats_common.common import Action, Direction
 from ibats_common.utils.mess import str_2_date, pd_timedelta_2_timedelta
 import logging
 
+engine_ibats = engines.engine_ibats
 BaseModel = declarative_base()
 # 每一次实务均产生数据库插入或更新动作（默认：否）
 UPDATE_OR_INSERT_PER_ACTION = False
