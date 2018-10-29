@@ -31,7 +31,7 @@ class StgRunInfo(BaseModel):
     stg_params = Column(String(2000))
     md_agent_params_list = Column(String(2000))
     run_mode = Column(SmallInteger)
-    run_mode_params = Column(String(2000))
+    trade_agent_params = Column(String(2000))
 
 
 class OrderInfo(BaseModel):
@@ -550,7 +550,6 @@ class AccountStatusInfo(BaseModel):
 
 
 def init():
-    from ibats_common.backend import engine_ibats
     from ibats_common.utils.db import alter_table_2_myisam
     BaseModel.metadata.create_all(engine_ibats)
     alter_table_2_myisam(engine_ibats)

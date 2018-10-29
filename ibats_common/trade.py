@@ -94,8 +94,8 @@ trader_agent_class_dic = {
 }
 
 
-def trader_agent_factory(run_mode: RunMode, stg_run_id, run_mode_params,
-                         exchange_name: ExchangeName = ExchangeName.Default, **kwargs) -> TraderAgentBase:
+def trader_agent_factory(run_mode: RunMode, stg_run_id, exchange_name: ExchangeName,
+                         run_mode_params, **kwargs) -> TraderAgentBase:
     """工厂类用来生成相应 TraderAgentBase 实例"""
     trader_agent_class = trader_agent_class_dic[run_mode][exchange_name]
     trader_agent_obj = trader_agent_class(stg_run_id, run_mode_params, **kwargs)

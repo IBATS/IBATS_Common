@@ -15,11 +15,11 @@ from datetime import date, datetime, timedelta
 from abc import ABC
 from ibats_common.backend import engines
 from ibats_common.utils.db import with_db_session
-from ibats_common.md import MdAgentBase
-from ibats_common.common import PeriodType, RunMode, ContextKey, Direction, BacktestTradeMode
+from ibats_common.md import md_agent_factory
+from ibats_common.common import PeriodType, RunMode, ContextKey, Direction, BacktestTradeMode, ExchangeName
 from ibats_common.utils.mess import try_2_date
 from ibats_common.backend.orm import StgRunInfo
-from ibats_common.trade import trader_agent_class_dic
+from ibats_common.trade import trader_agent_factory
 
 engine_ibats = engines.engine_ibats
 logger_stg_base = logging.getLogger('StgBase')
@@ -293,8 +293,9 @@ class StgHandlerBase(Thread, ABC):
 
 
 def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent_params_list, run_mode: RunMode,
-                             **run_mode_params) -> StgHandlerBase:
+                             exchange_name: ExchangeName, **trade_agent_params) -> StgHandlerBase:
     """
+    单一交易所策略处理具备
     建立策略对象
     建立数据库相应记录信息
     根据运行模式（实时、回测）：选择相应的md_agent以及trade_agent
@@ -302,8 +303,9 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
     :param strategy_params: 策略参数
     :param md_agent_params_list: 行情代理（md_agent）参数，支持同时订阅多周期、多品种，
     例如：同时订阅 [ethusdt, eosusdt] 1min 行情、[btcusdt, ethbtc] tick 行情
+    :param exchange_name: 选择交易所接口 ExchangeName
     :param run_mode: 运行模式 RunMode.Realtime  或 RunMode.Backtest
-    :param run_mode_params: 运行参数，回测模式下：运行起止时间，实时行情下：加载定时器等设置
+    :param trade_agent_params: 运行参数，回测模式下：运行起止时间，实时行情下：加载定时器等设置
     :return: 策略执行对象实力
     """
     stg_run_info = StgRunInfo(stg_name=stg_class.__name__,  # '{.__name__}'.format(stg_class)
@@ -312,36 +314,35 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
                               stg_params=json.dumps(strategy_params),
                               md_agent_params_list=json.dumps(md_agent_params_list),
                               run_mode=int(run_mode),
-                              run_mode_params=json.dumps(run_mode_params))
+                              trade_agent_params=json.dumps(trade_agent_params))
     with with_db_session(engine_ibats) as session:
         session.add(stg_run_info)
         session.commit()
         stg_run_id = stg_run_info.stg_run_id
     # 设置运行模式：回测模式，实时模式。初始化交易接口
     # if run_mode == RunMode.Backtest:
-    #     trade_agent = BacktestTraderAgent(stg_run_id, run_mode_params)
+    #     trade_agent = BacktestTraderAgent(stg_run_id, trade_agent_params)
     # elif run_mode == RunMode.Realtime:
-    #     trade_agent = RealTimeTraderAgent(stg_run_id, run_mode_params)
+    #     trade_agent = RealTimeTraderAgent(stg_run_id, trade_agent_params)
     # else:
     #     raise ValueError('run_mode %d error' % run_mode)
-    trade_agent_class = trader_agent_class_dic[run_mode]
     # 初始化策略实体，传入参数
     stg_base = stg_class(**strategy_params)
     # 设置策略交易接口 trade_agent，这里不适用参数传递的方式而使用属性赋值，
     # 因为stg子类被继承后，参数主要用于设置策略所需各种参数使用
-    stg_base.trade_agent = trade_agent_class(stg_run_id, run_mode_params)
+    stg_base.trade_agent = trader_agent_factory(run_mode, stg_run_id, exchange_name, trade_agent_params)
     # 对不同周期设置相应的md_agent
     # 初始化各个周期的 md_agent
     md_period_agent_dic = {}
     for md_agent_param in md_agent_params_list:
         period = md_agent_param['md_period']
-        md_agent = MdAgentBase.factory(run_mode, **md_agent_param)
+        md_agent = md_agent_factory(run_mode, exchange_name=exchange_name, **md_agent_param)
         md_period_agent_dic[period] = md_agent
         # 对各个周期分别加载历史数据，设置对应 handler
         # 通过 md_agent 加载各个周期的历史数据
         his_df_dic = md_agent.load_history()
         if his_df_dic is None:
-            StgHandlerBase.logger.warning('加载 %s 历史数据为 None', period)
+            logger_stg_base.warning('加载 %s 历史数据为 None', period)
             continue
         if isinstance(his_df_dic, dict):
             md_df = his_df_dic['md_df']
@@ -351,17 +352,18 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
 
         context = {ContextKey.instrument_id_list: list(md_agent.instrument_id_set)}
         stg_base.load_md_period_df(period, md_df, context)
-        StgHandlerBase.logger.debug('加载 %s 历史数据 %s 条', period, 'None' if md_df is None else str(md_df.shape[0]))
+        logger_stg_base.debug('加载 %s 历史数据 %s 条', period, 'None' if md_df is None else str(md_df.shape[0]))
     # 初始化 StgHandlerBase 实例
     if run_mode == RunMode.Realtime:
         stg_handler = StgHandlerRealtime(stg_run_id=stg_run_id, stg_base=stg_base,
-                                         md_period_agent_dic=md_period_agent_dic, **run_mode_params)
+                                         md_period_agent_dic=md_period_agent_dic, **trade_agent_params)
     elif run_mode == RunMode.Backtest:
         stg_handler = StgHandlerBacktest(stg_run_id=stg_run_id, stg_base=stg_base,
-                                         md_period_agent_dic=md_period_agent_dic, **run_mode_params)
+                                         md_period_agent_dic=md_period_agent_dic, **trade_agent_params)
     else:
         raise ValueError('run_mode %d error' % run_mode)
-    StgHandlerBase.logger.debug('初始化 %r 完成', stg_handler)
+
+    logger_stg_base.debug('初始化 %r 完成', stg_handler)
     return stg_handler
 
 
@@ -445,6 +447,7 @@ class StgHandlerRealtime(StgHandlerBase):
         md_agent.connect()
         md_agent.subscribe()  # 参数为空相当于 md_agent.subscribe(md_agent.instrument_id_list)
         md_agent.start()
+        md_dic = None
         while self.keep_running:
             try:
                 if not self.keep_running:
@@ -672,10 +675,10 @@ def _test_use():
         'instrument_id_list': ['ethbtc'],  # ['jm1711', 'rb1712', 'pb1801', 'IF1710'],
         'init_md_date_to': '2017-9-1',
     }]
-    run_mode_realtime_params = {
+    trade_agent_params_realtime = {
         'run_mode': RunMode.Realtime,
     }
-    run_mode_backtest_params = {
+    trade_agent_params_backtest = {
         'run_mode': RunMode.Backtest,
         'date_from': '2018-6-18',
         'date_to': '2018-6-19',
@@ -687,7 +690,8 @@ def _test_use():
     stghandler = strategy_handler_factory(stg_class=MACrossStg,
                                           strategy_params=strategy_params,
                                           md_agent_params_list=md_agent_params_list,
-                                          **run_mode_backtest_params)
+                                          exchange_name=ExchangeName.BitMex,
+                                          **trade_agent_params_backtest)
     stghandler.start()
     time.sleep(10)
     stghandler.keep_running = False
