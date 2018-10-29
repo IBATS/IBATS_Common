@@ -29,7 +29,7 @@ class MdAgentBase(Thread, ABC):
         self.md_period = md_period
         self.keep_running = None
         self.instrument_id_set = instrument_id_set
-        self.init_load_md_count = int(init_load_md_count)
+        self.init_load_md_count = int(init_load_md_count) if init_load_md_count is not None else None
         self.init_md_date_from = str_2_date(init_md_date_from)
         self.init_md_date_to = str_2_date(init_md_date_to)
         self.logger = logging.getLogger(str(self.__class__))
@@ -91,7 +91,7 @@ def register_md_agent(agent: MdAgentBase, run_mode: RunMode, exchange_name: Exch
     md_agent_class_dic[run_mode][exchange_name] = agent
     if is_default:
         md_agent_class_dic[run_mode][ExchangeName.Default] = agent
-    logger.info('注册 %s md agent[%s] = %s', run_mode, exchange_name, agent.__class__.__name__)
+    logger.info('注册 %s md agent[%s] = %s', run_mode, exchange_name, agent)
     return agent
 
 

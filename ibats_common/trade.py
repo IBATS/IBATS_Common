@@ -108,7 +108,7 @@ def register_trader_agent(agent: TraderAgentBase, run_mode: RunMode, exchange_na
     trader_agent_class_dic[run_mode][exchange_name] = agent
     if is_default:
         trader_agent_class_dic[run_mode][ExchangeName.Default] = agent
-    logger.info('注册 %s trade agent[%s] = %s', run_mode, exchange_name, agent.__class__.__name__)
+    logger.info('注册 %s trade agent[%s] = %s', run_mode, exchange_name, agent)
     return agent
 
 
