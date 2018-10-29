@@ -14,6 +14,7 @@ import pandas as pd
 import logging
 from abc import ABC, abstractmethod
 from functools import partial
+from ibats_common.utils.mess import str_2_date
 
 logger = logging.getLogger(__package__)
 
@@ -28,10 +29,10 @@ class MdAgentBase(Thread, ABC):
         self.md_period = md_period
         self.keep_running = None
         self.instrument_id_set = instrument_id_set
-        self.init_load_md_count = init_load_md_count
-        self.init_md_date_from = init_md_date_from
-        self.init_md_date_to = init_md_date_to
-        self.logger = logging.getLogger()
+        self.init_load_md_count = int(init_load_md_count)
+        self.init_md_date_from = str_2_date(init_md_date_from)
+        self.init_md_date_to = str_2_date(init_md_date_to)
+        self.logger = logging.getLogger(str(self.__class__))
 
     @abstractmethod
     def load_history(self, date_from=None, date_to=None, load_md_count=None) -> (pd.DataFrame, dict):

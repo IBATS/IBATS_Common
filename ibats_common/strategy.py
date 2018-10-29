@@ -308,24 +308,29 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
     :param trade_agent_params: 运行参数，回测模式下：运行起止时间，实时行情下：加载定时器等设置
     :return: 策略执行对象实力
     """
+    md_agent_params_list_4_json = md_agent_params_list.copy()
+    for md_agent_param in md_agent_params_list:
+        md_agent_param['exchange_name'] = exchange_name
+        md_agent_param['run_mode'] = run_mode
+    for md_agent_param in md_agent_params_list_4_json:
+        md_agent_param['exchange_name'] = exchange_name.name
+        md_agent_param['run_mode'] = run_mode.name
+
+    trade_agent_params_4_json = trade_agent_params.copy()
+    trade_agent_params_4_json['exchange_name'] = exchange_name.name
+    trade_agent_params['exchange_name'] = exchange_name
+
     stg_run_info = StgRunInfo(stg_name=stg_class.__name__,  # '{.__name__}'.format(stg_class)
                               dt_from=datetime.now(),
                               dt_to=None,
                               stg_params=json.dumps(strategy_params),
-                              md_agent_params_list=json.dumps(md_agent_params_list),
+                              md_agent_params_list=json.dumps(md_agent_params_list_4_json),
                               run_mode=int(run_mode),
-                              trade_agent_params=json.dumps(trade_agent_params))
+                              trade_agent_params=json.dumps(trade_agent_params_4_json))
     with with_db_session(engine_ibats) as session:
         session.add(stg_run_info)
         session.commit()
         stg_run_id = stg_run_info.stg_run_id
-    # 设置运行模式：回测模式，实时模式。初始化交易接口
-    # if run_mode == RunMode.Backtest:
-    #     trade_agent = BacktestTraderAgent(stg_run_id, trade_agent_params)
-    # elif run_mode == RunMode.Realtime:
-    #     trade_agent = RealTimeTraderAgent(stg_run_id, trade_agent_params)
-    # else:
-    #     raise ValueError('run_mode %d error' % run_mode)
     # 初始化策略实体，传入参数
     stg_base = stg_class(**strategy_params)
     # 设置策略交易接口 trade_agent，这里不适用参数传递的方式而使用属性赋值，
@@ -336,7 +341,7 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
     md_period_agent_dic = {}
     for md_agent_param in md_agent_params_list:
         period = md_agent_param['md_period']
-        md_agent = md_agent_factory(run_mode, exchange_name=exchange_name, **md_agent_param)
+        md_agent = md_agent_factory(**md_agent_param)
         md_period_agent_dic[period] = md_agent
         # 对各个周期分别加载历史数据，设置对应 handler
         # 通过 md_agent 加载各个周期的历史数据
@@ -670,7 +675,6 @@ def _test_use():
     # 参数设置
     strategy_params = {}
     md_agent_params_list = [{
-        'name': 'min1',
         'md_period': PeriodType.Min1,
         'instrument_id_list': ['ethbtc'],  # ['jm1711', 'rb1712', 'pb1801', 'IF1710'],
         'init_md_date_to': '2017-9-1',
