@@ -308,13 +308,15 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
     :param trade_agent_params: 运行参数，回测模式下：运行起止时间，实时行情下：加载定时器等设置
     :return: 策略执行对象实力
     """
-    md_agent_params_list_4_json = md_agent_params_list.copy()
+    md_agent_params_list_4_json = []
     for md_agent_param in md_agent_params_list:
+        md_agent_param_4_json = md_agent_param.copy()
+        md_agent_param_4_json['exchange_name'] = exchange_name.name
+        md_agent_param_4_json['run_mode'] = run_mode.name
+        md_agent_params_list_4_json.append(md_agent_param_4_json)
+
         md_agent_param['exchange_name'] = exchange_name
         md_agent_param['run_mode'] = run_mode
-    for md_agent_param in md_agent_params_list_4_json:
-        md_agent_param['exchange_name'] = exchange_name.name
-        md_agent_param['run_mode'] = run_mode.name
 
     trade_agent_params_4_json = trade_agent_params.copy()
     trade_agent_params_4_json['exchange_name'] = exchange_name.name
@@ -532,11 +534,13 @@ class StgHandlerBacktest(StgHandlerBase):
             period_dt_idx_dic = {}
             for period, his_df_dic in self.backtest_his_df_dic.items():
                 his_df = his_df_dic['md_df']
+                df_len = his_df.shape[0]
+                if df_len == 0:
+                    continue
                 datetime_s = his_df[his_df_dic['datetime_key']] if 'datetime_key' in his_df_dic else None
                 date_s = his_df[his_df_dic['date_key']] if 'date_key' in his_df_dic else None
                 time_s = his_df[his_df_dic['time_key']] if 'time_key' in his_df_dic else None
                 microseconds_s = his_df[his_df_dic['microseconds_key']] if 'microseconds_key' in his_df_dic else None
-                df_len = his_df.shape[0]
                 # 整理日期轴
                 dt_idx_dic = {}
                 if datetime_s is not None:
