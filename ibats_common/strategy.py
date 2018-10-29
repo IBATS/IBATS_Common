@@ -8,20 +8,19 @@ import warnings
 import json
 import numpy as np
 import pandas as pd
-from ibats_trader.config import config
+from ibats_common.config import config
 import logging
 from queue import Empty
 import time
 from datetime import date, datetime, timedelta
 from abc import ABC
-from ibats_trader.backend import engine_ibats
+from ibats_common.backend import engine_ibats
 from ibats_common.utils.db import with_db_session
 from ibats_common.md import MdAgentBase
 from ibats_common.common import PeriodType, RunMode, ContextKey, Direction, BacktestTradeMode
 from ibats_common.utils.mess import try_2_date
-from ibats_trader.backend.orm import StgRunInfo
+from ibats_common.backend.orm import StgRunInfo
 from ibats_common.trade import trader_agent_class_dic
-
 
 logger_stg_base = logging.getLogger('StgBase')
 
@@ -261,7 +260,8 @@ class StgHandlerBase(Thread, ABC):
     logger = logging.getLogger("StgHandlerBase")
 
     @staticmethod
-    def factory(stg_class_obj: StgBase.__class__, strategy_params, md_agent_params_list, run_mode: RunMode, **run_mode_params):
+    def factory(stg_class_obj: StgBase.__class__, strategy_params, md_agent_params_list, run_mode: RunMode,
+                **run_mode_params):
         """
         建立策略对象
         建立数据库相应记录信息
@@ -364,6 +364,79 @@ class StgHandlerBase(Thread, ABC):
 
     def __repr__(self):
         return '<{0.__class__.__name__}:{0.stg_run_id} {0.run_mode}>'.format(self)
+
+
+def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent_params_list, run_mode: RunMode,
+                             **run_mode_params) -> StgHandlerBase:
+    """
+    建立策略对象
+    建立数据库相应记录信息
+    根据运行模式（实时、回测）：选择相应的md_agent以及trade_agent
+    :param stg_class: 策略类型 StgBase 的子类
+    :param strategy_params: 策略参数
+    :param md_agent_params_list: 行情代理（md_agent）参数，支持同时订阅多周期、多品种，
+    例如：同时订阅 [ethusdt, eosusdt] 1min 行情、[btcusdt, ethbtc] tick 行情
+    :param run_mode: 运行模式 RunMode.Realtime  或 RunMode.Backtest
+    :param run_mode_params: 运行参数，回测模式下：运行起止时间，实时行情下：加载定时器等设置
+    :return: 策略执行对象实力
+    """
+    stg_run_info = StgRunInfo(stg_name=stg_class.__name__,  # '{.__name__}'.format(stg_class)
+                              dt_from=datetime.now(),
+                              dt_to=None,
+                              stg_params=json.dumps(strategy_params),
+                              md_agent_params_list=json.dumps(md_agent_params_list),
+                              run_mode=int(run_mode),
+                              run_mode_params=json.dumps(run_mode_params))
+    with with_db_session(engine_ibats) as session:
+        session.add(stg_run_info)
+        session.commit()
+        stg_run_id = stg_run_info.stg_run_id
+    # 设置运行模式：回测模式，实时模式。初始化交易接口
+    # if run_mode == RunMode.Backtest:
+    #     trade_agent = BacktestTraderAgent(stg_run_id, run_mode_params)
+    # elif run_mode == RunMode.Realtime:
+    #     trade_agent = RealTimeTraderAgent(stg_run_id, run_mode_params)
+    # else:
+    #     raise ValueError('run_mode %d error' % run_mode)
+    trade_agent_class = trader_agent_class_dic[run_mode]
+    # 初始化策略实体，传入参数
+    stg_base = stg_class(**strategy_params)
+    # 设置策略交易接口 trade_agent，这里不适用参数传递的方式而使用属性赋值，
+    # 因为stg子类被继承后，参数主要用于设置策略所需各种参数使用
+    stg_base.trade_agent = trade_agent_class(stg_run_id, run_mode_params)
+    # 对不同周期设置相应的md_agent
+    # 初始化各个周期的 md_agent
+    md_period_agent_dic = {}
+    for md_agent_param in md_agent_params_list:
+        period = md_agent_param['md_period']
+        md_agent = MdAgentBase.factory(run_mode, **md_agent_param)
+        md_period_agent_dic[period] = md_agent
+        # 对各个周期分别加载历史数据，设置对应 handler
+        # 通过 md_agent 加载各个周期的历史数据
+        his_df_dic = md_agent.load_history()
+        if his_df_dic is None:
+            StgHandlerBase.logger.warning('加载 %s 历史数据为 None', period)
+            continue
+        if isinstance(his_df_dic, dict):
+            md_df = his_df_dic['md_df']
+        else:
+            md_df = his_df_dic
+            warnings.warn('load_history 返回 df 数据格式即将废弃，请更新成 dict', DeprecationWarning)
+
+        context = {ContextKey.instrument_id_list: list(md_agent.instrument_id_set)}
+        stg_base.load_md_period_df(period, md_df, context)
+        StgHandlerBase.logger.debug('加载 %s 历史数据 %s 条', period, 'None' if md_df is None else str(md_df.shape[0]))
+    # 初始化 StgHandlerBase 实例
+    if run_mode == RunMode.Realtime:
+        stg_handler = StgHandlerRealtime(stg_run_id=stg_run_id, stg_base=stg_base,
+                                         md_period_agent_dic=md_period_agent_dic, **run_mode_params)
+    elif run_mode == RunMode.Backtest:
+        stg_handler = StgHandlerBacktest(stg_run_id=stg_run_id, stg_base=stg_base,
+                                         md_period_agent_dic=md_period_agent_dic, **run_mode_params)
+    else:
+        raise ValueError('run_mode %d error' % run_mode)
+    StgHandlerBase.logger.debug('初始化 %r 完成', stg_handler)
+    return stg_handler
 
 
 class StgHandlerRealtime(StgHandlerBase):
@@ -664,8 +737,7 @@ class MACrossStg(StgBase):
                 self.open_short(instrument_id, close, 1)
 
 
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG, format=config.LOG_FORMAT)
+def _test_use():
     # 参数设置
     strategy_params = {}
     md_agent_params_list = [{
@@ -686,12 +758,17 @@ if __name__ == '__main__':
     }
     # run_mode = RunMode.BackTest
     # 初始化策略处理器
-    stghandler = StgHandlerBase.factory(stg_class_obj=MACrossStg,
-                                        strategy_params=strategy_params,
-                                        md_agent_params_list=md_agent_params_list,
-                                        **run_mode_backtest_params)
+    stghandler = strategy_handler_factory(stg_class=MACrossStg,
+                                          strategy_params=strategy_params,
+                                          md_agent_params_list=md_agent_params_list,
+                                          **run_mode_backtest_params)
     stghandler.start()
     time.sleep(10)
     stghandler.keep_running = False
     stghandler.join()
     logging.info("执行结束")
+
+
+if __name__ == '__main__':
+    # logging.basicConfig(level=logging.DEBUG, format=config.LOG_FORMAT)
+    _test_use()

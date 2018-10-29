@@ -6,7 +6,7 @@ Created on 2017/11/13
 import logging
 from enum import IntEnum, unique
 from ibats_common.common import PeriodType
-from ibats_trader.config import config
+from ibats_common.config import config
 
 logger = logging.getLogger()
 
