@@ -60,6 +60,12 @@ config = ConfigBase()
 
 
 def update_config(config_new: ConfigBase):
+    """更新配置信息"""
     global config
     config = config_new
     logger.info('更新默认配置信息 %s < %s', ConfigBase, config_new.__class__)
+
+
+def update_db_config(db_url_dic: dict):
+    """更新数据配置链接"""
+    config.DB_URL_DIC.update(db_url_dic)
