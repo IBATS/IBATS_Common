@@ -20,6 +20,7 @@ from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.expression import Insert
 from ibats_common.utils.mess import date_2_str
 import logging
+from sqlalchemy import create_engine
 
 logger = logging.getLogger()
 
@@ -246,9 +247,37 @@ def execute_sql(engine, sql_str, commit=False):
     return insert_count
 
 
-if __name__ == "__main__":
-    from sqlalchemy import create_engine
+class DynamicEngine:
 
+    def __init__(self, db_url_dic):
+        self._engine_dic = {}
+        self.db_url_dic = db_url_dic
+
+    def reload_engines(self, refresh=False):
+        """
+        重新加载全部引擎
+        :param refresh: True：全部重新加载；False：仅增量加载
+        :return:
+        """
+        if refresh:
+            self._engine_dic = {}
+        for key, url in self.db_url_dic.items():
+            if not refresh and key in self._engine_dic:
+                continue
+            engine = create_engine(url)
+            self._engine_dic[key] = engine
+            logger.debug('加载 engine %s: %s', key, engine)
+
+    def __getitem__(self, item):
+        if item not in self._engine_dic:
+            self.reload_engines()
+        return self._engine_dic[item]
+
+    def __iter__(self):
+        return iter(self._engine_dic)
+
+
+if __name__ == "__main__":
     engine = create_engine("mysql://mg:Dcba1234@localhost/md_integration?charset=utf8",
                            echo=False, encoding="utf-8")
     table_name = 'test_only'
