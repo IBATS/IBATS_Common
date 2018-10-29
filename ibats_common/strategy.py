@@ -346,7 +346,10 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
         md_agent = md_agent_factory(**md_agent_param)
         md_period_agent_dic[period] = md_agent
         # 对各个周期分别加载历史数据，设置对应 handler
-        # 通过 md_agent 加载各个周期的历史数据
+        # 通过 md_agent 加载各个周期的历史数据,
+        # 这里加载历史数据为初始化数据：
+        # 主要对应于 md_agent_params_list 参数中 init_md_date_from init_md_date_to 等参数设置
+        # 与下方的另一次加载历史数据不同，下面的加载历史数据位回测过程中对回测数据的加载，两者不可合并
         his_df_dic = md_agent.load_history()
         if his_df_dic is None:
             logger_stg_base.warning('加载 %s 历史数据为 None', period)
@@ -360,6 +363,7 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
         context = {ContextKey.instrument_id_list: list(md_agent.instrument_id_set)}
         stg_base.load_md_period_df(period, md_df, context)
         logger_stg_base.debug('加载 %s 历史数据 %s 条', period, 'None' if md_df is None else str(md_df.shape[0]))
+
     # 初始化 StgHandlerBase 实例
     if run_mode == RunMode.Realtime:
         stg_handler = StgHandlerRealtime(stg_run_id=stg_run_id, stg_base=stg_base,
