@@ -6,14 +6,14 @@ Created on 2017/6/9
 import logging
 from logging.config import dictConfig
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 
 class ConfigBase:
 
     DB_SCHEMA_IBATS = 'ibats'
     DB_URL_DIC = {
-        DB_SCHEMA_IBATS: 'mysql://mg:****@localhost/' + DB_SCHEMA_IBATS,
+        DB_SCHEMA_IBATS: 'mysql://m*:****@localhost/' + DB_SCHEMA_IBATS,
     }
 
     # evn configuration
