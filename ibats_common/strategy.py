@@ -601,6 +601,14 @@ class StgHandlerBacktest(StgHandlerBase):
                 # 记录各个周期时间戳
                 period_dt_idx_dic[period] = dt_idx_dic
 
+                # 设置各个周期相关 key 给 trade_agent
+                if 'datetime_key' in his_df_dic:
+                    self.stg_base.trade_agent.set_timestamp_key(his_df_dic['datetime_key'])
+                if 'symbol_key' in his_df_dic:
+                    self.stg_base.trade_agent.set_symbol_key(his_df_dic['symbol_key'])
+                if 'close_key' in his_df_dic:
+                    self.stg_base.trade_agent.set_close_key(his_df_dic['close_key'])
+
             # 按照时间顺序将各个周期数据依次推入对应 handler
             period_idx_df = pd.DataFrame(period_dt_idx_dic).sort_index()
             for row_num in range(period_idx_df.shape[0]):

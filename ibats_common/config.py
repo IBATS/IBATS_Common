@@ -16,6 +16,8 @@ class ConfigBase:
         DB_SCHEMA_IBATS: 'mysql://m*:****@localhost/' + DB_SCHEMA_IBATS,
     }
 
+    BACKTEST_UPDATE_OR_INSERT_PER_ACTION = False
+
     # evn configuration
     LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s %(filename)s.%(funcName)s:%(lineno)d|%(message)s'
 
