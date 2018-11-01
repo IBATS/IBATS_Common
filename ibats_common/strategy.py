@@ -265,7 +265,8 @@ class StgHandlerBase(Thread, ABC):
         # 初始化策略实体，传入参数
         self.stg_base = stg_base
         # 设置工作状态
-        self.keep_running = None
+        self.is_working = False
+        self.is_done = False
         # 日志
         self.logger = logging.getLogger()
         # 对不同周期设置相应的md_agent
@@ -287,6 +288,9 @@ class StgHandlerBase(Thread, ABC):
             # StgRunInfo.c.stg_run_id == self.stg_run_id).values(dt_to=datetime.now())
             # session.execute(sql_str)
             session.commit()
+
+        self.is_working = False
+        self.is_done = True
 
     def __repr__(self):
         return '<{0.__class__.__name__}:{0.stg_run_id} {0.run_mode}>'.format(self)
@@ -398,10 +402,10 @@ class StgHandlerRealtime(StgHandlerBase):
     def run(self):
 
         # TODO: 以后再加锁，防止多线程，目前只是为了防止误操作导致的重复执行
-        if self.keep_running:
+        if self.is_working:
             return
         else:
-            self.keep_running = True
+            self.is_working = True
 
         try:
             # 策略初始化
@@ -429,7 +433,7 @@ class StgHandlerRealtime(StgHandlerBase):
                 run_md_agent_thread.join()
                 self.logger.info('%s period %s finished', run_md_agent_thread.name, period)
         finally:
-            self.keep_running = False
+            self.is_working = False
             self.stg_run_ending()
 
     def run_timer(self):
@@ -437,7 +441,7 @@ class StgHandlerRealtime(StgHandlerBase):
         负责定时运行策略对象的 on_timer 方法
         :return: 
         """
-        while self.keep_running:
+        while self.is_working:
             try:
                 self.stg_base.on_timer()
             except:
@@ -459,9 +463,9 @@ class StgHandlerRealtime(StgHandlerBase):
         md_agent.subscribe()  # 参数为空相当于 md_agent.subscribe(md_agent.instrument_id_list)
         md_agent.start()
         md_dic = None
-        while self.keep_running:
+        while self.is_working:
             try:
-                if not self.keep_running:
+                if not self.is_working:
                     break
                 # 加载数据，是设置超时时间，防止长时间阻塞
                 md_dic = md_agent.pull(self.timeout_pull)
@@ -525,11 +529,11 @@ class StgHandlerBacktest(StgHandlerBase):
         :return: 
         """
         # TODO: 以后再加锁，防止多线程，目前只是为了防止误操作导致的重复执行
-        if self.keep_running:
+        if self.is_working:
             self.logger.warning('当前任务正在执行中..，避免重复执行')
             return
         else:
-            self.keep_running = True
+            self.is_working = True
         self.logger.info('执行回测任务【%s - %s】开始', self.date_from, self.date_to)
         try:
             # 策略初始化
@@ -628,7 +632,7 @@ class StgHandlerBacktest(StgHandlerBase):
                         self.stg_base.trade_agent.update_account_info()
             self.logger.info('执行回测任务【%s - %s】完成', self.date_from, self.date_to)
         finally:
-            self.keep_running = False
+            self.is_working = False
             self.stg_run_ending()
 
 
@@ -714,7 +718,7 @@ def _test_use():
                                           **trade_agent_params_backtest)
     stghandler.start()
     time.sleep(10)
-    stghandler.keep_running = False
+    stghandler.is_working = False
     stghandler.join()
     logging.info("执行结束")
 
