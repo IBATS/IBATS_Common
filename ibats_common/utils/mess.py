@@ -13,7 +13,6 @@ import functools
 from datetime import datetime, date, timedelta
 import pytz
 import numpy as np
-# from pandas.tslib import Timestamp
 from pandas import Timestamp
 import re
 import pandas as pd
@@ -28,6 +27,7 @@ logger = logging.getLogger(__name__)
 STR_FORMAT_DATE = '%Y-%m-%d'
 STR_FORMAT_DATETIME = '%Y-%m-%d %H:%M:%S'
 STR_FORMAT_DATETIME2 = '%Y-%m-%d %H:%M:%S.%f'
+STR_FORMAT_TIME = '%H:%M:%S'
 PATTERN_DATE_FORMAT_RESTRICT = re.compile(r"\d{4}(\D)*\d{2}(\D)*\d{2}")
 PATTERN_DATE_FORMAT = re.compile(r"\d{4}(\D)*\d{1,2}(\D)*\d{1,2}")
 
@@ -214,13 +214,31 @@ def datetime_2_str(dt, format=STR_FORMAT_DATETIME):
     if dt is not None and type(dt) in (date, datetime, Timestamp):
         dt_str = dt.strftime(format)
         # print(type(dt), '->', dt_str)
-    elif isinstance(dt, pd.core.indexes.datetimes.DatetimeIndex):
-        dt_str = [x.strftime(STR_FORMAT_DATETIME) for x in dt]
+    elif isinstance(dt, pd.DatetimeIndex):
+        dt_str = [x.strftime(format) for x in dt]
         # print(type(dt), '-->', dt_str)
     else:
         dt_str = dt
         # print(type(dt), '没有转换', dt)
     return dt_str
+
+
+def time_2_str(t):
+    if t is not None and isinstance(t, timedelta):
+        seconds = t.seconds
+        hours, minutes = divmod(seconds, 3600)
+        minutes, secs = divmod(minutes, 60)
+        dt_str = "{0:02d}:{1:02d}:{2:02d}".format(hours, minutes, secs)
+        # print(type(t), '->', dt_str)
+    else:
+        dt_str = str(t)
+        # print(type(t), '没有转换', t)
+    return dt_str
+
+
+def date_time_2_str(d, t):
+    """将日期与时间组合成  '%Y-%m-%d %H:%M:%S' 字符串 """
+    return date_2_str(d) +  ' ' + time_2_str(t)
 
 
 def str_2_datetime(datetime_str, format=STR_FORMAT_DATETIME):
