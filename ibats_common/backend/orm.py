@@ -4,20 +4,30 @@ Created on 2017/10/9
 @author: MG
 """
 from datetime import datetime, timedelta
-from sqlalchemy import MetaData, Table, Column, Integer, String, DateTime, Boolean, SmallInteger, Date, Time
+from sqlalchemy import MetaData, Table, Column, Integer, String, DateTime, Boolean, SmallInteger, Date, Time, func
 from sqlalchemy.dialects.mysql import DOUBLE, TINYINT
 from sqlalchemy.ext.declarative import declarative_base
 from pandas import Timedelta
 from ibats_common.backend import engines
-from ibats_common.utils.db import with_db_session
+from ibats_common.utils.db import with_db_session, get_db_session
 from ibats_common.common import Action, Direction
-from ibats_common.utils.mess import str_2_date, pd_timedelta_2_timedelta
+from ibats_common.utils.mess import str_2_date, pd_timedelta_2_timedelta, date_2_str, datetime_2_str, date_time_2_str
 import logging
+from collections import defaultdict
+import warnings
 
 engine_ibats = engines.engine_ibats
 BaseModel = declarative_base()
 # 每一次实务均产生数据库插入或更新动作（默认：否）
 UPDATE_OR_INSERT_PER_ACTION = False
+_key_idx = defaultdict(lambda: defaultdict(int))
+
+
+def idx_genetrator(id, key):
+    idx = _key_idx[id][key]
+    idx += 1
+    _key_idx[id][key] = idx
+    return idx
 
 
 class StgRunInfo(BaseModel):
@@ -25,86 +35,101 @@ class StgRunInfo(BaseModel):
 
     __tablename__ = 'stg_run_info'
     stg_run_id = Column(Integer, autoincrement=True, primary_key=True)
-    stg_name = Column(String(200))
+    stg_name = Column(String(300))
     dt_from = Column(DateTime())
     dt_to = Column(DateTime())
-    stg_params = Column(String(2000))
-    md_agent_params_list = Column(String(2000))
+    stg_params = Column(String(5000))
+    md_agent_params_list = Column(String(5000))
     run_mode = Column(SmallInteger)
-    trade_agent_params = Column(String(2000))
+    trade_agent_params_list = Column(String(5000))
 
 
 class OrderInfo(BaseModel):
     """订单信息"""
 
     __tablename__ = 'order_info'
-    order_id = Column(Integer, primary_key=True, autoincrement=True)
-    stg_run_id = Column(Integer)
-    # order_dt = Column(DateTime, server_default=func.now())
+    stg_run_id = Column(Integer, primary_key=True)
+    order_idx = Column(Integer, primary_key=True)
+    order_dt = Column(DateTime)
     order_date = Column(Date)  # 对应行情数据中 ActionDate
     order_time = Column(Time)  # 对应行情数据中 ActionTime
-    order_millisec = Column(Integer)  # 对应行情数据中 ActionMillisec
+    order_millisec = Column(Integer, default=0, server_default='0')  # 对应行情数据中 ActionMillisec
     direction = Column(TINYINT)  # -1：空；1：多
     action = Column(Integer)  # 0：关：1：开
-    instrument_id = Column(String(30))
+    symbol = Column(String(30))
     order_price = Column(DOUBLE)
     order_vol = Column(DOUBLE)  # 订单量
-    traded_vol = Column(DOUBLE, server_default='0')  # 保证金 , comment="成交数量"
-    margin = Column(DOUBLE, server_default='0')  # 保证金 , comment="占用保证金"
 
-    # 每一次实务均产生数据库插入或更新动作（默认：否）
+    def __init__(self, stg_run_id=None, order_dt=None, order_date=None, order_time=None, order_millisec=0,
+                 direction=None, action=None, symbol=None, order_price=0, order_vol=0):
+        self.stg_run_id = stg_run_id
+        self.order_idx = None if stg_run_id is None else idx_genetrator(stg_run_id, OrderInfo)
+        self.order_dt = date_time_2_str(order_date, order_time) if order_dt is None else order_dt
+        self.order_date = order_date
+        self.order_time = order_time
+        self.order_millisec = order_millisec
+        self.direction = direction.value if isinstance(direction, Direction) else direction
+        self.action = action.value if isinstance(action, Action) else action
+        self.symbol = symbol
+        self.order_price = order_price
+        self.order_vol = order_vol
 
     def __repr__(self):
-        return "<OrderInfo(id='{0.order_id}', direction='{0.direction}', action='{0.action}', instrument_id='{0.instrument_id}', order_price='{0.order_price}', order_vol='{0.order_vol}')>".format(
-            self)
+        return f"<OrderInfo(stg_run_id='{self.stg_run_id}' idx='{self.order_idx}', direction='{Direction(self.direction)}', action='{Action(self.action)}', symbol='{self.symbol}', order_price='{self.order_price}', order_vol='{self.order_vol}')>"
 
     @staticmethod
-    def remove_order_info(stg_run_id: int):
+    def remove(stg_run_id: int):
         """
         仅作为调试工具使用，删除指定 stg_run_id 相关的 order_info
         :param stg_run_id: 
         :return: 
         """
         with with_db_session(engine_ibats) as session:
-            session.execute('DELETE FROM order_info WHERE stg_run_id=:stg_run_id',
-                            {'stg_run_id': stg_run_id})
+            # session.execute('DELETE FROM order_info WHERE stg_run_id=:stg_run_id',
+            #                 {'stg_run_id': stg_run_id})
+            session.query(OrderInfo).filter(OrderInfo.stg_run_id == stg_run_id).delete()
             session.commit()
-
-    @staticmethod
-    def create_by_dic(order_dic):
-        order_info = OrderInfo()
-        order_info.order_date = order_dic['TradingDay']
-        order_info.order_time = pd_timedelta_2_timedelta(order_dic['InsertTime'])
-        order_info.order_millisec = 0
-        order_info.direction = Direction.create_by_direction(order_dic['Direction'])
-        order_info.action = Action.create_by_offsetflag(order_dic['CombOffsetFlag'])
-        order_info.instrument_id = order_dic['InstrumentID']
-        order_info.order_price = order_dic['LimitPrice']
-        order_info.order_vol = order_dic['VolumeTotalOriginal']
-        order_info.traded_vol = order_dic['VolumeTraded']
-        order_info.margin = 0
-        return order_info
 
 
 class TradeInfo(BaseModel):
     """记录成交信息"""
     __tablename__ = 'trade_info'
-    trade_id = Column(Integer, primary_key=True, autoincrement=True)  # , comment="成交id"
-    stg_run_id = Column(Integer)
-    order_id = Column(Integer)  # , comment="对应订单id"
-    # order_dt = Column(DateTime, server_default=func.now())
+    stg_run_id = Column(Integer, primary_key=True)
+    trade_idx = Column(Integer, primary_key=True)  # , comment="成交id"
+    order_idx = Column(Integer)  # , comment="对应订单id"
     order_price = Column(DOUBLE)  # , comment="原订单价格"
     order_vol = Column(DOUBLE)  # 订单量 , comment="原订单数量"
+    trade_dt = Column(DateTime)  # 对应行情数据中 ActionDate
     trade_date = Column(Date)  # 对应行情数据中 ActionDate
     trade_time = Column(Time)  # 对应行情数据中 ActionTime
     trade_millisec = Column(Integer)  # 对应行情数据中 ActionMillisec
     direction = Column(TINYINT)  # -1：空；1：多
     action = Column(Integer)  # 0：关：1：开
-    instrument_id = Column(String(30))
+    symbol = Column(String(30))
     trade_price = Column(DOUBLE)  # , comment="成交价格"
     trade_vol = Column(DOUBLE)  # 订单量 , comment="成交数量"
     margin = Column(DOUBLE, server_default='0')  # 保证金 , comment="占用保证金"
     commission = Column(DOUBLE, server_default='0')  # 佣金、手续费 , comment="佣金、手续费"
+
+    def __init__(self, stg_run_id=None, order_idx=None, order_price=None, order_vol=None, trade_dt=None,
+                 trade_date=None, trade_time=None, trade_millisec=0, direction=None, action=None, symbol=None,
+                 trade_price=None, trade_vol=None, margin=None, commission=None):
+        self.stg_run_id = stg_run_id
+        self.trade_idx = None if stg_run_id is None else idx_genetrator(stg_run_id, TradeInfo)
+        self.order_idx = order_idx
+        self.order_price = order_price
+        self.order_vol = order_vol
+        self.trade_dt = date_time_2_str(trade_date, trade_time) if trade_dt is None else trade_dt
+        self.trade_date = trade_date
+        self.trade_time = trade_time
+        self.trade_millisec = trade_millisec
+        self.direction = direction
+        self.action = action
+        self.symbol = symbol
+        self.trade_price = trade_price
+        self.trade_vol = trade_vol
+        self.margin = margin
+        self.commission = commission
 
     def set_trade_time(self, value):
         if isinstance(value, Timedelta):
@@ -114,39 +139,40 @@ class TradeInfo(BaseModel):
             self.trade_time = value
 
     @staticmethod
-    def remove_trade_info(stg_run_id: int):
+    def remove(stg_run_id: int):
         """
         仅作为调试工具使用，删除指定 stg_run_id 相关的 trade_info
         :param stg_run_id: 
         :return: 
         """
         with with_db_session(engine_ibats) as session:
-            session.execute('DELETE FROM trade_info WHERE stg_run_id=:stg_run_id',
-                            {'stg_run_id': stg_run_id})
+            # session.execute('DELETE FROM trade_info WHERE stg_run_id=:stg_run_id',
+            #                 {'stg_run_id': stg_run_id})
+            # session.query(PosStatusInfo).filter(PosStatusInfo.stg_run_id.in_([3, 4])).delete(False)  # 仅供实例
+            session.query(TradeInfo).filter(TradeInfo.stg_run_id == stg_run_id).delete()
             session.commit()
 
     @staticmethod
     def create_by_order_info(order_info: OrderInfo):
-        direction, action, instrument_id = order_info.direction, order_info.action, order_info.instrument_id
-        order_price, order_vol, order_id = order_info.order_price, order_info.order_vol, order_info.order_id
-        order_date, order_time, order_millisec = order_info.order_date, order_info.order_time, order_info.order_millisec
-        stg_run_id = order_info.stg_run_id
+        symbol = order_info.symbol
+        order_price, order_vol = order_info.order_price, order_info.order_vol
+        # stg_run_id = order_info.stg_run_id
 
-        # TODO: 以后还可以增加滑点，成交比例等
-        # instrument_info = Config.instrument_info_dic[instrument_id]
+        # TODO: 增加滑点、成交比例、费率、保证金比例等参数，该参数将和在回测参数中进行设置
+        # instrument_info = Config.instrument_info_dic[symbol]
         # multiple = instrument_info['VolumeMultiple']
         # margin_ratio = instrument_info['LongMarginRatio']
         multiple, margin_ratio = 1, 1
         margin = order_vol * order_price * multiple * margin_ratio
         commission = 0
-        trade_info = TradeInfo(stg_run_id=stg_run_id,
-                               order_id=order_id,
-                               trade_date=order_date,
-                               trade_time=order_time,
-                               trade_millisec=order_millisec,
-                               direction=direction,
-                               action=action,
-                               instrument_id=instrument_id,
+        trade_info = TradeInfo(stg_run_id=order_info.stg_run_id,
+                               order_idx=order_info.order_idx,
+                               trade_date=order_info.order_date,
+                               trade_time=order_info.order_time,
+                               trade_millisec=order_info.order_millisec,
+                               direction=order_info.direction,
+                               action=order_info.action,
+                               symbol=symbol,
                                order_price=order_price,
                                order_vol=order_vol,
                                trade_price=order_price,
@@ -168,15 +194,15 @@ class PosStatusInfo(BaseModel):
     在调用 create_by_self 时，则需要处理一下，当 position==0 时，floating_pl 直接设置为 0，避免引起后续计算上的混淆
     """
     __tablename__ = 'pos_status_info'
-    pos_status_info_id = Column(Integer, primary_key=True, autoincrement=True)
-    stg_run_id = Column(Integer)  # 对应回测了策略 StgRunID 此数据与 AccSumID 对应数据相同
-    trade_id = Column(Integer)  # , comment="最新的成交id"
-    # update_dt = Column(DateTime)  # 每个订单变化生成一条记录 此数据与 AccSumID 对应数据相同
+    stg_run_id = Column(Integer, primary_key=True)  # 对应回测了策略 StgRunID 此数据与 AccSumID 对应数据相同
+    pos_status_info_idx = Column(Integer, primary_key=True)
+    trade_idx = Column(Integer)  # , comment="最新的成交id"
+    trade_dt = Column(DateTime)  # 每个订单变化生成一条记录 此数据与 AccSumID 对应数据相同
     trade_date = Column(Date)  # 对应行情数据中 ActionDate
     trade_time = Column(Time)  # 对应行情数据中 ActionTime
     trade_millisec = Column(Integer)  # 对应行情数据中 ActionMillisec
     direction = Column(TINYINT)
-    instrument_id = Column(String(30))
+    symbol = Column(String(30))
     position = Column(DOUBLE, default=0.0)
     avg_price = Column(DOUBLE, default=0.0)  # 所持投资品种上一交易日所有交易的加权平均价
     cur_price = Column(DOUBLE, default=0.0)
@@ -186,30 +212,53 @@ class PosStatusInfo(BaseModel):
     margin = Column(DOUBLE, default=0.0)
     margin_chg = Column(DOUBLE, default=0.0)
     position_date = Column(Integer, default=0)
-    logger = logging.getLogger(__tablename__)
+    logger = logging.getLogger(f'<Table:{__tablename__}')
 
     def __repr__(self):
-        return "<PosStatusInfo(id='{0.pos_status_info_id}', update_dt='{0.update_dt}', instrument_id='{0.instrument_id}', instrument_id='{0.instrument_id}', direction='{0.direction}', position='{0.position}')>".format(
-            self)
+        return f"<PosStatusInfo(id='{self.pos_status_info_idx}', update_dt='{datetime_2_str(self.trade_dt)}', trade_idx='{self.trade_idx}', symbol='{self.symbol}', direction='{self.direction}', position='{self.position}', avg_price='{self.avg_price}')>"
+
+    def __init__(self, stg_run_id=None, trade_idx=None, trade_dt=None,
+                 trade_date=None, trade_time=None, trade_millisec=None, direction=None, symbol=None, position=None,
+                 avg_price=None, cur_price=None, floating_pl=None, floating_pl_chg=None, floating_pl_cum=None,
+                 margin=None, margin_chg=None, position_date=None):
+        self.stg_run_id = stg_run_id
+        self.pos_status_info_idx = None if stg_run_id is None else idx_genetrator(stg_run_id, PosStatusInfo)
+        self.trade_idx = trade_idx
+        self.trade_dt = date_time_2_str(trade_date, trade_time) if trade_dt is None else trade_dt
+        self.trade_date = trade_date
+        self.trade_time = trade_time
+        self.trade_millisec = trade_millisec
+        self.direction = direction
+        self.symbol = symbol
+        self.position = position
+        self.avg_price = avg_price
+        self.cur_price = cur_price
+        self.floating_pl = floating_pl
+        self.floating_pl_chg = floating_pl_chg
+        self.floating_pl_cum = floating_pl_cum
+        self.margin = margin
+        self.margin_chg = margin_chg
+        self.position_date = position_date
 
     @staticmethod
     def create_by_trade_info(trade_info: TradeInfo):
-        direction, action, instrument_id = trade_info.direction, trade_info.action, trade_info.instrument_id
-        trade_price, trade_vol, trade_id = trade_info.trade_price, trade_info.trade_vol, trade_info.trade_id
-        trade_date, trade_time, trade_millisec = trade_info.trade_date, trade_info.trade_time, trade_info.trade_millisec
-        stg_run_id = trade_info.stg_run_id
+        direction, action, instrument_id = trade_info.direction, trade_info.action, trade_info.symbol
+        # trade_price, trade_vol, trade_idx = trade_info.trade_price, trade_info.trade_vol, trade_info.trade_idx
+        # trade_date, trade_time, trade_millisec = trade_info.trade_date, trade_info.trade_time, trade_info.trade_millisec
+        # stg_run_id = trade_info.stg_run_id
         if action == int(Action.Close):
             raise ValueError('trade_info.action 不能为 close')
-        pos_status_info = PosStatusInfo(stg_run_id=stg_run_id,
-                                        trade_id=trade_id,
-                                        trade_date=trade_date,
-                                        trade_time=trade_time,
-                                        trade_millisec=trade_millisec,
-                                        direction=direction,
-                                        instrument_id=instrument_id,
-                                        position=trade_vol,
-                                        avg_price=trade_price,
-                                        cur_price=trade_price,
+        pos_status_info = PosStatusInfo(stg_run_id=trade_info.stg_run_id,
+                                        trade_idx=trade_info.trade_idx,
+                                        trade_dt=trade_info.trade_dt,
+                                        trade_date=trade_info.trade_date,
+                                        trade_time=trade_info.trade_time,
+                                        trade_millisec=trade_info.trade_millisec,
+                                        direction=trade_info.direction,
+                                        symbol=trade_info.symbol,
+                                        position=trade_info.trade_vol,
+                                        avg_price=trade_info.trade_price,
+                                        cur_price=trade_info.trade_price,
                                         margin=0,
                                         margin_chg=0,
                                         floating_pl=0,
@@ -231,18 +280,18 @@ class PosStatusInfo(BaseModel):
         """
         # 复制前一个持仓状态
         pos_status_info = self.create_by_self()
-        direction, action, instrument_id = trade_info.direction, trade_info.action, trade_info.instrument_id
-        trade_price, trade_vol, trade_id = trade_info.trade_price, trade_info.trade_vol, trade_info.trade_id
-        trade_date, trade_time, trade_millisec = trade_info.trade_date, trade_info.trade_time, trade_info.trade_millisec
+        direction, action, symbol = trade_info.direction, trade_info.action, trade_info.symbol
+        trade_price, trade_vol, trade_idx = trade_info.trade_price, trade_info.trade_vol, trade_info.trade_idx
 
         # 获取合约信息
-        # instrument_info = Config.instrument_info_dic[instrument_id]
+        # instrument_info = Config.instrument_info_dic[symbol]
         # multiple = instrument_info['VolumeMultiple']
         # margin_ratio = instrument_info['LongMarginRatio']
         multiple, margin_ratio = 1, 1
 
         # 计算仓位、方向、平均价格
-        pos_direction, position, avg_price = pos_status_info.direction, pos_status_info.position, pos_status_info.avg_price
+        pos_direction = pos_status_info.direction
+        position, avg_price = pos_status_info.position, pos_status_info.avg_price
         if pos_direction == direction:
             if action == Action.Open:
                 # 方向相同：开仓：加仓；
@@ -292,7 +341,7 @@ class PosStatusInfo(BaseModel):
             #         pos_status_info.position = position_rest
             #     else:
             #         # 多空反手
-            #         self.logger.warning("%s 持%s：%d -> %d 多空反手", self.instrument_id,
+            #         self.logger.warning("%s 持%s：%d -> %d 多空反手", self.symbol,
             #                             '多' if direction == int(Direction.Long) else '空', position, position_rest)
             #         pos_status_info.avg_price = avg_price
             #         pos_status_info.position = position_rest
@@ -300,9 +349,10 @@ class PosStatusInfo(BaseModel):
 
         # 设置其他属性
         pos_status_info.cur_price = trade_price
-        pos_status_info.trade_date = trade_date
-        pos_status_info.trade_time = trade_time
-        pos_status_info.trade_millisec = trade_millisec
+        pos_status_info.trade_dt = trade_info.trade_dt
+        pos_status_info.trade_date = trade_info.trade_date
+        pos_status_info.trade_time = trade_info.trade_time
+        pos_status_info.trade_millisec = trade_info.trade_millisec
 
         # 计算 floating_pl margin
         position = pos_status_info.position
@@ -332,47 +382,6 @@ class PosStatusInfo(BaseModel):
                 session.commit()
         return pos_status_info
 
-    def update_by_md(self, md: dict):
-        """
-        创建新的对象，根据 trade_info 更新相关信息
-        :param md: 
-        :return: 
-        """
-        trade_date = md['ActionDay']
-        trade_time = pd_timedelta_2_timedelta(md['ActionTime'])
-        trade_millisec = int(md.setdefault('ActionMillisec', 0))
-        trade_price = float(md['close'])
-        instrument_id = md['InstrumentID']
-        pos_status_info = self.create_by_self()
-        pos_status_info.cur_price = trade_price
-        pos_status_info.trade_date = trade_date
-        pos_status_info.trade_time = trade_time
-        pos_status_info.trade_millisec = trade_millisec
-
-        # 计算 floating_pl margin
-        # instrument_info = Config.instrument_info_dic[instrument_id]
-        # multiple = instrument_info['VolumeMultiple']
-        # margin_ratio = instrument_info['LongMarginRatio']
-        multiple, margin_ratio = 1, 1
-        position = pos_status_info.position
-        cur_price = pos_status_info.cur_price
-        avg_price = pos_status_info.avg_price
-        pos_status_info.margin = position * cur_price * multiple * margin_ratio
-        pos_status_info.margin_chg = pos_status_info.margin - self.margin
-        if pos_status_info.direction == Direction.Long:
-            pos_status_info.floating_pl = (cur_price - avg_price) * position * multiple
-        else:
-            pos_status_info.floating_pl = (avg_price - cur_price) * position * multiple
-        pos_status_info.floating_pl_chg = pos_status_info.floating_pl - self.floating_pl
-        pos_status_info.floating_pl_cum += pos_status_info.floating_pl_chg
-
-        if UPDATE_OR_INSERT_PER_ACTION:
-            # 更新最新持仓纪录
-            with with_db_session(engine_ibats, expire_on_commit=False) as session:
-                session.add(pos_status_info)
-                session.commit()
-        return pos_status_info
-
     def create_by_self(self):
         """
         创建新的对象
@@ -381,12 +390,13 @@ class PosStatusInfo(BaseModel):
         """
         position = self.position
         pos_status_info = PosStatusInfo(stg_run_id=self.stg_run_id,
-                                        trade_id=self.trade_id,
+                                        trade_idx=self.trade_idx,
+                                        trade_dt=self.trade_dt,
                                         trade_date=self.trade_date,
                                         trade_time=self.trade_time,
                                         trade_millisec=self.trade_millisec,
                                         direction=self.direction,
-                                        instrument_id=self.instrument_id,
+                                        symbol=self.symbol,
                                         position=position,
                                         avg_price=self.avg_price,
                                         cur_price=self.cur_price,
@@ -396,45 +406,26 @@ class PosStatusInfo(BaseModel):
         return pos_status_info
 
     @staticmethod
-    def create_by_dic(position_date_inv_pos_dic: dict) -> dict:
-        if position_date_inv_pos_dic is None:
-            return None
-        position_date_pos_info_dic = {}
-        for position_date, pos_dic in position_date_inv_pos_dic.items():
-            pos_info = PosStatusInfo()
-            pos_info.trade_date = pos_dic['TradingDay']
-            pos_info.trade_time = None
-            pos_info.direction = Direction.create_by_posi_direction(pos_dic['PosiDirection'])
-            pos_info.instrument_id = pos_dic['InstrumentID']
-            pos_info.position = pos_dic['Position']
-            pos_info.avg_price = pos_dic['PositionCost']
-            pos_info.cur_price = 0
-            pos_info.floating_pl = pos_dic['PositionProfit']
-            pos_info.floating_pl_chg = 0
-            pos_info.margin = pos_dic['UseMargin']
-            pos_info.margin_chg = 0
-            pos_info.position_date = int(position_date)
-            position_date_pos_info_dic[position_date] = pos_info
-        return position_date_pos_info_dic
-
-    @staticmethod
-    def remove_pos_status_info(stg_run_id: int):
+    def remove(stg_run_id: int):
         """
         仅作为调试工具使用，删除指定 stg_run_id 相关的 pos_status_info
         :param stg_run_id: 
         :return: 
         """
         with with_db_session(engine_ibats) as session:
-            session.execute('DELETE FROM pos_status_info WHERE stg_run_id=:stg_run_id',
-                            {'stg_run_id': stg_run_id})
+            # session.execute('DELETE FROM pos_status_info WHERE stg_run_id=:stg_run_id',
+            #                 {'stg_run_id': stg_run_id})
+            session.query(PosStatusInfo).filter(PosStatusInfo.stg_run_id == stg_run_id).delete()
             session.commit()
+        # PosStatusInfo.query.filter
 
 
 class AccountStatusInfo(BaseModel):
     """持仓状态数据"""
     __tablename__ = 'account_status_info'
-    account_status_info_id = Column(Integer, primary_key=True, autoincrement=True)
-    stg_run_id = Column(Integer)  # 对应回测了策略 StgRunID 此数据与 AccSumID 对应数据相同
+    stg_run_id = Column(Integer, primary_key=True)  # 对应回测了策略 StgRunID 此数据与 AccSumID 对应数据相同
+    account_status_info_idx = Column(Integer, primary_key=True)
+    trade_dt = Column(DateTime)
     trade_date = Column(Date)  # 对应行情数据中 ActionDate
     trade_time = Column(Time)  # 对应行情数据中 ActionTime
     trade_millisec = Column(Integer)  # 对应行情数据中 ActionMillisec
@@ -446,6 +437,23 @@ class AccountStatusInfo(BaseModel):
     fee_tot = Column(DOUBLE, default=0.0)
     balance_tot = Column(DOUBLE, default=0.0)
 
+    def __init__(self, stg_run_id=None, trade_dt=None, trade_date=None, trade_time=None, trade_millisec=None,
+                 available_cash=None, curr_margin=None, close_profit=None, position_profit=None, floating_pl_cum=None,
+                 fee_tot=None, balance_tot=None):
+        self.stg_run_id = stg_run_id
+        self.account_status_info_idx = None if stg_run_id is None else idx_genetrator(stg_run_id, AccountStatusInfo)
+        self.trade_dt = date_time_2_str(trade_date, trade_time) if trade_dt is None else trade_dt
+        self.trade_date = trade_date
+        self.trade_time = trade_time
+        self.trade_millisec = trade_millisec
+        self.available_cash = available_cash
+        self.curr_margin = curr_margin
+        self.close_profit = close_profit
+        self.position_profit = position_profit
+        self.floating_pl_cum = floating_pl_cum
+        self.fee_tot = fee_tot
+        self.balance_tot = balance_tot
+
     @staticmethod
     def create(stg_run_id, init_cash: int, md: dict):
         """
@@ -455,6 +463,7 @@ class AccountStatusInfo(BaseModel):
         :param md: 
         :return: 
         """
+        warnings.warn('该函数为范例函数，需要根据实际情况改写', UserWarning)
         trade_date = str_2_date(md['ActionDay']) - timedelta(days=1)
         trade_time = pd_timedelta_2_timedelta(md['ActionTime'])
         trade_millisec = int(md.setdefault('ActionMillisec', 0))
@@ -498,6 +507,7 @@ class AccountStatusInfo(BaseModel):
         :param pos_status_info_dic: 
         :return: 
         """
+        warnings.warn('该函数为范例函数，需要根据实际情况改写', UserWarning)
         account_status_info = self.create_by_self()
         # 上一次更新日期、时间
         # trade_date_last, trade_time_last, trade_millisec_last = \

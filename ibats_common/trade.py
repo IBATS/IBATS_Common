@@ -165,7 +165,7 @@ class BacktestTraderAgentBase(TraderAgentBase):
                                order_millisec=0,
                                direction=int(direction),
                                action=int(action),
-                               instrument_id=symbol,
+                               symbol=symbol,
                                order_price=float(price),
                                order_vol=int(vol)
                                )
@@ -197,7 +197,7 @@ class BacktestTraderAgentBase(TraderAgentBase):
         :param trade_info:
         :return:
         """
-        symbol = trade_info.instrument_id
+        symbol = trade_info.symbol
         if symbol in self._pos_status_info_dic:
             pos_status_info_last = self._pos_status_info_dic[symbol]
             pos_status_info = pos_status_info_last.update_by_trade_info(trade_info)
