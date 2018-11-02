@@ -55,6 +55,7 @@ class ConfigBase:
     )
     logging.getLogger('sqlalchemy.engine').setLevel(logging.WARN)
     logging.getLogger('urllib3.connectionpool').setLevel(logging.INFO)
+    logging.getLogger('matplotlib').setLevel(logging.INFO)
     dictConfig(logging_config)
     update_db_datetime = datetime.now()
 
