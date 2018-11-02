@@ -10,11 +10,28 @@
 from ibats_common.config import config
 from ibats_common.utils.db import DynamicEngine
 import logging
+from datetime import datetime
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 
 class DyEngine(DynamicEngine):
+
+    def __init__(self, db_url_dic):
+        DynamicEngine.__init__(self, db_url_dic)
+        self.update_datetime = datetime.now()
+
+    def __getitem__(self, item):
+        if config.update_db_datetime > self.update_datetime:
+            self.reload_engines(refresh=True)
+
+        return DynamicEngine.__getitem__(self, item)
+
+    def __iter__(self):
+        if config.update_db_datetime > self.update_datetime:
+            self.reload_engines(refresh=True)
+
+        return DynamicEngine.__iter__(self)
 
     @property
     def engine_ibats(self):

@@ -5,6 +5,7 @@ Created on 2017/6/9
 """
 import logging
 from logging.config import dictConfig
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ class ConfigBase:
     logging.getLogger('sqlalchemy.engine').setLevel(logging.WARN)
     logging.getLogger('urllib3.connectionpool').setLevel(logging.INFO)
     dictConfig(logging_config)
+    update_db_datetime = datetime.now()
 
 
 # 开发配置（SIMNOW MD + Trade）
@@ -65,6 +67,7 @@ def update_config(config_new: ConfigBase):
     """更新配置信息"""
     global config
     config = config_new
+    config.update_db_datetime = datetime.now()
     logger.info('更新默认配置信息 %s < %s', ConfigBase, config_new.__class__)
 
 
@@ -72,3 +75,4 @@ def update_db_config(db_url_dic: dict):
     """更新数据配置链接"""
     config.DB_URL_DIC.update(db_url_dic)
     logger.debug('更新数据库配置信息  %s keys: %s', ConfigBase, list(db_url_dic.keys()))
+    config.update_db_datetime = datetime.now()
