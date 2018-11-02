@@ -328,11 +328,11 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
 
     stg_run_info = StgRunInfo(stg_name=stg_class.__name__,  # '{.__name__}'.format(stg_class)
                               dt_from=datetime.now(),
-                              dt_to=None,
+                              # dt_to=None,
                               stg_params=json.dumps(strategy_params),
                               md_agent_params_list=json.dumps(md_agent_params_list_4_json),
                               run_mode=int(run_mode),
-                              trade_agent_params=json.dumps(trade_agent_params_4_json))
+                              trade_agent_params_list=json.dumps(trade_agent_params_4_json))
     with with_db_session(engine_ibats) as session:
         session.add(stg_run_info)
         session.commit()
@@ -341,7 +341,7 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
     stg_base = stg_class(**strategy_params)
     # 设置策略交易接口 trade_agent，这里不适用参数传递的方式而使用属性赋值，
     # 因为stg子类被继承后，参数主要用于设置策略所需各种参数使用
-    stg_base.trade_agent = trader_agent_factory(run_mode, stg_run_id, exchange_name, trade_agent_params)
+    stg_base.trade_agent = trader_agent_factory(run_mode, stg_run_id, **trade_agent_params)
     # 对不同周期设置相应的md_agent
     # 初始化各个周期的 md_agent
     md_period_agent_dic = {}
@@ -711,15 +711,15 @@ def _test_use():
     }
     # run_mode = RunMode.BackTest
     # 初始化策略处理器
-    stghandler = strategy_handler_factory(stg_class=MACrossStg,
-                                          strategy_params=strategy_params,
-                                          md_agent_params_list=md_agent_params_list,
-                                          exchange_name=ExchangeName.BitMex,
-                                          **trade_agent_params_backtest)
-    stghandler.start()
+    stg_handler = strategy_handler_factory(stg_class=MACrossStg,
+                                           strategy_params=strategy_params,
+                                           md_agent_params_list=md_agent_params_list,
+                                           exchange_name=ExchangeName.BitMex,
+                                           **trade_agent_params_backtest)
+    stg_handler.start()
     time.sleep(10)
-    stghandler.is_working = False
-    stghandler.join()
+    stg_handler.is_working = False
+    stg_handler.join()
     logging.info("执行结束")
 
 
