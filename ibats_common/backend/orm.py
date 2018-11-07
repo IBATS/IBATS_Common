@@ -192,6 +192,7 @@ class PosStatusInfo(BaseModel):
     持仓状态数据
     当持仓状态从有仓位到清仓时（position>0 --> position==0），计算清仓前的浮动收益，并设置到 floating_pl 字段最为当前状态的浮动收益
     在调用 create_by_self 时，则需要处理一下，当 position==0 时，floating_pl 直接设置为 0，避免引起后续计算上的混淆
+    2018-11-02 当仓位多空切换时（1根K线内多头反手转空头），则浮动收益继续保持之前数字
     """
     __tablename__ = 'pos_status_info'
     stg_run_id = Column(Integer, primary_key=True)  # 对应回测了策略 StgRunID 此数据与 AccSumID 对应数据相同
@@ -219,8 +220,8 @@ class PosStatusInfo(BaseModel):
 
     def __init__(self, stg_run_id=None, trade_idx=None, trade_dt=None,
                  trade_date=None, trade_time=None, trade_millisec=None, direction=None, symbol=None, position=None,
-                 avg_price=None, cur_price=None, floating_pl=None, floating_pl_chg=None, floating_pl_cum=None,
-                 margin=None, margin_chg=None, position_date=None):
+                 avg_price=None, cur_price=None, floating_pl=0, floating_pl_chg=0, floating_pl_cum=0,
+                 margin=0, margin_chg=0, position_date=None):
         self.stg_run_id = stg_run_id
         self.pos_status_info_idx = None if stg_run_id is None else idx_genetrator(stg_run_id, PosStatusInfo)
         self.trade_idx = trade_idx
@@ -239,6 +240,8 @@ class PosStatusInfo(BaseModel):
         self.margin = margin
         self.margin_chg = margin_chg
         self.position_date = position_date
+        # 记录上一状态的浮动收益，用于在计算仓位多空切换时前一状态的浮动收益
+        # self.floating_pl_last = floating_pl_last
 
     @staticmethod
     def create_by_trade_info(trade_info: TradeInfo):
@@ -290,40 +293,40 @@ class PosStatusInfo(BaseModel):
         multiple, margin_ratio = 1, 1
 
         # 计算仓位、方向、平均价格
-        pos_direction = pos_status_info.direction
-        position, avg_price = pos_status_info.position, pos_status_info.avg_price
-        if pos_direction == direction:
+        pos_direction_last, position_last, avg_price_last = self.direction, self.position, self.avg_price
+        if pos_direction_last == direction:
             if action == Action.Open:
                 # 方向相同：开仓：加仓；
-                pos_status_info.avg_price = (position * avg_price + trade_price * trade_vol) / (position + trade_vol)
-                pos_status_info.position = position + trade_vol
+                pos_status_info.avg_price = \
+                    (position_last * avg_price_last + trade_price * trade_vol) / (position_last + trade_vol)
+                pos_status_info.position = position_last + trade_vol
             else:
                 # 方向相同：关仓：减仓；
-                if trade_vol > position:
-                    raise ValueError("当前持仓%d，平仓%d，错误" % (position, trade_vol))
-                elif trade_vol == position:
+                if trade_vol > position_last:
+                    raise ValueError("当前持仓%d，平仓%d，错误" % (position_last, trade_vol))
+                elif trade_vol == position_last:
                     # 清仓前计算浮动收益
                     # 未清仓的情况将在下面的代码中统一计算浮动收益
                     if pos_status_info.direction == Direction.Long:
-                        pos_status_info.floating_pl = (trade_price - avg_price) * position * multiple
+                        pos_status_info.floating_pl = (trade_price - avg_price_last) * position_last * multiple
                     else:
-                        pos_status_info.floating_pl = (avg_price - trade_price) * position * multiple
+                        pos_status_info.floating_pl = (avg_price_last - trade_price) * position_last * multiple
 
                     pos_status_info.avg_price = 0
                     pos_status_info.position = 0
 
                 else:
-                    pos_status_info.avg_price = (position * avg_price - trade_price * trade_vol) / (
-                            position - trade_vol)
-                    pos_status_info.position = position - trade_vol
-        elif position == 0:
+                    pos_status_info.avg_price = (position_last * avg_price_last - trade_price * trade_vol) / (
+                            position_last - trade_vol)
+                    pos_status_info.position = position_last - trade_vol
+        elif position_last == 0:
             pos_status_info.avg_price = trade_price
             pos_status_info.position = trade_vol
             pos_status_info.direction = direction
         else:
             # 方向相反
             raise ValueError("当前仓位：%s %d手，目标操作：%s %d手，请先平仓在开仓" % (
-                "多头" if pos_direction == Direction.Long else "空头", position,
+                "多头" if pos_direction_last == Direction.Long else "空头", position_last,
                 "多头" if direction == Direction.Long else "空头", trade_vol,
             ))
             # if position == trade_vol:
@@ -355,18 +358,18 @@ class PosStatusInfo(BaseModel):
         pos_status_info.trade_millisec = trade_info.trade_millisec
 
         # 计算 floating_pl margin
-        position = pos_status_info.position
+        position_cur = pos_status_info.position
         # cur_price = pos_status_info.cur_price
-        avg_price = pos_status_info.avg_price
-        pos_status_info.margin = position * trade_price * multiple * margin_ratio
+        avg_price_last = pos_status_info.avg_price
+        pos_status_info.margin = position_cur * trade_price * multiple * margin_ratio
         # 如果当前仓位不为 0 则计算浮动收益
-        if position > 0:
+        if position_cur > 0:
             if pos_status_info.direction == Direction.Long:
-                pos_status_info.floating_pl = (trade_price - avg_price) * position * multiple
+                pos_status_info.floating_pl = (trade_price - avg_price_last) * position_cur * multiple
             else:
-                pos_status_info.floating_pl = (avg_price - trade_price) * position * multiple
-        # 如果前一状态仓位为 0 则不进行差值计算
-        if self.position == 0:
+                pos_status_info.floating_pl = (avg_price_last - trade_price) * position_cur * multiple
+        # 如果前一状态仓位为 0,  且不是多空切换的情况，则保留上一状态的浮动收益
+        if self.position == 0 and self.trade_dt != trade_info.trade_dt:
             pos_status_info.margin_chg = pos_status_info.margin
             pos_status_info.floating_pl_chg = pos_status_info.floating_pl
         else:
@@ -402,7 +405,9 @@ class PosStatusInfo(BaseModel):
                                         cur_price=self.cur_price,
                                         floating_pl=self.floating_pl if position > 0 else 0,
                                         floating_pl_cum=self.floating_pl_cum,
-                                        margin=self.margin)
+                                        margin=self.margin,
+                                        # floating_pl_last=self.floating_pl,
+                                        )
         return pos_status_info
 
     @staticmethod
