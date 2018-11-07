@@ -157,7 +157,7 @@ class BacktestTraderAgentBase(TraderAgentBase):
     def curr_close(self) -> float:
         return float(self.curr_md[self.close_key])
 
-    def _save_order_info(self, symbol, price: float, vol: int, direction: Direction, action: Action):
+    def _record_order_info(self, symbol, price: float, vol: int, direction: Direction, action: Action):
         order_date = self.curr_timestamp.date()
         order_info = OrderInfo(stg_run_id=self.stg_run_id,
                                order_date=order_date,
@@ -178,9 +178,9 @@ class BacktestTraderAgentBase(TraderAgentBase):
         # 更新成交信息
         # Order_2_Deal 模式：下单即成交
         if self.trade_mode == BacktestTradeMode.Order_2_Deal:
-            self._save_trade_info(order_info)
+            self._record_trade_info(order_info)
 
-    def _save_trade_info(self, order_info: OrderInfo):
+    def _record_trade_info(self, order_info: OrderInfo):
         """
         根据订单信息保存成交结果
         :param order_info:
@@ -189,9 +189,9 @@ class BacktestTraderAgentBase(TraderAgentBase):
         trade_info = TradeInfo.create_by_order_info(order_info)
         self.trade_info_list.append(trade_info)
         # 更新持仓信息
-        self._save_pos_status_info(trade_info)
+        self._record_pos_status_info(trade_info)
 
-    def _save_pos_status_info(self, trade_info: TradeInfo):
+    def _record_pos_status_info(self, trade_info: TradeInfo):
         """
         根据成交信息保存最新持仓信息
         :param trade_info:
@@ -210,7 +210,7 @@ class BacktestTraderAgentBase(TraderAgentBase):
         self._pos_status_info_dic[symbol] = pos_status_info
         # self.c_save_acount_info(pos_status_info)
 
-    def _create_account_status_info(self) -> AccountStatusInfo:
+    def _record_account_status_info(self) -> AccountStatusInfo:
         stg_run_id, init_cash = self.stg_run_id, self.init_cash
         timestamp_curr = self.curr_timestamp
         trade_date = timestamp_curr.date()
@@ -333,7 +333,7 @@ class BacktestTraderAgentBase(TraderAgentBase):
             return
         if self._account_status_info is None:
             # self._account_status_info = AccountStatusInfo.create(self.stg_run_id, self.init_cash, self.curr_md)
-            self._account_status_info = self._create_account_status_info()
+            self._account_status_info = self._record_account_status_info()
             self.account_info_list.append(self._account_status_info)
 
         symbol = self.curr_symbol
@@ -360,16 +360,16 @@ class BacktestTraderAgentBase(TraderAgentBase):
         self.account_info_list.append(self._account_status_info)
 
     def open_long(self, symbol, price, vol):
-        self._save_order_info(symbol, price, vol, Direction.Long, Action.Open)
+        self._record_order_info(symbol, price, vol, Direction.Long, Action.Open)
 
     def close_long(self, symbol, price, vol):
-        self._save_order_info(symbol, price, vol, Direction.Long, Action.Close)
+        self._record_order_info(symbol, price, vol, Direction.Long, Action.Close)
 
     def open_short(self, symbol, price, vol):
-        self._save_order_info(symbol, price, vol, Direction.Short, Action.Open)
+        self._record_order_info(symbol, price, vol, Direction.Short, Action.Open)
 
     def close_short(self, symbol, price, vol):
-        self._save_order_info(symbol, price, vol, Direction.Short, Action.Close)
+        self._record_order_info(symbol, price, vol, Direction.Short, Action.Close)
 
     def get_position(self, symbol, **kwargs) -> dict:
         if symbol in self._pos_status_info_dic:
