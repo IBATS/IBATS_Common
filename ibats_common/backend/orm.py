@@ -38,9 +38,10 @@ class StgRunInfo(BaseModel):
     stg_name = Column(String(300))
     dt_from = Column(DateTime())
     dt_to = Column(DateTime())
-    stg_params = Column(String(5000))
-    md_agent_params_list = Column(String(5000))
     run_mode = Column(SmallInteger)
+    stg_params = Column(String(5000))
+    strategy_handler_param = Column(String(1000))
+    md_agent_params_list = Column(String(5000))
     trade_agent_params_list = Column(String(5000))
 
 
