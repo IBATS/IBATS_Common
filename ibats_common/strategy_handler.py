@@ -324,8 +324,8 @@ class StgHandlerBacktest(StgHandlerBase):
             self.stg_run_ending()
 
 
-def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent_params_list, run_mode: RunMode,
-                             exchange_name: ExchangeName, **trade_agent_params) -> StgHandlerBase:
+def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent_params_list,
+                             run_mode: RunMode, exchange_name: ExchangeName, **trade_agent_params) -> StgHandlerBase:
     """
     单一交易所策略处理具备
     建立策略对象
@@ -340,27 +340,43 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
     :param trade_agent_params: 运行参数，回测模式下：运行起止时间，实时行情下：加载定时器等设置
     :return: 策略执行对象实力
     """
-    md_agent_params_list_4_json = []
+    # 为 md_agent_param 补充参数
     for md_agent_param in md_agent_params_list:
-        md_agent_param_4_json = md_agent_param.copy()
-        md_agent_param_4_json['exchange_name'] = exchange_name.name
-        md_agent_param_4_json['run_mode'] = run_mode.name
-        md_agent_params_list_4_json.append(md_agent_param_4_json)
-
         md_agent_param['exchange_name'] = exchange_name
-        md_agent_param['run_mode'] = run_mode
 
-    trade_agent_params_4_json = trade_agent_params.copy()
-    trade_agent_params_4_json['exchange_name'] = exchange_name.name
+    # 为 trade_agent_params 补充参数
     trade_agent_params['exchange_name'] = exchange_name
+    trade_agent_params_list = [trade_agent_params]
+    strategy_handler_param = {}
+    stg_handler = strategy_handler_factory_multi_exchange(
+        stg_class, strategy_params, md_agent_params_list, run_mode, trade_agent_params_list, strategy_handler_param)
+    return stg_handler
 
+
+def strategy_handler_factory_multi_exchange(
+        stg_class: type(StgBase), strategy_params, md_agent_params_list, run_mode: RunMode,
+        trade_agent_params_list: list, strategy_handler_param:dict) -> StgHandlerBase:
+    """
+    多交易所策略处理具备
+    建立策略对象
+    建立数据库相应记录信息
+    根据运行模式（实时、回测）：选择相应的md_agent以及trade_agent
+    :param stg_class: 策略类型 StgBase 的子类
+    :param strategy_params: 策略参数
+    :param md_agent_params_list: 行情代理（md_agent）参数，支持同时订阅多周期、多品种，
+    例如：同时订阅 [ethusdt, eosusdt] 1min 行情、[btcusdt, ethbtc] tick 行情
+    :param run_mode: 运行模式 RunMode.Realtime  或 RunMode.Backtest
+    :param trade_agent_params_list: 运行参数，回测模式下：运行起止时间，实时行情下：加载定时器等设置
+    :return: 策略执行对象实力
+    """
     stg_run_info = StgRunInfo(stg_name=stg_class.__name__,  # '{.__name__}'.format(stg_class)
                               dt_from=datetime.now(),
                               # dt_to=None,
                               stg_params=json.dumps(strategy_params),
-                              md_agent_params_list=json.dumps(md_agent_params_list_4_json),
+                              md_agent_params_list=json.dumps(md_agent_params_list),
                               run_mode=int(run_mode),
-                              trade_agent_params_list=json.dumps(trade_agent_params_4_json))
+                              trade_agent_params_list=json.dumps(trade_agent_params_list),
+                              )
     with with_db_session(engine_ibats) as session:
         session.add(stg_run_info)
         session.commit()
@@ -368,14 +384,22 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
     # 初始化策略实体，传入参数
     stg_base = stg_class(**strategy_params)
     # 设置策略交易接口 trade_agent，这里不适用参数传递的方式而使用属性赋值，
-    # 因为stg子类被继承后，参数主要用于设置策略所需各种参数使用
-    stg_base.trade_agent = trader_agent_factory(run_mode, stg_run_id, **trade_agent_params)
+    # 因为stg_base子类被继承后，参数主要用于设置策略所需各种参数使用
+    for params in trade_agent_params_list:
+        trade_agent = trader_agent_factory(run_mode, stg_run_id, **params)
+        # 默认使用交易所名称，若同一交易所，多个账户交易，则可以单独指定名称
+        name = params['name'] if 'name' in params else params['exchange_name']
+        stg_base.trade_agent_dic[name] = trade_agent
+        if 'is_default' in params and params['is_default']:
+            stg_base.trade_agent = trade_agent
+            stg_base.trade_agent_dic[ExchangeName.Default] = trade_agent
+
     # 对不同周期设置相应的md_agent
     # 初始化各个周期的 md_agent
     md_period_agent_dic = {}
-    for md_agent_param in md_agent_params_list:
-        period = md_agent_param['md_period']
-        md_agent = md_agent_factory(**md_agent_param)
+    for params in md_agent_params_list:
+        period = params['md_period']
+        md_agent = md_agent_factory(run_mode=run_mode, **params)
         md_period_agent_dic[period] = md_agent
         # 对各个周期分别加载历史数据，设置对应 handler
         # 通过 md_agent 加载各个周期的历史数据,
@@ -398,11 +422,11 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
 
     # 初始化 StgHandlerBase 实例
     if run_mode == RunMode.Realtime:
-        stg_handler = StgHandlerRealtime(stg_run_id=stg_run_id, stg_base=stg_base,
-                                         md_period_agent_dic=md_period_agent_dic, **trade_agent_params)
+        stg_handler = StgHandlerRealtime(
+            stg_run_id=stg_run_id, stg_base=stg_base, md_period_agent_dic=md_period_agent_dic, **strategy_handler_param)
     elif run_mode == RunMode.Backtest:
-        stg_handler = StgHandlerBacktest(stg_run_id=stg_run_id, stg_base=stg_base,
-                                         md_period_agent_dic=md_period_agent_dic, **trade_agent_params)
+        stg_handler = StgHandlerBacktest(
+            stg_run_id=stg_run_id, stg_base=stg_base, md_period_agent_dic=md_period_agent_dic, **strategy_handler_param)
     else:
         raise ValueError('run_mode %d error' % run_mode)
 
