@@ -61,14 +61,15 @@ class MACrossStg(StgBase):
 
 def _test_use():
     # 参数设置
+    run_mode = RunMode.Backtest
     strategy_params = {}
     md_agent_params_list = [
         {
-        'md_period': PeriodType.Min1,
-        'exchange_name': ExchangeName.BitMex,
-        'instrument_id_list': ['ethbtc'],  # ['jm1711', 'rb1712', 'pb1801', 'IF1710'],
-        'init_md_date_to': '2017-9-1',
-    },
+            'md_period': PeriodType.Min1,
+            'exchange_name': ExchangeName.BitMex,
+            'instrument_id_list': ['ethbtc'],  # ['jm1711', 'rb1712', 'pb1801', 'IF1710'],
+            'init_md_date_to': '2017-9-1',
+        },
         {
             'md_period': PeriodType.Min1,
             'exchange_name': ExchangeName.HuoBi,
@@ -76,41 +77,43 @@ def _test_use():
             'init_md_date_to': '2017-9-1',
         }
     ]
-    trade_agent_params_realtime = {
-        'run_mode': RunMode.Realtime,
-    }
-    trade_agent_params_list_backtest = [
-        {
-            'run_mode': RunMode.Backtest,
-            'date_from': '2018-6-18',
-            'date_to': '2018-6-19',
-            'init_cash': 1000000,
-            'exchange_name': ExchangeName.BitMex,
-            'trade_mode': BacktestTradeMode.Order_2_Deal
-        },
-        {
-            'run_mode': RunMode.Backtest,
-            'date_from': '2018-6-18',
-            'date_to': '2018-6-19',
-            'init_cash': 1000000,
-            'exchange_name': ExchangeName.HuoBi,
-            'trade_mode': BacktestTradeMode.Order_2_Deal
+    if run_mode == RunMode.Realtime:
+        trade_agent_params_list = [{
+        }]
+        strategy_handler_param = {
         }
-    ]
-    # run_mode = RunMode.BackTest
+    else:
+        trade_agent_params_list = [
+            {
+                'exchange_name': ExchangeName.BitMex,
+                'trade_mode': BacktestTradeMode.Order_2_Deal,
+                'init_cash': 1000000,
+            },
+            {
+                'exchange_name': ExchangeName.BitMex,
+                'trade_mode': BacktestTradeMode.Order_2_Deal,
+                'init_cash': 1000000,
+            }
+        ]
+        strategy_handler_param = {
+            'date_from': '2018-7-19',  # 策略回测历史数据，回测指定时间段的历史行情
+            'date_to': '2018-7-20',
+        }
+
     # 初始化策略处理器
-    stg_handler = strategy_handler_factory_multi_exchange(
+    stghandler = strategy_handler_factory_multi_exchange(
         stg_class=MACrossStg,
         strategy_params=strategy_params,
         md_agent_params_list=md_agent_params_list,
-        trade_agent_params_list=trade_agent_params_list_backtest,
         run_mode=RunMode.Backtest,
+        trade_agent_params_list=trade_agent_params_list,
+        strategy_handler_param=strategy_handler_param,
     )
-    stg_handler.start()
+    stghandler.start()
     time.sleep(10)
-    stg_handler.is_working = False
-    stg_handler.join()
-    logger.info("执行结束")
+    stghandler.keep_running = False
+    stghandler.join()
+    logging.info("执行结束")
 
 
 if __name__ == '__main__':

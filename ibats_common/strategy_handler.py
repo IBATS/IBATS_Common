@@ -27,7 +27,7 @@ from ibats_common.utils.mess import try_2_date
 from ibats_common.trade import trader_agent_factory
 
 engine_ibats = engines.engine_ibats
-logger_stg_base = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class StgHandlerBase(Thread, ABC):
@@ -186,7 +186,7 @@ class StgHandlerBacktest(StgHandlerBase):
         if not isinstance(self.date_to, date):
             raise ValueError("date_from: %s", date_to)
         # 初始资金账户金额
-        self.init_cash = kwargs['init_cash']
+        # self.init_cash = kwargs['init_cash']
         # 载入回测时间段各个周期的历史数据，供回测使用
         # 对各个周期分别进行处理
         self.backtest_his_df_dic = {}
@@ -324,8 +324,9 @@ class StgHandlerBacktest(StgHandlerBase):
             self.stg_run_ending()
 
 
-def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent_params_list,
-                             run_mode: RunMode, exchange_name: ExchangeName, **trade_agent_params) -> StgHandlerBase:
+def strategy_handler_factory(
+        stg_class: type(StgBase), strategy_params, md_agent_params_list, run_mode: RunMode, exchange_name: ExchangeName,
+        trade_agent_params: dict, strategy_handler_param: dict) -> StgHandlerBase:
     """
     单一交易所策略处理具备
     建立策略对象
@@ -338,6 +339,7 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
     :param exchange_name: 选择交易所接口 ExchangeName
     :param run_mode: 运行模式 RunMode.Realtime  或 RunMode.Backtest
     :param trade_agent_params: 运行参数，回测模式下：运行起止时间，实时行情下：加载定时器等设置
+    :param strategy_handler_param: strategy_handler 运行参数
     :return: 策略执行对象实力
     """
     # 为 md_agent_param 补充参数
@@ -346,8 +348,8 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
 
     # 为 trade_agent_params 补充参数
     trade_agent_params['exchange_name'] = exchange_name
+    trade_agent_params['is_default'] = True
     trade_agent_params_list = [trade_agent_params]
-    strategy_handler_param = {}
     stg_handler = strategy_handler_factory_multi_exchange(
         stg_class, strategy_params, md_agent_params_list, run_mode, trade_agent_params_list, strategy_handler_param)
     return stg_handler
@@ -355,7 +357,7 @@ def strategy_handler_factory(stg_class: type(StgBase), strategy_params, md_agent
 
 def strategy_handler_factory_multi_exchange(
         stg_class: type(StgBase), strategy_params, md_agent_params_list, run_mode: RunMode,
-        trade_agent_params_list: list, strategy_handler_param:dict) -> StgHandlerBase:
+        trade_agent_params_list: list, strategy_handler_param: dict) -> StgHandlerBase:
     """
     多交易所策略处理具备
     建立策略对象
@@ -367,6 +369,7 @@ def strategy_handler_factory_multi_exchange(
     例如：同时订阅 [ethusdt, eosusdt] 1min 行情、[btcusdt, ethbtc] tick 行情
     :param run_mode: 运行模式 RunMode.Realtime  或 RunMode.Backtest
     :param trade_agent_params_list: 运行参数，回测模式下：运行起止时间，实时行情下：加载定时器等设置
+    :param strategy_handler_param: strategy_handler 运行参数
     :return: 策略执行对象实力
     """
     stg_run_info = StgRunInfo(stg_name=stg_class.__name__,  # '{.__name__}'.format(stg_class)
@@ -383,9 +386,11 @@ def strategy_handler_factory_multi_exchange(
         stg_run_id = stg_run_info.stg_run_id
     # 初始化策略实体，传入参数
     stg_base = stg_class(**strategy_params)
+    logger.debug('strategy_params: %s', strategy_params)
     # 设置策略交易接口 trade_agent，这里不适用参数传递的方式而使用属性赋值，
     # 因为stg_base子类被继承后，参数主要用于设置策略所需各种参数使用
-    for params in trade_agent_params_list:
+    for num, params in enumerate(trade_agent_params_list, start=1):
+        logger.debug('%d) run_mode=%s, stg_run_id=%d, trade_agent_params: %s', num, run_mode.name, stg_run_id, params)
         trade_agent = trader_agent_factory(run_mode, stg_run_id, **params)
         # 默认使用交易所名称，若同一交易所，多个账户交易，则可以单独指定名称
         name = params['name'] if 'name' in params else params['exchange_name']
@@ -397,7 +402,8 @@ def strategy_handler_factory_multi_exchange(
     # 对不同周期设置相应的md_agent
     # 初始化各个周期的 md_agent
     md_period_agent_dic = {}
-    for params in md_agent_params_list:
+    for num, params in enumerate(md_agent_params_list, start=1):
+        logger.debug('%d) run_mode=%s, md_agent_params: %s', num, run_mode.name, params)
         period = params['md_period']
         md_agent = md_agent_factory(run_mode=run_mode, **params)
         md_period_agent_dic[period] = md_agent
@@ -408,7 +414,7 @@ def strategy_handler_factory_multi_exchange(
         # 与下方的另一次加载历史数据不同，下面的加载历史数据位回测过程中对回测数据的加载，两者不可合并
         his_df_dic = md_agent.load_history()
         if his_df_dic is None:
-            logger_stg_base.warning('加载 %s 历史数据为 None', period)
+            logger.warning('加载 %s 历史数据为 None', period)
             continue
         if isinstance(his_df_dic, dict):
             md_df = his_df_dic['md_df']
@@ -418,9 +424,10 @@ def strategy_handler_factory_multi_exchange(
 
         context = {ContextKey.instrument_id_list: list(md_agent.instrument_id_set)}
         stg_base.load_md_period_df(period, md_df, context)
-        logger_stg_base.debug('加载 %s 历史数据 %s 条', period, 'None' if md_df is None else str(md_df.shape[0]))
+        logger.debug('加载 %s 历史数据 %s 条', period, 'None' if md_df is None else str(md_df.shape[0]))
 
     # 初始化 StgHandlerBase 实例
+    logger.debug("stg_run_id=%d, strategy_handler_param: %s", stg_run_id, strategy_handler_param)
     if run_mode == RunMode.Realtime:
         stg_handler = StgHandlerRealtime(
             stg_run_id=stg_run_id, stg_base=stg_base, md_period_agent_dic=md_period_agent_dic, **strategy_handler_param)
@@ -430,5 +437,5 @@ def strategy_handler_factory_multi_exchange(
     else:
         raise ValueError('run_mode %d error' % run_mode)
 
-    logger_stg_base.debug('初始化 %r 完成', stg_handler)
+    logger.debug('初始化 %r 完成', stg_handler)
     return stg_handler
