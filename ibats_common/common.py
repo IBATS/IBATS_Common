@@ -131,5 +131,6 @@ class ContextKey(IntEnum):
     策略执行逻辑中 context[key] 的部分定制化key
     """
     instrument_id_list = 0
+    md_agent_key = 1
 
 

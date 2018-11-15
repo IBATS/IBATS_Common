@@ -7,6 +7,7 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
+from datetime import timedelta, datetime
 from ibats_common.common import PeriodType, RunMode, ExchangeName
 from threading import Thread
 import time
@@ -14,7 +15,7 @@ import pandas as pd
 import logging
 from abc import ABC, abstractmethod
 from functools import partial
-from ibats_common.utils.mess import str_2_date
+from ibats_common.utils.mess import str_2_date, active_coroutine
 
 logger = logging.getLogger(__package__)
 
@@ -48,6 +49,52 @@ class MdAgentBase(Thread, ABC):
             'date_key': **, 'time_key': **, 'microseconds_key': **
             }
         """
+
+    def load_history_record(self, date_from=None, date_to=None, load_md_count=None):
+        """
+        加载历史数据，以协程方式逐条推送出去（生成器方法）
+        :param date_from: None代表沿用类的 init_md_date_from 属性
+        :param date_to: None代表沿用类的 init_md_date_from 属性
+        :param load_md_count: 0 代表不限制，None代表沿用类的 init_load_md_count 属性，其他数字代表相应的最大加载条数
+        :return: 加载记录数
+        """
+        his_df_dic = self.load_history(date_from, date_to, load_md_count)
+        md_df = his_df_dic['md_df']
+        df_len = md_df.shape[0]
+        if df_len == 0:
+            return df_len
+
+        datetime_key = his_df_dic['datetime_key'] if 'datetime_key' in his_df_dic else None
+        date_key = his_df_dic['date_key'] if 'date_key' in his_df_dic else None
+        time_key = his_df_dic['time_key'] if 'time_key' in his_df_dic else None
+        microseconds_key = his_df_dic['microseconds_key'] if 'microseconds_key' in his_df_dic else None
+        # 字段合法性检查
+        if datetime_key is None and date_key is None and time_key is None:
+            raise KeyError('load_history 方法返回的 key 无效 %s' % his_df_dic.keys())
+
+        num = 0
+        for num, md_s in md_df.iterrows():
+            if datetime_key is not None:
+                datetime_tag = md_s[datetime_key]
+            else:
+                datetime_tag = datetime.combine(md_s[date_key], md_s[time_key])
+
+            if microseconds_key is not None:
+                datetime_tag += timedelta(microseconds=int(md_df[microseconds_key]))
+            yield num, datetime_tag, md_s
+
+        return num
+
+    @active_coroutine
+    def cor_load_history_record(self, date_from=None, date_to=None, load_md_count=None):
+        """
+        加载历史数据，以协程方式逐条推送出去（协程方法）
+        :param date_from: None代表沿用类的 init_md_date_from 属性
+        :param date_to: None代表沿用类的 init_md_date_from 属性
+        :param load_md_count: 0 代表不限制，None代表沿用类的 init_load_md_count 属性，其他数字代表相应的最大加载条数
+        :return: 加载记录数        """
+        data_count = yield from self.load_history_record(date_from, date_to, load_md_count)
+        return data_count
 
     @abstractmethod
     def connect(self):

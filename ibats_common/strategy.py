@@ -7,7 +7,8 @@ Created on 2017/9/2
 """
 import pandas as pd
 import logging
-from ibats_common.common import PeriodType, ExchangeName
+from collections import defaultdict
+from ibats_common.common import PeriodType, ExchangeName, ContextKey
 
 logger_stg_base = logging.getLogger(__name__)
 
@@ -15,12 +16,14 @@ logger_stg_base = logging.getLogger(__name__)
 class StgBase:
 
     def __init__(self):
-        # 记录各个周期 md 数据
-        self._md_period_df_dic = {}
+        # 记录各个md_agent_key、各个周期 md 数据
+        self._md_agent_key_period_df_dic = defaultdict(dict)
+        # 记录各个md_agent_key、各个周期 md 列信息
+        self._md_agent_key_period_df_col_name_list_dic = defaultdict(dict)
+        # 记录各个md_agent_key、各个周期 context 信息
+        self._md_agent_key_period_context_dic = defaultdict(dict)
         # 记录在行情推送过程中最新的一笔md数据
         # self._period_curr_md_dic = {}
-        # 记录各个周期 md 列信息
-        self._md_period_df_col_name_list_dic = {}
         self.trade_agent = None
         self.trade_agent_dic = {}
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -38,16 +41,17 @@ class StgBase:
             PeriodType.Mon1: EventHandlersRelation(PeriodType.Mon1,
                                                    self.on_prepare_month1, self.on_month1, pd.DataFrame),
         }
-        self._period_context_dic = {}
 
     def on_timer(self):
         pass
 
     def load_md_period_df(self, period, md_df, context):
         """初始化加载 md 数据"""
-        self._md_period_df_dic[period] = md_df
-        self._md_period_df_col_name_list_dic[period] = list(md_df.columns) if isinstance(md_df, pd.DataFrame) else None
-        self._period_context_dic[period] = context
+        md_agent_key = context[ContextKey.md_agent_key]
+        self._md_agent_key_period_df_dic[md_agent_key][period] = md_df
+        self._md_agent_key_period_df_col_name_list_dic[md_agent_key][period] = list(md_df.columns) \
+            if isinstance(md_df, pd.DataFrame) else None
+        self._md_agent_key_period_context_dic[md_agent_key][period] = context
         # prepare_event_handler = self._on_period_prepare_event_dic[period]
         prepare_event_handler = self._on_period_event_dic[period].prepare_event
         prepare_event_handler(md_df, context)
@@ -82,7 +86,7 @@ class StgBase:
             self.logger.debug('%d) release trade_agent %s', num, name)
             trade_agent.release()
 
-    def _on_period_md_append(self, period, md):
+    def _on_period_md_append(self, period, md, md_agent_key):
         """
         （仅供 on_period_md_handler 调用使用）
         用于整理接收到的各个周期行情数据
@@ -92,19 +96,19 @@ class StgBase:
         """
         # self._period_curr_md_dic[period] = md
         md_df = pd.DataFrame([md])
-        if period in self._md_period_df_dic:
-            col_name_list = self._md_period_df_col_name_list_dic[period]
-            md_df_his = self._md_period_df_dic[period].append(md_df[col_name_list])
-            self._md_period_df_dic[period] = md_df_his
+        if period in self._md_agent_key_period_df_dic[md_agent_key]:
+            col_name_list = self._md_agent_key_period_df_col_name_list_dic[md_agent_key][period]
+            md_df_his = self._md_agent_key_period_df_dic[md_agent_key][period].append(md_df[col_name_list])
+            self._md_agent_key_period_df_dic[md_agent_key][period] = md_df_his
         else:
             md_df_his = md_df
-            self._md_period_df_dic[period] = md_df_his
-            self._md_period_df_col_name_list_dic[period] = \
+            self._md_agent_key_period_df_dic[md_agent_key][period] = md_df_his
+            self._md_agent_key_period_df_col_name_list_dic[md_agent_key][period] = \
                 list(md_df.columns) if isinstance(md_df, pd.DataFrame) else None
             # self.logger.debug('%s -> %s', period, md)
         return md_df_his
 
-    def _on_period_md_event(self, period, md_df_his):
+    def _on_period_md_event(self, period, md_df_his, md_agent_key):
         """
         （仅供 on_period_md_handler 调用使用）
         用于将各个周期数据传入对应周期事件处理函数
@@ -114,11 +118,11 @@ class StgBase:
         """
         # event_handler = self._on_period_md_event_dic[period]
         event_handler = self._on_period_event_dic[period].md_event
-        context = self._period_context_dic[period]
+        context = self._md_agent_key_period_context_dic[md_agent_key][period]
         # self._trade_agent.curr_md = md
         event_handler(md_df_his, context)
 
-    def on_period_md_handler(self, period, md):
+    def on_period_md_handler(self, period, md, md_agent_key):
         """响应 period 数据"""
         # 本机测试，延时0.155秒，从分钟K线合成到交易策略端收到数据
         logger_stg_base.debug("%s -> %s", PeriodType(period), md)
@@ -126,12 +130,12 @@ class StgBase:
         period_event_relation = self._on_period_event_dic[period]
         event_handler = period_event_relation.md_event
         param_type = period_event_relation.param_type
-        context = self._period_context_dic[period]
+        context = self._md_agent_key_period_context_dic[md_agent_key][period]
         # TODO 由于每一次进入都需要进行判断，增加不必要的计算，考虑通过优化提高运行效率
         if param_type is dict:
             param = md
         elif param_type is pd.DataFrame:
-            param = self._on_period_md_append(period, md)
+            param = self._on_period_md_append(period, md, md_agent_key)
         else:
             raise ValueError("不支持 %s 类型作为 %s 的事件参数" % (param_type, period))
         event_handler(param, context)
