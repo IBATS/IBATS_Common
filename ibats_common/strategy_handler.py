@@ -172,7 +172,8 @@ class StgHandlerRealtime(StgHandlerBase):
 
 class StgHandlerBacktest(StgHandlerBase):
 
-    def __init__(self, stg_run_id, stg_base: StgBase, md_key_period_agent_dic, date_from, date_to, **kwargs):
+    def __init__(self, stg_run_id, stg_base: StgBase, md_key_period_agent_dic, date_from, date_to,
+                 md_td_agent_map=None, **kwargs):
         super().__init__(stg_run_id=stg_run_id, stg_base=stg_base, run_mode=RunMode.Backtest,
                          md_key_period_agent_dic=md_key_period_agent_dic)
         # 设置回测时间区间
@@ -208,6 +209,21 @@ class StgHandlerBacktest(StgHandlerBase):
         #     else:
         #         self.backtest_his_df_dic[period] = his_df_dic
         #         self.logger.debug('加载 %s 回测数据 %d 条记录', period, his_df_dic['md_df'].shape[0])
+
+        # 用于维护 md_agent 与 td_agent 之间对应关系（多对多关系）
+        # 用于在回测成交时指定行情发送到哪一个 trade_agent，默认情况下，该map将交易所相同的 md td agent进行匹配，也可以根据需要在参数设是手动进行配置
+        if md_td_agent_map is not None:
+            self.md_td_agent_key_set = md_td_agent_map
+        else:
+            self.md_td_agent_key_set = defaultdict(set)
+            # 遍历所有 md_agent, 查找 exchange_name 相同的进行 mapping
+            for md_agent_key, period_agent_dic in self.md_key_period_agent_dic.items():
+                for period, md_agent in period_agent_dic.items():
+                    for trade_agent_key, trade_agent in self.stg_base.trade_agent_dic.items():
+                        if md_agent.exchange_name == trade_agent.exchange_name:
+                            self.md_td_agent_key_set[md_agent_key].add(trade_agent_key)
+
+                    break
 
     def load_history_record(self):
         """
@@ -270,11 +286,16 @@ class StgHandlerBacktest(StgHandlerBase):
                     self.load_history_record(), start=1):
                 md = md_s.to_dict()
                 # 在回测阶段，需要对 trade_agent 设置最新的md数据，一遍交易接口确认相应的k线日期
-                self.stg_base.trade_agent.set_curr_md(period, md)
+                for trade_agent_key in self.md_td_agent_key_set[md_agent_key]:
+                    self.stg_base.trade_agent_dic[trade_agent_key].set_curr_md(period, md)
+
                 # 执行策略相应的事件响应函数
                 self.stg_base.on_period_md_handler(period, md, md_agent_key)
                 # 根据最新的 md 及 持仓信息 更新 账户信息
-                self.stg_base.trade_agent.update_account_info()
+                for trade_agent_key in self.md_td_agent_key_set[md_agent_key]:
+                    self.stg_base.trade_agent_dic[trade_agent_key].update_account_info()
+
+            # 循环结束
             self.logger.info('执行回测任务【%s - %s】完成，处理数据 %d 条', self.date_from, self.date_to, data_count)
         finally:
             self.is_working = False

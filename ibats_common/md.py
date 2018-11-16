@@ -22,10 +22,11 @@ logger = logging.getLogger(__package__)
 
 class MdAgentBase(Thread, ABC):
 
-    def __init__(self, instrument_id_set, md_period: PeriodType, name=None,
+    def __init__(self, instrument_id_set, md_period: PeriodType, exchange_name, name=None,
                  init_load_md_count=None, init_md_date_from=None, init_md_date_to=None):
         if name is None:
             name = md_period
+        self.exchange_name = exchange_name
         super().__init__(name=name, daemon=True)
         self.md_period = md_period
         self.keep_running = None
@@ -128,7 +129,8 @@ def md_agent_factory(run_mode: RunMode, instrument_id_list, md_period: PeriodTyp
                      exchange_name: ExchangeName = ExchangeName.Default, **kwargs) -> MdAgentBase:
     """工厂类用来生成相应 MdAgentBase 实例"""
     md_agent_class = md_agent_class_dic[run_mode][exchange_name]
-    md_agent_obj = md_agent_class(instrument_id_list, md_period, name, **kwargs)
+    md_agent_obj = md_agent_class(
+        instrument_id_list, md_period=md_period, name=name, exchange_name=exchange_name, **kwargs)
     return md_agent_obj
 
 

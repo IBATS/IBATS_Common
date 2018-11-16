@@ -25,14 +25,16 @@ class TraderAgentBase(ABC):
     交易代理（抽象类），回测交易代理，实盘交易代理的父类
     """
 
-    def __init__(self, stg_run_id, **run_mode_params):
+    def __init__(self, stg_run_id, exchange_name, **agent_params):
         """
         stg_run_id 作为每一次独立的执行策略过程的唯一标识
         :param stg_run_id:
+        :param exchange_name:
         """
         self.stg_run_id = stg_run_id
-        self.run_mode_params = run_mode_params
+        self.agent_params = agent_params
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.exchange_name = exchange_name
 
     @abstractmethod
     def connect(self):
@@ -97,12 +99,12 @@ class BacktestTraderAgentBase(TraderAgentBase):
     供调用模拟交易接口使用
     """
 
-    def __init__(self, stg_run_id, **run_mode_params):
-        super().__init__(stg_run_id, **run_mode_params)
+    def __init__(self, stg_run_id, **agent_params):
+        super().__init__(stg_run_id, **agent_params)
         # 标示 order 成交模式
-        self.trade_mode = run_mode_params.setdefault('trade_mode', BacktestTradeMode.Order_2_Deal)
+        self.trade_mode = agent_params.setdefault('trade_mode', BacktestTradeMode.Order_2_Deal)
         # 账户初始资金
-        self.init_cash = run_mode_params['init_cash']
+        self.init_cash = agent_params['init_cash']
         # 用来标示当前md，一般执行买卖交易是，对时间，价格等信息进行记录
         self.curr_md_period_type = None
         self.curr_md = None
@@ -120,10 +122,32 @@ class BacktestTraderAgentBase(TraderAgentBase):
         self.timestamp_key = None
         self.symbol_key = None
         self.close_key = None
+        # 未成交的订单列表
+        self.un_finished_order_list = []
 
     def set_curr_md(self, period_type, md):
         self.curr_md_period_type = period_type
         self.curr_md = md
+        if self.trade_mode != BacktestTradeMode.Order_2_Deal:
+            # 根据行情判断是否订单成交
+            finished_order_list = []
+            for order_info in self.un_finished_order_list:
+                # 如果 开多 或 平空 情况下
+                if (order_info.direction == int(Direction.Long) and order_info.action == int(Action.Open)) or (
+                        order_info.direction == int(Direction.Short) and order_info.action != int(Action.Open)
+                ):
+                    # 目前设置只有价格超越订单价格才能成就，= 的情况不能成就
+                    if order_info.order_price < md[self.close_key]:
+                        self._record_trade_info(order_info)
+                        finished_order_list.append(order_info)
+                else:
+                    # 目前设置只有价格跌破订单价格才能成就，= 的情况不能成就
+                    if order_info.order_price > md[self.close_key]:
+                        self._record_trade_info(order_info)
+                        finished_order_list.append(order_info)
+
+            for order_info in finished_order_list:
+                self.un_finished_order_list.remove(order_info)
 
     def set_timestamp_key(self, key):
         self.timestamp_key = key
@@ -179,6 +203,8 @@ class BacktestTraderAgentBase(TraderAgentBase):
         # Order_2_Deal 模式：下单即成交
         if self.trade_mode == BacktestTradeMode.Order_2_Deal:
             self._record_trade_info(order_info)
+        else:
+            self.un_finished_order_list.append(order_info)
 
     def _record_trade_info(self, order_info: OrderInfo):
         """
@@ -428,7 +454,7 @@ def trader_agent_factory(run_mode: RunMode, stg_run_id, exchange_name: ExchangeN
                          **trade_agent_params) -> TraderAgentBase:
     """工厂类用来生成相应 TraderAgentBase 实例"""
     trader_agent_class = trader_agent_class_dic[run_mode][exchange_name]
-    trader_agent_obj = trader_agent_class(stg_run_id, **trade_agent_params)
+    trader_agent_obj = trader_agent_class(stg_run_id, exchange_name=exchange_name, **trade_agent_params)
     return trader_agent_obj
 
 
