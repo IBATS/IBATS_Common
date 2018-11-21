@@ -22,19 +22,34 @@ logger = logging.getLogger(__package__)
 
 class MdAgentBase(Thread, ABC):
 
-    def __init__(self, instrument_id_set, md_period: PeriodType, exchange_name, name=None,
-                 init_load_md_count=None, init_md_date_from=None, init_md_date_to=None):
-        if name is None:
-            name = md_period
+    def __init__(self, instrument_id_list, md_period: PeriodType, exchange_name, agent_name=None,
+                 init_load_md_count=None, init_md_date_from=None, init_md_date_to=None, **kwargs):
+        if agent_name is None:
+            agent_name = f'{exchange_name}.{md_period}'
         self.exchange_name = exchange_name
-        super().__init__(name=name, daemon=True)
+        super().__init__(name=agent_name, daemon=True)
         self.md_period = md_period
         self.keep_running = None
-        self.instrument_id_set = instrument_id_set
+        self.instrument_id_list = instrument_id_list
         self.init_load_md_count = int(init_load_md_count) if init_load_md_count is not None else None
         self.init_md_date_from = str_2_date(init_md_date_from)
         self.init_md_date_to = str_2_date(init_md_date_to)
         self.logger = logging.getLogger(str(self.__class__))
+        self.agent_name = agent_name
+        self.params = kwargs
+        # 关键 key 信息
+        self.timestamp_key = None
+        self.symbol_key = None
+        self.close_key = None
+
+    def check_key(self):
+        """检查 关键 key 信息 是否设置齐全"""
+        if self.timestamp_key is None:
+            raise ValueError('timestamp_key 尚未设置')
+        if self.symbol_key is None:
+            raise ValueError('symbol_key 尚未设置')
+        if self.close_key is None:
+            raise ValueError('close_key 尚未设置')
 
     @abstractmethod
     def load_history(self, date_from=None, date_to=None, load_md_count=None) -> (pd.DataFrame, dict):
@@ -105,18 +120,18 @@ class MdAgentBase(Thread, ABC):
     def release(self):
         """释放channel资源"""
 
-    def subscribe(self, instrument_id_set=None):
+    def subscribe(self, instrument_id_list=None):
         """订阅合约"""
-        if instrument_id_set is None:
+        if instrument_id_list is None:
             return
-        self.instrument_id_set |= instrument_id_set
+        self.instrument_id_list = list(set(self.instrument_id_list) | set(instrument_id_list))
 
-    def unsubscribe(self, instrument_id_set):
+    def unsubscribe(self, instrument_id_list):
         """退订合约"""
-        if instrument_id_set is None:
-            self.instrument_id_set = set()
+        if instrument_id_list is None:
+            self.instrument_id_list = []
         else:
-            self.instrument_id_set -= instrument_id_set
+            self.instrument_id_list = list(set(self.instrument_id_list) - set(instrument_id_list))
 
 
 md_agent_class_dic = {
@@ -125,12 +140,13 @@ md_agent_class_dic = {
 }
 
 
-def md_agent_factory(run_mode: RunMode, instrument_id_list, md_period: PeriodType, name=None,
+def md_agent_factory(run_mode: RunMode, instrument_id_list: list, md_period: PeriodType, agent_name=None,
                      exchange_name: ExchangeName = ExchangeName.Default, **kwargs) -> MdAgentBase:
     """工厂类用来生成相应 MdAgentBase 实例"""
     md_agent_class = md_agent_class_dic[run_mode][exchange_name]
     md_agent_obj = md_agent_class(
-        instrument_id_list, md_period=md_period, name=name, exchange_name=exchange_name, **kwargs)
+        instrument_id_list=instrument_id_list, md_period=md_period, agent_name=agent_name, exchange_name=exchange_name,
+        **kwargs)
     return md_agent_obj
 
 
@@ -151,7 +167,7 @@ def md_agent(run_mode: RunMode, exchange_name: ExchangeName = ExchangeName.Defau
 
 
 def _test_only():
-    instrument_id_list = {'jm1711', 'rb1712', 'pb1801', 'IF1710'}
+    instrument_id_list = ['jm1711', 'rb1712', 'pb1801', 'IF1710']
     md_agent_obj = md_agent_factory(RunMode.Realtime, instrument_id_list, md_period=PeriodType.Min1,
                                     init_load_md_count=100)
     md_df = md_agent_obj.load_history()

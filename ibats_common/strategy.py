@@ -16,6 +16,7 @@ logger_stg_base = logging.getLogger(__name__)
 class StgBase:
 
     def __init__(self):
+        self.stg_run_id = None
         # 记录各个md_agent_key、各个周期 md 数据
         self._md_agent_key_period_df_dic = defaultdict(dict)
         # 记录各个md_agent_key、各个周期 md 列信息

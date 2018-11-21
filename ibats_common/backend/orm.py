@@ -118,11 +118,12 @@ class TradeDetail(BaseModel):
     margin = Column(DOUBLE, server_default='0')  # 保证金 , comment="占用保证金"
     commission = Column(DOUBLE, server_default='0')  # 佣金、手续费 , comment="佣金、手续费"
 
-    def __init__(self, stg_run_id=None, order_idx=None, order_price=None, order_vol=None, trade_dt=None,
-                 trade_date=None, trade_time=None, trade_millisec=0, direction=None, action=None, symbol=None,
-                 trade_price=None, trade_vol=None, margin=None, commission=None):
+    def __init__(self, stg_run_id=None, trade_agent_key=None, order_idx=None, order_price=None, order_vol=None,
+                 trade_dt=None, trade_date=None, trade_time=None, trade_millisec=0, direction=None, action=None,
+                 symbol=None, trade_price=None, trade_vol=None, margin=None, commission=None):
         self.stg_run_id = stg_run_id
         self.trade_idx = None if stg_run_id is None else idx_generator(stg_run_id, TradeDetail)
+        self.trade_agent_key = trade_agent_key
         self.order_idx = order_idx
         self.order_price = order_price
         self.order_vol = order_vol
@@ -173,6 +174,7 @@ class TradeDetail(BaseModel):
         margin = order_vol * order_price * multiple * margin_ratio
         commission = 0
         trade_detail = TradeDetail(stg_run_id=order_detail.stg_run_id,
+                                   trade_agent_key=order_detail.trade_agent_key,
                                    order_idx=order_detail.order_idx,
                                    trade_date=order_detail.order_date,
                                    trade_time=order_detail.order_time,
@@ -228,12 +230,13 @@ class PosStatusDetail(BaseModel):
                f" update_dt='{datetime_2_str(self.trade_dt)}', trade_idx='{self.trade_idx}', symbol='{self.symbol}', " \
                f"direction='{self.direction}', position='{self.position}', avg_price='{self.avg_price}')>"
 
-    def __init__(self, stg_run_id=None, trade_idx=None, trade_dt=None,
+    def __init__(self, stg_run_id=None, trade_agent_key=None, trade_idx=None, trade_dt=None,
                  trade_date=None, trade_time=None, trade_millisec=None, direction=None, symbol=None, position=None,
                  avg_price=None, cur_price=None, floating_pl=0, floating_pl_chg=0, floating_pl_cum=0,
                  margin=0, margin_chg=0, position_date=None):
         self.stg_run_id = stg_run_id
         self.pos_status_detail_idx = None if stg_run_id is None else idx_generator(stg_run_id, PosStatusDetail)
+        self.trade_agent_key = trade_agent_key
         self.trade_idx = trade_idx
         self.trade_dt = date_time_2_str(trade_date, trade_time) if trade_dt is None else trade_dt
         self.trade_date = trade_date
@@ -262,6 +265,7 @@ class PosStatusDetail(BaseModel):
         if action == int(Action.Close):
             raise ValueError('trade_detail.action 不能为 close')
         pos_status_detail = PosStatusDetail(stg_run_id=trade_detail.stg_run_id,
+                                            trade_agent_key=trade_detail.trade_agent_key,
                                             trade_idx=trade_detail.trade_idx,
                                             trade_dt=trade_detail.trade_dt,
                                             trade_date=trade_detail.trade_date,
@@ -403,6 +407,7 @@ class PosStatusDetail(BaseModel):
         """
         position = self.position
         pos_status_detail = PosStatusDetail(stg_run_id=self.stg_run_id,
+                                            trade_agent_key=self.trade_agent_key,
                                             trade_idx=self.trade_idx,
                                             trade_dt=self.trade_dt,
                                             trade_date=self.trade_date,
@@ -435,12 +440,12 @@ class PosStatusDetail(BaseModel):
         # PosStatusInfo.query.filter
 
 
-
-class AccountStatusDetail(BaseModel):
+class TradeAgentStatusDetail(BaseModel):
     """持仓状态数据"""
-    __tablename__ = 'account_status_detail'
+    __tablename__ = 'trade_agent_status_detail'
     stg_run_id = Column(Integer, primary_key=True)  # 对应回测了策略 StgRunID 此数据与 AccSumID 对应数据相同
-    account_status_detail_idx = Column(Integer, primary_key=True)
+    trade_agent_status_detail_idx = Column(Integer, primary_key=True)
+    trade_agent_key = Column(String(40))
     trade_dt = Column(DateTime)
     trade_date = Column(Date)  # 对应行情数据中 ActionDate
     trade_time = Column(Time)  # 对应行情数据中 ActionTime
@@ -453,11 +458,14 @@ class AccountStatusDetail(BaseModel):
     fee_tot = Column(DOUBLE, default=0.0)
     balance_tot = Column(DOUBLE, default=0.0)
 
-    def __init__(self, stg_run_id=None, trade_dt=None, trade_date=None, trade_time=None, trade_millisec=None,
+    def __init__(self, stg_run_id=None, trade_agent_key=None,
+                 trade_dt=None, trade_date=None, trade_time=None, trade_millisec=None,
                  available_cash=None, curr_margin=None, close_profit=None, position_profit=None, floating_pl_cum=None,
                  fee_tot=None, balance_tot=None):
         self.stg_run_id = stg_run_id
-        self.account_status_detail_idx = None if stg_run_id is None else idx_generator(stg_run_id, AccountStatusDetail)
+        self.trade_agent_status_detail_idx = None if stg_run_id is None else idx_generator(
+            stg_run_id, TradeAgentStatusDetail)
+        self.trade_agent_key = trade_agent_key
         self.trade_dt = date_time_2_str(trade_date, trade_time) if trade_dt is None else trade_dt
         self.trade_date = trade_date
         self.trade_time = trade_time
@@ -471,10 +479,11 @@ class AccountStatusDetail(BaseModel):
         self.balance_tot = balance_tot
 
     @staticmethod
-    def create(stg_run_id, init_cash: int, md: dict):
+    def create(stg_run_id, trade_agent_key, init_cash: int, md: dict):
         """
         根据 md 及 初始化资金 创建对象，默认日期为当前md数据-1天
-        :param stg_run_id: 
+        :param stg_run_id:
+        :param trade_agent_key:
         :param init_cash: 
         :param md: 
         :return: 
@@ -484,13 +493,14 @@ class AccountStatusDetail(BaseModel):
         trade_time = pd_timedelta_2_timedelta(md['ActionTime'])
         trade_millisec = int(md.setdefault('ActionMillisec', 0))
         trade_price = float(md['close'])
-        acc_status_detail = AccountStatusDetail(stg_run_id=stg_run_id,
-                                                trade_date=trade_date,
-                                                trade_time=trade_time,
-                                                trade_millisec=trade_millisec,
-                                                available_cash=init_cash,
-                                                balance_tot=init_cash,
-                                                )
+        acc_status_detail = TradeAgentStatusDetail(stg_run_id=stg_run_id,
+                                                   trade_agent_key=trade_agent_key,
+                                                   trade_date=trade_date,
+                                                   trade_time=trade_time,
+                                                   trade_millisec=trade_millisec,
+                                                   available_cash=init_cash,
+                                                   balance_tot=init_cash,
+                                                   )
         if UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
@@ -503,19 +513,20 @@ class AccountStatusDetail(BaseModel):
         创建新的对象，默认前一日持仓信息的最新价，等于下一交易日的结算价（即 AvePrice）
         :return: 
         """
-        account_status_detail = AccountStatusDetail(stg_run_id=self.stg_run_id,
-                                                    trade_date=self.trade_date,
-                                                    trade_time=self.trade_time,
-                                                    trade_millisec=self.trade_millisec,
-                                                    available_cash=self.available_cash,
-                                                    curr_margin=self.curr_margin,
-                                                    close_profit=self.close_profit,
-                                                    position_profit=self.position_profit,
-                                                    floating_pl_cum=self.floating_pl_cum,
-                                                    fee_tot=self.fee_tot,
-                                                    balance_tot=self.balance_tot
-                                                    )
-        return account_status_detail
+        trade_agent_status_detail = TradeAgentStatusDetail(stg_run_id=self.stg_run_id,
+                                                           trade_agent_key=self.trade_agent_key,
+                                                           trade_date=self.trade_date,
+                                                           trade_time=self.trade_time,
+                                                           trade_millisec=self.trade_millisec,
+                                                           available_cash=self.available_cash,
+                                                           curr_margin=self.curr_margin,
+                                                           close_profit=self.close_profit,
+                                                           position_profit=self.position_profit,
+                                                           floating_pl_cum=self.floating_pl_cum,
+                                                           fee_tot=self.fee_tot,
+                                                           balance_tot=self.balance_tot
+                                                           )
+        return trade_agent_status_detail
 
     def update_by_pos_status_detail(self, pos_status_detail_dic, md: dict):
         """
@@ -524,10 +535,7 @@ class AccountStatusDetail(BaseModel):
         :return: 
         """
         warnings.warn('该函数为范例函数，需要根据实际情况改写', UserWarning)
-        account_status_detail = self.create_by_self()
-        # 上一次更新日期、时间
-        # trade_date_last, trade_time_last, trade_millisec_last = \
-        #     account_status_detail.trade_date, account_status_detail.trade_time, account_status_detail.trade_millisec
+        trade_agent_status_detail = self.create_by_self()
         # 更新日期、时间
         trade_date = md['ActionDay']
         trade_time = pd_timedelta_2_timedelta(md['ActionTime'])
@@ -551,28 +559,107 @@ class AccountStatusDetail(BaseModel):
             floating_pl_cum += pos_status_detail.floating_pl_cum
 
         available_cash_chg = floating_pl_chg - margin_chg
-        account_status_detail.curr_margin = curr_margin
+        trade_agent_status_detail.curr_margin = curr_margin
         # # 对于同一时间，平仓后又开仓的情况，不能将close_profit重置为0
         # if trade_date == trade_date_last and trade_time == trade_time_last and trade_millisec == trade_millisec_last:
-        #     account_status_detail.close_profit += close_profit
+        #     trade_agent_status_detail.close_profit += close_profit
         # else:
         # 一个单位时段只允许一次，不需要考虑上面的情况
-        account_status_detail.close_profit = close_profit
+        trade_agent_status_detail.close_profit = close_profit
 
-        account_status_detail.position_profit = position_profit
-        account_status_detail.available_cash += available_cash_chg
-        account_status_detail.floating_pl_cum = floating_pl_cum
-        account_status_detail.balance_tot = account_status_detail.available_cash + curr_margin
+        trade_agent_status_detail.position_profit = position_profit
+        trade_agent_status_detail.available_cash += available_cash_chg
+        trade_agent_status_detail.floating_pl_cum = floating_pl_cum
+        trade_agent_status_detail.balance_tot = trade_agent_status_detail.available_cash + curr_margin
 
-        account_status_detail.trade_date = trade_date
-        account_status_detail.trade_time = trade_time
-        account_status_detail.trade_millisec = trade_millisec
+        trade_agent_status_detail.trade_date = trade_date
+        trade_agent_status_detail.trade_time = trade_time
+        trade_agent_status_detail.trade_millisec = trade_millisec
         if UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
-                session.add(account_status_detail)
+                session.add(trade_agent_status_detail)
                 session.commit()
-        return account_status_detail
+        return trade_agent_status_detail
+
+
+class StgRunStatusDetail(BaseModel):
+    """记录每一单位时刻 所有trade_agent_detail 状态汇总"""
+    __tablename__ = 'stg_run_status_detail'
+    stg_run_id = Column(Integer, primary_key=True)  # 对应回测了策略 StgRunID 此数据与 AccSumID 对应数据相同
+    stg_run_status_detail_idx = Column(Integer, primary_key=True)
+    trade_dt = Column(DateTime)
+    trade_date = Column(Date)  # 对应行情数据中 ActionDate
+    trade_time = Column(Time)  # 对应行情数据中 ActionTime
+    trade_millisec = Column(Integer)  # 对应行情数据中 ActionMillisec
+    available_cash = Column(DOUBLE, default=0.0)  # 可用资金, double
+    curr_margin = Column(DOUBLE, default=0.0)  # 当前保证金总额, double
+    close_profit = Column(DOUBLE, default=0.0)
+    position_profit = Column(DOUBLE, default=0.0)
+    floating_pl_cum = Column(DOUBLE, default=0.0)
+    fee_tot = Column(DOUBLE, default=0.0)
+    balance_tot = Column(DOUBLE, default=0.0)
+
+    def __init__(self, stg_run_id=None,
+                 trade_dt=None, trade_date=None, trade_time=None, trade_millisec=None,
+                 available_cash=None, curr_margin=None, close_profit=None, position_profit=None, floating_pl_cum=None,
+                 fee_tot=None, balance_tot=None):
+        self.stg_run_id = stg_run_id
+        self.stg_run_status_detail_idx = None if stg_run_id is None else idx_generator(
+            stg_run_id, StgRunStatusDetail)
+        self.trade_dt = date_time_2_str(trade_date, trade_time) if trade_dt is None else trade_dt
+        self.trade_date = trade_date
+        self.trade_time = trade_time
+        self.trade_millisec = trade_millisec
+        self.available_cash = available_cash
+        self.curr_margin = curr_margin
+        self.close_profit = close_profit
+        self.position_profit = position_profit
+        self.floating_pl_cum = floating_pl_cum
+        self.fee_tot = fee_tot
+        self.balance_tot = balance_tot
+
+    @staticmethod
+    def create_by_trade_agent_status_detail_list(stg_run_id, trade_agent_status_detail_list):
+        """通过 trade_agent_status_detail_list 更新当前 stg_run_detail 状态"""
+        data_len = len(trade_agent_status_detail_list)
+        if data_len == 0:
+            return None
+
+        stg_run_id = stg_run_id
+        trade_dt, trade_date, trade_time, trade_millisec = None, None, None, None
+        available_cash, curr_margin, close_profit, position_profit = 0, 0, 0, 0
+        floating_pl_cum, fee_tot, balance_tot = 0, 0, 0
+        for detail in trade_agent_status_detail_list:
+            if trade_dt is None or trade_dt < detail.trade_dt:
+                trade_dt = detail.trade_dt
+                trade_date = detail.trade_date
+                trade_time = detail.trade_time
+                trade_millisec = detail.trade_millisec
+
+            available_cash += 0 if detail.available_cash is None else detail.available_cash
+            curr_margin += 0 if detail.curr_margin is None else detail.curr_margin
+            close_profit += 0 if detail.close_profit is None else detail.close_profit
+            position_profit += 0 if detail.position_profit is None else detail.position_profit
+            floating_pl_cum += 0 if detail.floating_pl_cum is None else detail.floating_pl_cum
+            fee_tot += 0 if detail.fee_tot is None else detail.fee_tot
+            balance_tot += 0 if detail.balance_tot is None else detail.balance_tot
+
+        stg_run_status_detail = StgRunStatusDetail(
+            stg_run_id=stg_run_id,
+            trade_dt=trade_dt,
+            trade_date=trade_date,
+            trade_time=trade_time,
+            trade_millisec=trade_millisec,
+            available_cash=available_cash,
+            curr_margin=curr_margin,
+            close_profit=close_profit,
+            position_profit=position_profit,
+            floating_pl_cum=floating_pl_cum,
+            fee_tot=fee_tot,
+            balance_tot=balance_tot,
+        )
+        return stg_run_status_detail
 
 
 def init():

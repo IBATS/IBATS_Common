@@ -13,7 +13,7 @@ from collections import OrderedDict
 from datetime import datetime
 from functools import partial
 from ibats_common.config import config
-from ibats_common.backend.orm import OrderDetail, engine_ibats, TradeDetail, PosStatusDetail, AccountStatusDetail
+from ibats_common.backend.orm import OrderDetail, engine_ibats, TradeDetail, PosStatusDetail, TradeAgentStatusDetail
 from ibats_common.common import RunMode, ExchangeName, BacktestTradeMode, Action, Direction, PositionDateType
 from ibats_common.utils.db import with_db_session
 
@@ -25,7 +25,7 @@ class TraderAgentBase(ABC):
     交易代理（抽象类），回测交易代理，实盘交易代理的父类
     """
 
-    def __init__(self, stg_run_id, exchange_name, **agent_params):
+    def __init__(self, stg_run_id, exchange_name, agent_name, **agent_params):
         """
         stg_run_id 作为每一次独立的执行策略过程的唯一标识
         :param stg_run_id:
@@ -35,6 +35,7 @@ class TraderAgentBase(ABC):
         self.agent_params = agent_params
         self.logger = logging.getLogger(self.__class__.__name__)
         self.exchange_name = exchange_name
+        self.agent_name = agent_name
 
     @abstractmethod
     def connect(self):
@@ -112,12 +113,12 @@ class BacktestTraderAgentBase(TraderAgentBase):
         self.order_detail_list = []
         self.trade_detail_list = []
         self.pos_status_detail_dic = OrderedDict()
-        self.account_info_list = []
+        self.trade_agent_detail_list = []
         # 持仓信息 初始化持仓状态字典，key为 symbol
         self._pos_status_detail_dic = {}
         self._order_detail_dic = {}
         # 账户信息
-        self._account_status_detail = None
+        self.trade_agent_status_detail_latest = None
         # 关键 key 信息
         self.timestamp_key = None
         self.symbol_key = None
@@ -184,16 +185,16 @@ class BacktestTraderAgentBase(TraderAgentBase):
     def _record_order_detail(self, symbol, price: float, vol: int, direction: Direction, action: Action):
         order_date = self.curr_timestamp.date()
         order_detail = OrderDetail(stg_run_id=self.stg_run_id,
-
-                                 order_date=order_date,
-                                 order_time=self.curr_timestamp.time(),
-                                 order_millisec=0,
-                                 direction=int(direction),
-                                 action=int(action),
-                                 symbol=symbol,
-                                 order_price=float(price),
-                                 order_vol=int(vol)
-                                 )
+                                   trade_agent_key=self.agent_name,
+                                   order_date=order_date,
+                                   order_time=self.curr_timestamp.time(),
+                                   order_millisec=0,
+                                   direction=int(direction),
+                                   action=int(action),
+                                   symbol=symbol,
+                                   order_price=float(price),
+                                   order_vol=int(vol)
+                                   )
         if config.BACKTEST_UPDATE_OR_INSERT_PER_ACTION:
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
                 session.add(order_detail)
@@ -237,36 +238,38 @@ class BacktestTraderAgentBase(TraderAgentBase):
         self._pos_status_detail_dic[symbol] = pos_status_detail
         # self.c_save_acount_info(pos_status_detail)
 
-    def _record_account_status_detail(self) -> AccountStatusDetail:
+    def _record_trade_agent_status_detail(self) -> TradeAgentStatusDetail:
         stg_run_id, init_cash = self.stg_run_id, self.init_cash
         timestamp_curr = self.curr_timestamp
         trade_date = timestamp_curr.date()
         trade_time = timestamp_curr.time()
         trade_millisec = 0
         # trade_price = float(self.curr_md['close'])
-        acc_status_info = AccountStatusDetail(stg_run_id=stg_run_id,
-                                              trade_date=trade_date,
-                                              trade_time=trade_time,
-                                              trade_millisec=trade_millisec,
-                                              available_cash=init_cash,
-                                              balance_tot=init_cash,
-                                              )
+        trade_agent_status_detail = TradeAgentStatusDetail(
+            stg_run_id=stg_run_id,
+                                                 trade_agent_key=self.agent_name,
+                                                 trade_date=trade_date,
+                                                 trade_time=trade_time,
+                                                 trade_millisec=trade_millisec,
+                                                 available_cash=init_cash,
+                                                 balance_tot=init_cash,
+                                                 )
         if config.BACKTEST_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
-                session.add(acc_status_info)
+                session.add(trade_agent_status_detail)
                 session.commit()
-        return acc_status_info
+        return trade_agent_status_detail
 
-    def _update_by_pos_status_detail(self) -> AccountStatusDetail:
+    def _update_by_pos_status_detail(self) -> TradeAgentStatusDetail:
         """根据 持仓列表更新账户信息"""
 
         pos_status_detail_dic = self._pos_status_detail_dic
         timestamp_curr = self.curr_timestamp
-        account_status_detail = self._account_status_detail.create_by_self()
+        trade_agent_status_detail = self.trade_agent_status_detail_latest.create_by_self()
         # 上一次更新日期、时间
         # trade_date_last, trade_time_last, trade_millisec_last = \
-        #     account_status_detail.trade_date, account_status_detail.trade_time, account_status_detail.trade_millisec
+        #     trade_agent_status_detail.trade_date, trade_agent_status_detail.trade_time, trade_agent_status_detail.trade_millisec
         # 更新日期、时间
         trade_date = timestamp_curr.date()
         trade_time = timestamp_curr.time()
@@ -289,28 +292,28 @@ class BacktestTraderAgentBase(TraderAgentBase):
             floating_pl_cum += pos_status_detail.floating_pl_cum
 
         available_cash_chg = floating_pl_chg - margin_chg
-        account_status_detail.curr_margin = curr_margin
+        trade_agent_status_detail.curr_margin = curr_margin
         # # 对于同一时间，平仓后又开仓的情况，不能将close_profit重置为0
         # if trade_date == trade_date_last and trade_time == trade_time_last and trade_millisec == trade_millisec_last:
-        #     account_status_detail.close_profit += close_profit
+        #     trade_agent_status_detail.close_profit += close_profit
         # else:
         # 一个单位时段只允许一次，不需要考虑上面的情况
-        account_status_detail.close_profit = close_profit
+        trade_agent_status_detail.close_profit = close_profit
 
-        account_status_detail.position_profit = position_profit
-        account_status_detail.available_cash += available_cash_chg
-        account_status_detail.floating_pl_cum = floating_pl_cum
-        account_status_detail.balance_tot = account_status_detail.available_cash + curr_margin
+        trade_agent_status_detail.position_profit = position_profit
+        trade_agent_status_detail.available_cash += available_cash_chg
+        trade_agent_status_detail.floating_pl_cum = floating_pl_cum
+        trade_agent_status_detail.balance_tot = trade_agent_status_detail.available_cash + curr_margin
 
-        account_status_detail.trade_date = trade_date
-        account_status_detail.trade_time = trade_time
-        account_status_detail.trade_millisec = trade_millisec
+        trade_agent_status_detail.trade_date = trade_date
+        trade_agent_status_detail.trade_time = trade_time
+        trade_agent_status_detail.trade_millisec = trade_millisec
         if config.BACKTEST_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
-                session.add(account_status_detail)
+                session.add(trade_agent_status_detail)
                 session.commit()
-        return account_status_detail
+        return trade_agent_status_detail
 
     def _update_pos_status_detail_by_md(self, pos_status_detail_last) -> PosStatusDetail:
         """创建新的对象，根据 trade_detail 更新相关信息"""
@@ -351,17 +354,17 @@ class BacktestTraderAgentBase(TraderAgentBase):
                 session.commit()
         return pos_status_detail
 
-    def update_account_info(self):
+    def update_trade_agent_status_detail(self):
         """
         更新 持仓盈亏数据 汇总统计当前周期账户盈利情况
         :return:
         """
         if self.curr_md is None:
             return
-        if self._account_status_detail is None:
-            # self._account_status_detail = AccountStatusInfo.create(self.stg_run_id, self.init_cash, self.curr_md)
-            self._account_status_detail = self._record_account_status_detail()
-            self.account_info_list.append(self._account_status_detail)
+        if self.trade_agent_status_detail_latest is None:
+            # self.trade_agent_status_detail_latest = AccountStatusInfo.create(self.stg_run_id, self.init_cash, self.curr_md)
+            self.trade_agent_status_detail_latest = self._record_trade_agent_status_detail()
+            self.trade_agent_detail_list.append(self.trade_agent_status_detail_latest)
 
         symbol = self.curr_symbol
         if symbol in self._pos_status_detail_dic:
@@ -380,11 +383,12 @@ class BacktestTraderAgentBase(TraderAgentBase):
             self._pos_status_detail_dic[symbol] = pos_status_detail
 
         # 统计账户信息，更新账户信息
-        # account_status_detail = self._account_status_detail.update_by_pos_status_detail(
+        # trade_agent_status_detail = self.trade_agent_status_detail_latest.update_by_pos_status_detail(
         #     self._pos_status_detail_dic, self.curr_md)
-        account_status_detail = self._update_by_pos_status_detail()
-        self._account_status_detail = account_status_detail
-        self.account_info_list.append(self._account_status_detail)
+        trade_agent_status_detail = self._update_by_pos_status_detail()
+        self.trade_agent_status_detail_latest = trade_agent_status_detail
+        self.trade_agent_detail_list.append(self.trade_agent_status_detail_latest)
+        return self.trade_agent_status_detail_latest
 
     def open_long(self, symbol, price, vol):
         self._record_order_detail(symbol, price, vol, Direction.Long, Action.Open)
@@ -428,7 +432,7 @@ class BacktestTraderAgentBase(TraderAgentBase):
                 session.add_all(self.order_detail_list)
                 session.add_all(self.trade_detail_list)
                 session.add_all(self.pos_status_detail_dic.values())
-                session.add_all(self.account_info_list)
+                session.add_all(self.trade_agent_detail_list)
                 session.commit()
         except:
             self.logger.exception("release exception")
