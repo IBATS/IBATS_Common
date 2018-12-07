@@ -411,7 +411,8 @@ def strategy_handler_factory_multi_exchange(
 
         context = {
             ContextKey.instrument_id_list: list(md_agent.instrument_id_list),
-            ContextKey.md_agent_key: agent_name
+            ContextKey.md_agent_key: agent_name,
+            ContextKey.period: period,
         }
         stg_base.load_md_period_df(period, md_df, context)
         logger.debug('加载 %s 历史数据 %s 条', period, 'None' if md_df is None else str(md_df.shape[0]))

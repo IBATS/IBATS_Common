@@ -18,6 +18,7 @@ class ConfigBase:
     }
 
     BACKTEST_UPDATE_OR_INSERT_PER_ACTION = False
+    UPDATE_STG_RUN_STATUS_DETAIL_PERIOD = 1  # 1 每一个最小行情周期，2 每天
 
     # evn configuration
     LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s %(filename)s.%(funcName)s:%(lineno)d|%(message)s'

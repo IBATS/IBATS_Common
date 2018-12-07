@@ -132,5 +132,6 @@ class ContextKey(IntEnum):
     """
     instrument_id_list = 0
     md_agent_key = 1
+    period = 2
 
 
