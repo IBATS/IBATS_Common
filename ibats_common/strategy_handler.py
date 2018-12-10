@@ -42,7 +42,7 @@ class StgHandlerBase(Thread, ABC):
         self.is_working = False
         self.is_done = False
         # 日志
-        self.logger = logging.getLogger()
+        self.logger = logging.getLogger(str(self.__class__))
         # 对不同周期设置相应的md_agent
         self.md_key_period_agent_dic = md_key_period_agent_dic
         self.stg_run_status_detail_list = []
@@ -64,6 +64,7 @@ class StgHandlerBase(Thread, ABC):
             # StgRunInfo.c.stg_run_id == self.stg_run_id).values(dt_to=datetime.now())
             # session.execute(sql_str)
             session.commit()
+            self.logger.debug("%d 条 stg_run_status_detail 被保存", len(self.stg_run_status_detail_list))
 
         self.is_working = False
         self.is_done = True
@@ -81,8 +82,6 @@ class StgHandlerRealtime(StgHandlerBase):
         self.md_period_agent_dic = md_key_period_agent_dic
         # 设置线程池
         self.running_thread = {}
-        # 日志
-        self.logger = logging.getLogger()
         # 设置推送超时时间
         self.timeout_pull = 60
         # 设置独立的时间线程
@@ -174,7 +173,7 @@ class StgHandlerRealtime(StgHandlerBase):
 class StgHandlerBacktest(StgHandlerBase):
 
     def __init__(self, stg_run_id, stg_base: StgBase, md_key_period_agent_dic, date_from, date_to,
-                 md_td_agent_map=None, **kwargs):
+                 md_td_agent_key_list_map=None, **kwargs):
         super().__init__(stg_run_id=stg_run_id, stg_base=stg_base, run_mode=RunMode.Backtest,
                          md_key_period_agent_dic=md_key_period_agent_dic)
         # 设置回测时间区间
@@ -187,25 +186,25 @@ class StgHandlerBacktest(StgHandlerBase):
             raise ValueError("date_from: %s", date_to)
         # 用于维护 md_agent 与 td_agent 之间对应关系（多对多关系）
         # 用于在回测成交时指定行情发送到哪一个 trade_agent，默认情况下，该map将交易所相同的 md td agent进行匹配，也可以根据需要在参数设是手动进行配置
-        self.logger.debug('设置 md_td_agent_key_set_map')
-        if md_td_agent_map is not None:
-            self.md_td_agent_key_set_map = md_td_agent_map
+        self.logger.debug('设置 md_td_agent_key_list_map')
+        if md_td_agent_key_list_map is not None:
+            self.md_td_agent_key_list_map = md_td_agent_key_list_map
         else:
-            self.md_td_agent_key_set_map = defaultdict(set)
+            self.md_td_agent_key_list_map = defaultdict(list)
             # 遍历所有 md_agent, 查找 exchange_name 相同的进行 mapping
             for md_agent_key, period_agent_dic in self.md_key_period_agent_dic.items():
                 for period, md_agent in period_agent_dic.items():
                     for trade_agent_key, trade_agent in self.stg_base.trade_agent_dic.items():
                         if md_agent.exchange_name == trade_agent.exchange_name:
-                            self.md_td_agent_key_set_map[md_agent_key].add(trade_agent_key)
+                            self.md_td_agent_key_list_map[md_agent_key].append(trade_agent_key)
 
                     break
 
         # 设置相应 trade_agent 的 关键 key 信息
         self.logger.debug('设置 关键 key 信息')
-        for md_agent_key, trade_agent_key_set in self.md_td_agent_key_set_map.items():
+        for md_agent_key, trade_agent_key_list in self.md_td_agent_key_list_map.items():
             for period, md_agent in self.md_key_period_agent_dic[md_agent_key].items():
-                for trade_agent_key in trade_agent_key_set:
+                for trade_agent_key in trade_agent_key_list:
                     md_agent.check_key()
                     self.stg_base.trade_agent_dic[trade_agent_key].set_timestamp_key(md_agent.timestamp_key)
                     self.stg_base.trade_agent_dic[trade_agent_key].set_symbol_key(md_agent.symbol_key)
@@ -281,13 +280,13 @@ class StgHandlerBacktest(StgHandlerBase):
                     self.load_history_record(), start=1):
                 md = md_s.to_dict()
                 # 在回测阶段，需要对 trade_agent 设置最新的md数据，一遍交易接口确认相应的k线日期
-                for trade_agent_key in self.md_td_agent_key_set_map[md_agent_key]:
+                for trade_agent_key in self.md_td_agent_key_list_map[md_agent_key]:
                     self.stg_base.trade_agent_dic[trade_agent_key].set_curr_md(period, md)
 
                 # 执行策略相应的事件响应函数
                 self.stg_base.on_period_md_handler(period, md, md_agent_key)
                 # 根据最新的 md 及 持仓信息 更新 账户信息
-                for trade_agent_key in self.md_td_agent_key_set_map[md_agent_key]:
+                for trade_agent_key in self.md_td_agent_key_list_map[md_agent_key]:
                     self.stg_base.trade_agent_dic[trade_agent_key].update_trade_agent_status_detail()
 
                 if config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 1 or (
@@ -364,6 +363,7 @@ def strategy_handler_factory_multi_exchange(
                               md_agent_params_list=json.dumps(md_agent_params_list),
                               run_mode=int(run_mode),
                               trade_agent_params_list=json.dumps(trade_agent_params_list),
+                              strategy_handler_param=json.dumps(strategy_handler_param),
                               )
     with with_db_session(engine_ibats) as session:
         session.add(stg_run_info)
@@ -416,6 +416,29 @@ def strategy_handler_factory_multi_exchange(
         }
         stg_base.load_md_period_df(period, md_df, context)
         logger.debug('加载 %s 历史数据 %s 条', period, 'None' if md_df is None else str(md_df.shape[0]))
+
+    # 设置 md_td_agent_key_list_map
+    if 'md_td_agent_key_list_map' in strategy_handler_param:
+        md_td_agent_key_list_map = strategy_handler_param['md_td_agent_key_list_map']
+    else:
+        md_td_agent_key_list_map = defaultdict(list)
+        # 遍历所有 md_agent, 查找 exchange_name 相同的进行 mapping
+        for md_agent_key, period_agent_dic in md_key_period_agent_dic.items():
+            for period, md_agent in period_agent_dic.items():
+                for trade_agent_key, trade_agent in stg_base.trade_agent_dic.items():
+                    if md_agent.exchange_name == trade_agent.exchange_name:
+                        md_td_agent_key_list_map[md_agent_key].append(trade_agent_key)
+
+                break
+        # 整理 mapping 去除重复 key，整理过程中 td_agent_key_list 顺序可能被打乱
+        for md_agent_key in list(md_td_agent_key_list_map.keys()):
+            td_agent_key_list = list(set(md_td_agent_key_list_map[md_agent_key]))
+            md_td_agent_key_list_map[md_agent_key] = td_agent_key_list
+        strategy_handler_param['md_td_agent_key_list_map'] = md_td_agent_key_list_map
+    logger.debug('md_td_agent_key_list_map: %s', md_td_agent_key_list_map)
+
+    # 为 stg_base 设置 md_td_agent_key_list_map
+    stg_base.set_md_td_agent_key_list_map(md_td_agent_key_list_map)
 
     # 初始化 StgHandlerBase 实例
     logger.debug("stg_run_id=%d, strategy_handler_param: %s", stg_run_id, strategy_handler_param)
