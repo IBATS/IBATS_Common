@@ -222,7 +222,7 @@ class PosStatusDetail(BaseModel):
     floating_pl_cum = Column(DOUBLE, default=0.0)
     margin = Column(DOUBLE, default=0.0)
     margin_chg = Column(DOUBLE, default=0.0)
-    position_date = Column(Integer, default=0)
+    position_date = Column(Date, default=0)
     logger = logging.getLogger(f'<Table:{__tablename__}')
 
     def __repr__(self):
@@ -281,6 +281,7 @@ class PosStatusDetail(BaseModel):
                                             floating_pl=0,
                                             floating_pl_chg=0,
                                             floating_pl_cum=0,
+                                            position_date=trade_detail.trade_date
                                             )
         if UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
