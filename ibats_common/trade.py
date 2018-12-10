@@ -33,7 +33,7 @@ class TraderAgentBase(ABC):
         """
         self.stg_run_id = stg_run_id
         self.agent_params = agent_params
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger(str(self.__class__))
         self.exchange_name = exchange_name
         self.agent_name = agent_name
 
@@ -430,9 +430,13 @@ class BacktestTraderAgentBase(TraderAgentBase):
         try:
             with with_db_session(engine_ibats) as session:
                 session.add_all(self.order_detail_list)
+                self.logger.debug("%d 条 order_detail_list 被保存", len(self.order_detail_list))
                 session.add_all(self.trade_detail_list)
+                self.logger.debug("%d 条 trade_detail_list 被保存", len(self.trade_detail_list))
                 session.add_all(self.pos_status_detail_dic.values())
+                self.logger.debug("%d 条 pos_status_detail_dic 被保存", len(self.pos_status_detail_dic))
                 session.add_all(self.trade_agent_detail_list)
+                self.logger.debug("%d 条 trade_agent_detail_list 被保存", len(self.trade_agent_detail_list))
                 session.commit()
         except:
             self.logger.exception("release exception")
