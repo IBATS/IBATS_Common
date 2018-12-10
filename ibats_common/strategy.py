@@ -23,11 +23,13 @@ class StgBase:
         self._md_agent_key_period_df_col_name_list_dic = defaultdict(dict)
         # 记录各个md_agent_key、各个周期 context 信息
         self._md_agent_key_period_context_dic = defaultdict(dict)
+        # 记录各个md_agent_key对应的 td_agent_key list
+        self._md_td_agent_key_list_map = defaultdict(list)
         # 记录在行情推送过程中最新的一笔md数据
         # self._period_curr_md_dic = {}
         self.trade_agent = None
         self.trade_agent_dic = {}
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger(str(self.__class__))
         self._on_period_event_dic = {
             PeriodType.Tick: EventHandlersRelation(PeriodType.Tick,
                                                    self.on_prepare_tick, self.on_tick, pd.DataFrame),
@@ -42,6 +44,9 @@ class StgBase:
             PeriodType.Mon1: EventHandlersRelation(PeriodType.Mon1,
                                                    self.on_prepare_month1, self.on_month1, pd.DataFrame),
         }
+
+    def set_md_td_agent_key_list_map(self, md_td_agent_key_list_map):
+        self._md_td_agent_key_list_map = md_td_agent_key_list_map
 
     def on_timer(self):
         pass
@@ -189,31 +194,39 @@ class StgBase:
         """1月线策略执行语句，需要相应策略实现具体的策略算法"""
         pass
 
-    def open_long(self, instrument_id, price, vol, trade_agent_key: (ExchangeName, str) = None):
-        if trade_agent_key is None:
+    def open_long(self, instrument_id, price, vol, trade_agent_key=None, md_agent_key=None):
+        if md_agent_key is None and trade_agent_key is None:
             return self.trade_agent.open_long(instrument_id, price, vol)
         else:
+            if trade_agent_key is None:
+                trade_agent_key = self.get_td_agent_key(md_agent_key)
             return self.trade_agent_dic[trade_agent_key].open_long(instrument_id, price, vol)
 
-    def close_long(self, instrument_id, price, vol, trade_agent_key: (ExchangeName, str) = None):
-        if trade_agent_key is None:
+    def close_long(self, instrument_id, price, vol, trade_agent_key=None, md_agent_key=None):
+        if md_agent_key is None and trade_agent_key is None:
             return self.trade_agent.close_long(instrument_id, price, vol)
         else:
+            if trade_agent_key is None:
+                trade_agent_key = self.get_td_agent_key(md_agent_key)
             return self.trade_agent_dic[trade_agent_key].close_long(instrument_id, price, vol)
 
-    def open_short(self, instrument_id, price, vol, trade_agent_key: (ExchangeName, str) = None):
-        if trade_agent_key is None:
+    def open_short(self, instrument_id, price, vol, trade_agent_key=None, md_agent_key=None):
+        if md_agent_key is None and trade_agent_key is None:
             return self.trade_agent.open_short(instrument_id, price, vol)
         else:
+            if trade_agent_key is None:
+                trade_agent_key = self.get_td_agent_key(md_agent_key)
             return self.trade_agent_dic[trade_agent_key].open_short(instrument_id, price, vol)
 
-    def close_short(self, instrument_id, price, vol, trade_agent_key: (ExchangeName, str) = None):
-        if trade_agent_key is None:
+    def close_short(self, instrument_id, price, vol, trade_agent_key=None, md_agent_key=None):
+        if md_agent_key is None and trade_agent_key is None:
             return self.trade_agent.close_short(instrument_id, price, vol)
         else:
+            if trade_agent_key is None:
+                trade_agent_key = self.get_td_agent_key(md_agent_key)
             return self.trade_agent_dic[trade_agent_key].close_short(instrument_id, price, vol)
 
-    def get_position(self, instrument_id, trade_agent_key: (ExchangeName, str) = None, **kwargs) -> dict:
+    def get_position(self, instrument_id, trade_agent_key=None, md_agent_key=None, **kwargs) -> dict:
         """
         position_date 作为key， PosStatusInfo 为 val
         返回 position_date_pos_info_dic
@@ -221,53 +234,67 @@ class StgBase:
         :param trade_agent_key: trade_agent key值，默认为None，选择默认 trade_agent
         :return:
         """
-        if trade_agent_key is None:
+        if md_agent_key is None and trade_agent_key is None:
             return self.trade_agent.get_position(instrument_id, **kwargs)
         else:
+            if trade_agent_key is None:
+                trade_agent_key = self.get_td_agent_key(md_agent_key)
             return self.trade_agent_dic[trade_agent_key].get_position(instrument_id, **kwargs)
 
-    def get_order(self, instrument_id, trade_agent_key: (ExchangeName, str) = None) -> list:
-        if trade_agent_key is None:
+    def get_order(self, instrument_id, trade_agent_key=None, md_agent_key=None) -> list:
+        if md_agent_key is None and trade_agent_key is None:
             return self.trade_agent.get_order(instrument_id)
         else:
+            if trade_agent_key is None:
+                trade_agent_key = self.get_td_agent_key(md_agent_key)
             return self.trade_agent_dic[trade_agent_key].get_order(instrument_id)
 
-    def cancel_order(self, instrument_id, trade_agent_key: (ExchangeName, str) = None):
-        if trade_agent_key is None:
+    def cancel_order(self, instrument_id, trade_agent_key=None, md_agent_key=None):
+        if md_agent_key is None and trade_agent_key is None:
             return self.trade_agent.cancel_order(instrument_id)
         else:
+            if trade_agent_key is None:
+                trade_agent_key = self.get_td_agent_key(md_agent_key)
             return self.trade_agent_dic[trade_agent_key].cancel_order(instrument_id)
 
     @property
-    def datetime_last_update_position(self, trade_agent_key: (ExchangeName, str) = None):
-        if trade_agent_key is None:
+    def datetime_last_update_position(self, trade_agent_key=None, md_agent_key=None):
+        if md_agent_key is None and trade_agent_key is None:
             return self.trade_agent.datetime_last_update_position
         else:
+            if trade_agent_key is None:
+                trade_agent_key = self.get_td_agent_key(md_agent_key)
             return self.trade_agent_dic[trade_agent_key].datetime_last_update_position
 
     @property
-    def datetime_last_rtn_trade_dic(self, trade_agent_key: (ExchangeName, str) = None):
-        if trade_agent_key is None:
+    def datetime_last_rtn_trade_dic(self, trade_agent_key=None, md_agent_key=None):
+        if md_agent_key is None and trade_agent_key is None:
             return self.trade_agent.datetime_last_rtn_trade_dic
         else:
+            if trade_agent_key is None:
+                trade_agent_key = self.get_td_agent_key(md_agent_key)
             return self.trade_agent_dic[trade_agent_key].datetime_last_rtn_trade_dic
 
     @property
-    def datetime_last_update_position_dic(self, trade_agent_key: (ExchangeName, str) = None):
-        if trade_agent_key is None:
+    def datetime_last_update_position_dic(self, trade_agent_key=None, md_agent_key=None):
+        if md_agent_key is None and trade_agent_key is None:
             return self.trade_agent.datetime_last_update_position_dic
         else:
+            if trade_agent_key is None:
+                trade_agent_key = self.get_td_agent_key(md_agent_key)
             return self.trade_agent_dic[trade_agent_key].datetime_last_update_position_dic
 
     @property
-    def datetime_last_send_order_dic(self, trade_agent_key: (ExchangeName, str) = None):
-        if trade_agent_key is None:
+    def datetime_last_send_order_dic(self, trade_agent_key=None, md_agent_key=None):
+        if md_agent_key is None and trade_agent_key is None:
             return self.trade_agent.datetime_last_send_order_dic
         else:
+            if trade_agent_key is None:
+                trade_agent_key = self.get_td_agent_key(md_agent_key)
             return self.trade_agent_dic[trade_agent_key].datetime_last_send_order_dic
 
     def get_balance(self, non_zero_only=True, trade_type_only=True, currency=None, force_refresh=False,
-                    trade_agent_key: (ExchangeName, str) = None) -> dict:
+                    trade_agent_key=None, md_agent_key=None) -> dict:
         """
         调用接口 查询 各个币种仓位
         :param non_zero_only: 只保留非零币种
@@ -277,24 +304,27 @@ class StgBase:
         :param trade_agent_key: trade_agent key值，默认为None，选择默认 trade_agent
         :return: {'usdt': {<PositionDateType.History: 2>: {'currency': 'usdt', 'type': 'trade', 'balance': 144.09238}}}
         """
-        if trade_agent_key is None:
+        if md_agent_key is None and trade_agent_key is None:
             return self.trade_agent.get_balance(non_zero_only, trade_type_only, currency, force_refresh)
         else:
+            if trade_agent_key is None:
+                trade_agent_key = self.get_td_agent_key(md_agent_key)
             return self.trade_agent_dic[trade_agent_key].get_balance(
                 non_zero_only, trade_type_only, currency, force_refresh)
 
     def get_holding_currency(self, force_refresh=False, exclude_usdt=True,
-                             trade_agent_key: (ExchangeName, str) = None) -> dict:
+                             trade_agent_key=None, md_agent_key=None) -> dict:
         """
         持仓情况dict（非usdt）,仅包含交易状态 type = 'trade' 的记录
         :param force_refresh:
         :param exclude_usdt: 默认为True，剔除 usdt
         :param trade_agent_key: trade_agent key值，默认为None，选择默认 trade_agent
+        :param md_agent_key: md_agent_key key值，默认为None，指明与 trade_agent_key 对应的 md_agent_key
         :return:
          {'eos': {<PositionDateType.History: 2>: {'currency': 'eos', 'type': 'trade', 'balance': 144.09238}}}
         """
         cur_balance_dic = self.get_balance(non_zero_only=True, force_refresh=force_refresh,
-                                           trade_agent_key=trade_agent_key)
+                                           trade_agent_key=trade_agent_key, md_agent_key=md_agent_key)
 
         balance_dic = {}
         for currency, dic in cur_balance_dic.items():
@@ -305,6 +335,18 @@ class StgBase:
                     continue
                 balance_dic.setdefault(currency, {})[pos_date_type] = dic_sub
         return balance_dic
+
+    def get_td_agent_keys(self, md_agent_key):
+        """返回首个 md_agent_key 对应的 td_agent_key 列表"""
+        return self._md_td_agent_key_list_map[md_agent_key]
+
+    def get_td_agent_key(self, md_agent_key):
+        """返回首个 md_agent_key 对应的 td_agent_key"""
+        key_list = self.get_td_agent_keys(md_agent_key)
+        if len(key_list) == 0:
+            return None
+        else:
+            return key_list[0]
 
 
 class EventHandlersRelation:
