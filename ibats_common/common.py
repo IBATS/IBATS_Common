@@ -66,6 +66,7 @@ class ExchangeName(IntEnum):
     Default = 0
     HuoBi = 1
     BitMex = 2
+    DataIntegration = 3
 
 
 @unique
