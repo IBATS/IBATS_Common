@@ -129,7 +129,7 @@ class BacktestTraderAgentBase(TraderAgentBase):
     def set_curr_md(self, period_type, md):
         self.curr_md_period_type = period_type
         self.curr_md = md
-        if self.trade_mode != BacktestTradeMode.Order_2_Deal:
+        if self.trade_mode == BacktestTradeMode.MD_2_Deal:
             # 根据行情判断是否订单成交
             finished_order_list = []
             for order_detail in self.un_finished_order_list:
@@ -149,6 +149,9 @@ class BacktestTraderAgentBase(TraderAgentBase):
 
             for order_detail in finished_order_list:
                 self.un_finished_order_list.remove(order_detail)
+        elif self.trade_mode == BacktestTradeMode.NextOpen:
+            # 下一个跟K线开盘价作为成交价格
+            finished_order_list = []
 
     def set_timestamp_key(self, key):
         self.timestamp_key = key
