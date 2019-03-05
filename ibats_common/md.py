@@ -38,9 +38,9 @@ class MdAgentBase(Thread, ABC):
         self.agent_name = agent_name
         self.params = kwargs
         # 关键 key 信息
-        self.timestamp_key = None
-        self.symbol_key = None
-        self.close_key = None
+        self.timestamp_key = kwargs['timestamp_key'] if 'timestamp_key' in kwargs else None
+        self.symbol_key = kwargs['symbol_key'] if 'symbol_key' in kwargs else None
+        self.close_key = kwargs['close_key'] if 'close_key' in kwargs else None
 
     def check_key(self):
         """检查 关键 key 信息 是否设置齐全"""
