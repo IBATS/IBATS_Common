@@ -37,11 +37,16 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         global engine_ibats
         engine_ibats = engines.engine_ibats
 
-    def test_add_stg_run_info(self):
+    @staticmethod
+    def add_stg_run_info():
         info = StgRunInfo()
         with with_db_session(engine_ibats, expire_on_commit=False) as session:
             session.add(info)
             session.commit()
+        return info
+
+    def test_add_stg_run_info(self):
+        info = MyTest.add_stg_run_info()
 
         self.assertIsNotNone(info.stg_run_id)
         self.assertGreater(info.stg_run_id, -1)
@@ -52,11 +57,9 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertIsInstance(info2, StgRunInfo)
         self.assertEqual(info.stg_run_id, info2.stg_run_id)
 
-    def test_add_order_detail(self):
-        info = StgRunInfo()
-        with with_db_session(engine_ibats, expire_on_commit=False) as session:
-            session.add(info)
-            session.commit()
+    @staticmethod
+    def add_order():
+        info = MyTest.add_stg_run_info()
         order = OrderDetail(info.stg_run_id, trade_agent_key=ExchangeName.DataIntegration,
                             order_dt=datetime.now(), order_date=datetime.today(), order_time=datetime.now().time(),
                             order_millisec=99, direction=int(Direction.Long), action=int(Action.Open), symbol='RB1801',
@@ -65,6 +68,10 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         with with_db_session(engine_ibats, expire_on_commit=False) as session:
             session.add(order)
             session.commit()
+        return order
+
+    def test_add_order_detail(self):
+        order = MyTest.add_order()
         self.assertIsNotNone(order)
         self.assertGreater(order.order_idx, -1)
 
@@ -73,6 +80,34 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
 
         self.assertIsInstance(order2, OrderDetail)
         self.assertEqual(order2.order_idx, order.order_idx)
+
+    def test_add_trade_detail(self):
+        trade = MyTest.add_trade()
+
+        self.assertIsNotNone(trade)
+        self.assertGreater(trade.trade_idx, -1)
+
+        with with_db_session(engine_ibats) as session:
+            trade2 = session.query(TradeDetail).filter(TradeDetail.trade_idx == trade.trade_idx).first()
+
+        self.assertIsInstance(trade2, TradeDetail)
+        self.assertEqual(trade2.trade_idx, trade2.trade_idx)
+
+    @staticmethod
+    def add_trade():
+        order = MyTest.add_order()
+        order = TradeDetail(info.stg_run_id, trade_agent_key=ExchangeName.DataIntegration, order_idx=order.order_idx,
+                            order_price=1000.0, order_vol=20,
+                            trade_dt=datetime.now(), trade_date=datetime.today(), trade_time=datetime.now().time(),
+                            trade_millisec=99, direction=int(Direction.Long), action=int(Action.Open), symbol='RB1801',
+                            trade_price=order.order_price + 1, trade_vol=order.order_vol,
+                            margin=order.order_price * order.order_vol,
+                            commission=order.order_price * order.order_vol + 0.00005, multiple=10, margin_ratio=1
+                            )
+        with with_db_session(engine_ibats, expire_on_commit=False) as session:
+            session.add(order)
+            session.commit()
+        return order
 
 
 if __name__ == '__main__':
