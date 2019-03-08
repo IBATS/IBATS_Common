@@ -96,7 +96,7 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
     @staticmethod
     def add_trade():
         order = MyTest.add_order()
-        order = TradeDetail(info.stg_run_id, trade_agent_key=ExchangeName.DataIntegration, order_idx=order.order_idx,
+        trade = TradeDetail(order.stg_run_id, trade_agent_key=ExchangeName.DataIntegration, order_idx=order.order_idx,
                             order_price=1000.0, order_vol=20,
                             trade_dt=datetime.now(), trade_date=datetime.today(), trade_time=datetime.now().time(),
                             trade_millisec=99, direction=int(Direction.Long), action=int(Action.Open), symbol='RB1801',
@@ -105,9 +105,9 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
                             commission=order.order_price * order.order_vol + 0.00005, multiple=10, margin_ratio=1
                             )
         with with_db_session(engine_ibats, expire_on_commit=False) as session:
-            session.add(order)
+            session.add(trade)
             session.commit()
-        return order
+        return trade
 
 
 if __name__ == '__main__':
