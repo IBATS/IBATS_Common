@@ -10,6 +10,8 @@
 from ibats_common.backend.orm import *
 import unittest
 
+from ibats_common.common import ExchangeName
+
 
 class MyTest(unittest.TestCase):  # 继承unittest.TestCase
     def tearDown(self):
@@ -35,7 +37,7 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         global engine_ibats
         engine_ibats = engines.engine_ibats
 
-    def test_a_run(self):
+    def test_add_stg_run_info(self):
         info = StgRunInfo()
         with with_db_session(engine_ibats, expire_on_commit=False) as session:
             session.add(info)
@@ -49,6 +51,28 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
 
         self.assertIsInstance(info2, StgRunInfo)
         self.assertEqual(info.stg_run_id, info2.stg_run_id)
+
+    def test_add_order_detail(self):
+        info = StgRunInfo()
+        with with_db_session(engine_ibats, expire_on_commit=False) as session:
+            session.add(info)
+            session.commit()
+        order = OrderDetail(info.stg_run_id, trade_agent_key=ExchangeName.DataIntegration,
+                            order_dt=datetime.now(), order_date=datetime.today(), order_time=datetime.now().time(),
+                            order_millisec=99, direction=int(Direction.Long), action=int(Action.Open), symbol='RB1801',
+                            order_price=1000.0, order_vol=20
+                            )
+        with with_db_session(engine_ibats, expire_on_commit=False) as session:
+            session.add(order)
+            session.commit()
+        self.assertIsNotNone(order)
+        self.assertGreater(order.order_idx, -1)
+
+        with with_db_session(engine_ibats) as session:
+            order2 = session.query(OrderDetail).filter(OrderDetail.order_idx == order.order_idx).first()
+
+        self.assertIsInstance(order2, OrderDetail)
+        self.assertEqual(order2.order_idx, order.order_idx)
 
 
 if __name__ == '__main__':
