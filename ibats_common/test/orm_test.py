@@ -26,8 +26,14 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
 
     @classmethod
     def setUpClass(cls):
+        from ibats_common.config import update_db_config, ConfigBase
+        update_db_config({
+            ConfigBase.DB_SCHEMA_IBATS: 'mysql://mg:Dcba1234@localhost/' + ConfigBase.DB_SCHEMA_IBATS,
+        })
         # 必须使用@classmethod 装饰器,所有test运行前运行一次
         init()
+        global engine_ibats
+        engine_ibats = engines.engine_ibats
 
     def test_a_run(self):
         info = StgRunInfo()
@@ -39,9 +45,10 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertGreater(info.stg_run_id, -1)
 
         with with_db_session(engine_ibats) as session:
-            info2 = session.query(StgRunInfo).filter(StgRunInfo.stg_run_id == info.stg_run_id)
+            info2 = session.query(StgRunInfo).filter(StgRunInfo.stg_run_id == info.stg_run_id).first()
 
-        self.assertEqual(info, info2)
+        self.assertIsInstance(info2, StgRunInfo)
+        self.assertEqual(info.stg_run_id, info2.stg_run_id)
 
 
 if __name__ == '__main__':

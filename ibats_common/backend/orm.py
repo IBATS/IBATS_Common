@@ -750,6 +750,8 @@ class StgRunStatusDetail(BaseModel):
 
 def init():
     from ibats_common.utils.db import alter_table_2_myisam
+    global engine_ibats
+    engine_ibats = engines.engine_ibats
     BaseModel.metadata.create_all(engine_ibats)
     alter_table_2_myisam(engine_ibats)
     print("所有表结构建立完成")
