@@ -8,6 +8,7 @@
 @desc    : 
 """
 from ibats_common.backend.orm import *
+from datetime import date, datetime
 import unittest
 
 from ibats_common.common import ExchangeName
@@ -61,7 +62,7 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
     def add_order():
         info = MyTest.add_stg_run_info()
         order = OrderDetail(info.stg_run_id, trade_agent_key=ExchangeName.DataIntegration,
-                            order_dt=datetime.now(), order_date=datetime.today(), order_time=datetime.now().time(),
+                            order_dt=datetime.now(), order_date=date.today(), order_time=datetime.now().time(),
                             order_millisec=99, direction=int(Direction.Long), action=int(Action.Open), symbol='RB1801',
                             order_price=1000.0, order_vol=20
                             )
@@ -91,14 +92,14 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
             trade2 = session.query(TradeDetail).filter(TradeDetail.trade_idx == trade.trade_idx).first()
 
         self.assertIsInstance(trade2, TradeDetail)
-        self.assertEqual(trade2.trade_idx, trade2.trade_idx)
+        self.assertEqual(trade.trade_idx, trade2.trade_idx)
 
     @staticmethod
     def add_trade():
         order = MyTest.add_order()
         trade = TradeDetail(order.stg_run_id, trade_agent_key=ExchangeName.DataIntegration, order_idx=order.order_idx,
                             order_price=1000.0, order_vol=20,
-                            trade_dt=datetime.now(), trade_date=datetime.today(), trade_time=datetime.now().time(),
+                            trade_dt=datetime.now(), trade_date=date.today(), trade_time=datetime.now().time(),
                             trade_millisec=99, direction=int(Direction.Long), action=int(Action.Open), symbol='RB1801',
                             trade_price=order.order_price + 1, trade_vol=order.order_vol,
                             margin=order.order_price * order.order_vol,
@@ -108,6 +109,39 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
             session.add(trade)
             session.commit()
         return trade
+
+    def test_add_pos_status(self):
+        pos_status = MyTest.add_pos_status()
+
+        self.assertIsNotNone(pos_status)
+        self.assertGreater(pos_status.pos_status_detail_idx, -1)
+
+        with with_db_session(engine_ibats) as session:
+            pos_status2 = session.query(PosStatusDetail).filter(
+                PosStatusDetail.pos_status_detail_idx == pos_status.pos_status_detail_idx).first()
+
+        self.assertIsInstance(pos_status2, PosStatusDetail)
+        self.assertEqual(pos_status.pos_status_detail_idx, pos_status2.pos_status_detail_idx)
+
+    @staticmethod
+    def add_pos_status():
+        trade = MyTest.add_trade()
+        commission_rate = 0.0005
+        info = PosStatusDetail(trade.stg_run_id, trade_agent_key=trade.trade_agent_key, trade_idx=trade.trade_idx,
+                               trade_dt=trade.trade_dt, trade_date=trade.trade_date, trade_time=trade.trade_time,
+                               trade_millisec=trade.trade_millisec, direction=trade.direction, symbol=trade.symbol,
+                               position=trade.trade_vol, position_chg=-trade.trade_vol, avg_price=trade.trade_price,
+                               cur_price=trade.trade_price, floating_pl=-1, floating_pl_rate=-commission_rate,
+                               floating_pl_chg=trade.trade_price * trade.trade_vol * trade.multiple * commission_rate,
+                               floating_pl_cum=-13, rr=-commission_rate, margin=trade.trade_price * trade.trade_vol,
+                               margin_chg=-trade.trade_price * trade.trade_vol,
+                               position_date_type=PositionDateType.Today.value,
+                               commission=trade.trade_vol * trade.trade_price * commission_rate * trade.multiple,
+                               commission_tot=trade.trade_vol * trade.trade_price * commission_rate * trade.multiple)
+        with with_db_session(engine_ibats, expire_on_commit=False) as session:
+            session.add(info)
+            session.commit()
+        return info
 
 
 if __name__ == '__main__':
