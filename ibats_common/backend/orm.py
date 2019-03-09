@@ -124,7 +124,8 @@ class TradeDetail(BaseModel):
 
     def __init__(self, stg_run_id=None, trade_agent_key=None, order_idx=None, order_price=None, order_vol=None,
                  trade_dt=None, trade_date=None, trade_time=None, trade_millisec=0, direction=None, action=None,
-                 symbol=None, trade_price=None, trade_vol=None, margin=None, commission=None, multiple=None, margin_ratio=None):
+                 symbol=None, trade_price=None, trade_vol=None, margin=None, commission=None, multiple=None,
+                 margin_ratio=None):
         self.stg_run_id = stg_run_id
         self.trade_idx = None if stg_run_id is None else idx_generator(stg_run_id, TradeDetail)
         self.trade_agent_key = trade_agent_key
@@ -237,6 +238,8 @@ class PosStatusDetail(BaseModel):
     position_date_type = Column(TINYINT, default=0)
     commission = Column(DOUBLE, default=0)  # 当前bar上如果存在交易，则相应的费用记录在此，其他情况均为0
     commission_tot = Column(DOUBLE, default=0)  # 累计费用
+    multiple = Column(DOUBLE, server_default='0')  # 合约乘数
+    margin_ratio = Column(DOUBLE, server_default='0')  # 保证金比例
     logger = logging.getLogger(f'<Table:{__tablename__}>')
 
     def __repr__(self):
@@ -250,7 +253,7 @@ class PosStatusDetail(BaseModel):
                  avg_price=None, cur_price=None, floating_pl=0.0, floating_pl_rate=0.00, floating_pl_chg=0.0,
                  floating_pl_cum=0.0, rr=0.0,
                  margin=0, margin_chg=0, position_date_type=PositionDateType.Today.value, commission=0.0,
-                 commission_tot=0.0):
+                 commission_tot=0.0, multiple=None, margin_ratio=None):
         self.stg_run_id = stg_run_id
         self.pos_status_detail_idx = None if stg_run_id is None else idx_generator(stg_run_id, PosStatusDetail)
         self.trade_agent_key = trade_agent_key
@@ -274,6 +277,8 @@ class PosStatusDetail(BaseModel):
         self.position_date_type = position_date_type
         self.commission = commission
         self.commission_tot = commission_tot
+        self.multiple = multiple
+        self.margin_ratio = margin_ratio
 
     @staticmethod
     def create_by_trade_detail(trade_detail: TradeDetail):
@@ -315,6 +320,8 @@ class PosStatusDetail(BaseModel):
                                             commission=commission,
                                             commission_tot=commission,
                                             position_date_type=PositionDateType.Today.value,
+                                            multiple=trade_detail.multiple,
+                                            margin_ratio=trade_detail.margin_ratio,
                                             )
         if UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
@@ -504,6 +511,8 @@ class PosStatusDetail(BaseModel):
                                             position_date_type=self.position_date_type,
                                             commission=0.0,
                                             commission_tot=self.commission_tot,
+                                            multiple=self.multiple,
+                                            margin_ratio=self.margin_ratio,
                                             )
         return pos_status_detail
 
@@ -537,7 +546,7 @@ class TradeAgentStatusDetail(BaseModel):
     close_profit = Column(DOUBLE, default=0.0)
     position_profit = Column(DOUBLE, default=0.0)
     floating_pl_cum = Column(DOUBLE, default=0.0)
-    fee_tot = Column(DOUBLE, default=0.0)
+    commission_tot = Column(DOUBLE, default=0.0)
     balance_init = Column(DOUBLE, default=0.0)
     balance_tot = Column(DOUBLE, default=0.0)
     rr = Column(DOUBLE, default=0.0)
@@ -545,7 +554,7 @@ class TradeAgentStatusDetail(BaseModel):
     def __init__(self, stg_run_id=None, trade_agent_key=None,
                  trade_dt=None, trade_date=None, trade_time=None, trade_millisec=None,
                  available_cash=None, curr_margin=None, close_profit=None, position_profit=None, floating_pl_cum=None,
-                 fee_tot=None, balance_init=None, balance_tot=None):
+                 commission_tot=None, balance_init=None, balance_tot=None):
         self.stg_run_id = stg_run_id
         self.trade_agent_status_detail_idx = None if stg_run_id is None else idx_generator(
             stg_run_id, TradeAgentStatusDetail)
@@ -559,10 +568,10 @@ class TradeAgentStatusDetail(BaseModel):
         self.close_profit = close_profit
         self.position_profit = position_profit
         self.floating_pl_cum = floating_pl_cum
-        self.fee_tot = fee_tot
+        self.commission_tot = commission_tot
         self.balance_init = balance_init
         self.balance_tot = balance_tot
-        self.rr = balance_tot / balance_init -1
+        self.rr = balance_tot / balance_init - 1
 
     @staticmethod
     def create(stg_run_id, trade_agent_key, init_cash: int, md: dict):
@@ -609,7 +618,7 @@ class TradeAgentStatusDetail(BaseModel):
                                                            close_profit=self.close_profit,
                                                            position_profit=self.position_profit,
                                                            floating_pl_cum=self.floating_pl_cum,
-                                                           fee_tot=self.fee_tot,
+                                                           fee_tot=self.commission_tot,
                                                            balance_init=self.balance_init,
                                                            balance_tot=self.balance_tot,
                                                            )

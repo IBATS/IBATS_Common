@@ -127,21 +127,60 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
     def add_pos_status():
         trade = MyTest.add_trade()
         commission_rate = 0.0005
-        info = PosStatusDetail(trade.stg_run_id, trade_agent_key=trade.trade_agent_key, trade_idx=trade.trade_idx,
-                               trade_dt=trade.trade_dt, trade_date=trade.trade_date, trade_time=trade.trade_time,
-                               trade_millisec=trade.trade_millisec, direction=trade.direction, symbol=trade.symbol,
-                               position=trade.trade_vol, position_chg=-trade.trade_vol, avg_price=trade.trade_price,
-                               cur_price=trade.trade_price, floating_pl=-1, floating_pl_rate=-commission_rate,
-                               floating_pl_chg=trade.trade_price * trade.trade_vol * trade.multiple * commission_rate,
-                               floating_pl_cum=-13, rr=-commission_rate, margin=trade.trade_price * trade.trade_vol,
-                               margin_chg=-trade.trade_price * trade.trade_vol,
-                               position_date_type=PositionDateType.Today.value,
-                               commission=trade.trade_vol * trade.trade_price * commission_rate * trade.multiple,
-                               commission_tot=trade.trade_vol * trade.trade_price * commission_rate * trade.multiple)
+        multiple, margin_ratio = 10, 0.12
+        pos_status = PosStatusDetail(
+            trade.stg_run_id, trade_agent_key=trade.trade_agent_key, trade_idx=trade.trade_idx,
+            trade_dt=trade.trade_dt, trade_date=trade.trade_date, trade_time=trade.trade_time,
+            trade_millisec=trade.trade_millisec, direction=trade.direction,
+            symbol=trade.symbol,
+            position=trade.trade_vol, position_chg=-trade.trade_vol,
+            avg_price=trade.trade_price,
+            cur_price=trade.trade_price, floating_pl=-1, floating_pl_rate=-commission_rate,
+            floating_pl_chg=trade.trade_price * trade.trade_vol * trade.multiple * commission_rate,
+            floating_pl_cum=-13, rr=-commission_rate,
+            margin=trade.trade_price * trade.trade_vol,
+            margin_chg=-trade.trade_price * trade.trade_vol,
+            position_date_type=PositionDateType.Today.value,
+            commission=trade.trade_vol * trade.trade_price * commission_rate * trade.multiple,
+            commission_tot=trade.trade_vol * trade.trade_price * commission_rate * trade.multiple,
+            multiple=multiple,
+            margin_ratio=margin_ratio,
+        )
         with with_db_session(engine_ibats, expire_on_commit=False) as session:
-            session.add(info)
+            session.add(pos_status)
             session.commit()
-        return info
+        return pos_status
+
+    def test_add_trade_agent_status(self):
+        status = MyTest.add_trade_agent_status()
+
+        self.assertIsNotNone(status)
+        self.assertGreater(status.trade_agent_status_detail_idx, -1)
+
+        with with_db_session(engine_ibats) as session:
+            status2 = session.query(TradeAgentStatusDetail).filter(
+                TradeAgentStatusDetail.trade_agent_status_detail_idx == status.trade_agent_status_detail_idx).first()
+
+        self.assertIsInstance(status2, TradeAgentStatusDetail)
+        self.assertEqual(status.trade_agent_status_detail_idx, status2.trade_agent_status_detail_idx)
+
+    @staticmethod
+    def add_trade_agent_status():
+        pos_status = MyTest.add_pos_status()
+        status = TradeAgentStatusDetail(
+            pos_status.stg_run_id, trade_agent_key=pos_status.trade_agent_key,
+            trade_dt=pos_status.trade_dt, trade_date=pos_status.trade_date,
+            trade_time=pos_status.trade_time,
+            trade_millisec=pos_status.trade_millisec, available_cash=0,
+            curr_margin=pos_status.margin,
+            close_profit=0, position_profit=pos_status.floating_pl,
+            floating_pl_cum=pos_status.floating_pl_cum,
+            commission_tot=pos_status.commission_tot, balance_init=10000,
+            balance_tot=pos_status.cur_price * pos_status.position * pos_status.multiple)
+        with with_db_session(engine_ibats, expire_on_commit=False) as session:
+            session.add(status)
+            session.commit()
+        return status
 
 
 if __name__ == '__main__':
