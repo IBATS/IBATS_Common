@@ -692,13 +692,14 @@ class StgRunStatusDetail(BaseModel):
     close_profit = Column(DOUBLE, default=0.0)
     position_profit = Column(DOUBLE, default=0.0)
     floating_pl_cum = Column(DOUBLE, default=0.0)
-    fee_tot = Column(DOUBLE, default=0.0)
+    commission_tot = Column(DOUBLE, default=0.0)
+    balance_init = Column(DOUBLE, default=0.0)
     balance_tot = Column(DOUBLE, default=0.0)
 
     def __init__(self, stg_run_id=None,
                  trade_dt=None, trade_date=None, trade_time=None, trade_millisec=None,
                  available_cash=None, curr_margin=None, close_profit=None, position_profit=None, floating_pl_cum=None,
-                 fee_tot=None, balance_tot=None):
+                 commission_tot=None, balance_init=None, balance_tot=None):
         self.stg_run_id = stg_run_id
         self.stg_run_status_detail_idx = None if stg_run_id is None else idx_generator(
             stg_run_id, StgRunStatusDetail)
@@ -711,7 +712,8 @@ class StgRunStatusDetail(BaseModel):
         self.close_profit = close_profit
         self.position_profit = position_profit
         self.floating_pl_cum = floating_pl_cum
-        self.fee_tot = fee_tot
+        self.commission_tot = commission_tot
+        self.balance_init = balance_init
         self.balance_tot = balance_tot
 
     @staticmethod
@@ -724,7 +726,7 @@ class StgRunStatusDetail(BaseModel):
         stg_run_id = stg_run_id
         trade_dt, trade_date, trade_time, trade_millisec = None, None, None, None
         available_cash, curr_margin, close_profit, position_profit = 0, 0, 0, 0
-        floating_pl_cum, fee_tot, balance_tot = 0, 0, 0
+        floating_pl_cum, fee_tot, balance_init, balance_tot = 0, 0, 0, 0
         for detail in trade_agent_status_detail_list:
             if trade_dt is None or trade_dt < detail.trade_dt:
                 trade_dt = detail.trade_dt
@@ -738,6 +740,7 @@ class StgRunStatusDetail(BaseModel):
             position_profit += 0 if detail.position_profit is None else detail.position_profit
             floating_pl_cum += 0 if detail.floating_pl_cum is None else detail.floating_pl_cum
             fee_tot += 0 if detail.fee_tot is None else detail.fee_tot
+            balance_init += 0 if detail.balance_tot is None else detail.balance_init
             balance_tot += 0 if detail.balance_tot is None else detail.balance_tot
 
         stg_run_status_detail = StgRunStatusDetail(
@@ -751,7 +754,8 @@ class StgRunStatusDetail(BaseModel):
             close_profit=close_profit,
             position_profit=position_profit,
             floating_pl_cum=floating_pl_cum,
-            fee_tot=fee_tot,
+            commission_tot=fee_tot,
+            balance_init=balance_init,
             balance_tot=balance_tot,
         )
         return stg_run_status_detail

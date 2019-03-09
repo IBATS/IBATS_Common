@@ -182,6 +182,36 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
             session.commit()
         return status
 
+    def test_add_stg_run_detail(self):
+        detail = MyTest.add_stg_run_detail()
+
+        self.assertIsNotNone(detail)
+        self.assertGreater(detail.stg_run_status_detail_idx, -1)
+
+        with with_db_session(engine_ibats) as session:
+            detail2 = session.query(StgRunStatusDetail).filter(
+                StgRunStatusDetail.stg_run_status_detail_idx == detail.stg_run_status_detail_idx).first()
+
+        self.assertIsInstance(detail2, StgRunStatusDetail)
+        self.assertEqual(detail.stg_run_status_detail_idx, detail2.stg_run_status_detail_idx)
+
+    @staticmethod
+    def add_stg_run_detail():
+        status = MyTest.add_trade_agent_status()
+        detail = StgRunStatusDetail(
+            status.stg_run_id, trade_dt=status.trade_dt, trade_date=status.trade_date,
+            trade_time=status.trade_time,
+            trade_millisec=status.trade_millisec, available_cash=0,
+            curr_margin=status.curr_margin,
+            close_profit=status.close_profit, position_profit=status.position_profit,
+            floating_pl_cum=status.floating_pl_cum,
+            commission_tot=status.commission_tot, balance_init=status.balance_init,
+            balance_tot=status.balance_tot)
+        with with_db_session(engine_ibats, expire_on_commit=False) as session:
+            session.add(detail)
+            session.commit()
+        return detail
+
 
 if __name__ == '__main__':
     unittest.main()  # 运行所有的测试用例
