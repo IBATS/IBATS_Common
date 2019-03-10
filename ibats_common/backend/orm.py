@@ -227,11 +227,12 @@ class PosStatusDetail(BaseModel):
     symbol = Column(String(30))
     position = Column(DOUBLE, default=0.0)
     position_chg = Column(DOUBLE, default=0.0)
+    position_value = Column(DOUBLE, default=0.0)  # 持仓投资品种的总市值 position * trade_price * multiple
     avg_price = Column(DOUBLE, default=0.0)  # 所持投资品种上一交易日所有交易的加权平均价
     cur_price = Column(DOUBLE, default=0.0)
     floating_pl = Column(DOUBLE, default=0.0)
-    floating_pl_rate = Column(DOUBLE,
-                              default=0.0)  # (trade_price - avg_price_last) / avg_price_last * multiple - commission / position_last
+    # floating_pl_rate = (trade_price - avg_price) / avg_price * multiple * int(pos_status_detail.direction)
+    floating_pl_rate = Column(DOUBLE, default=0.0)
     floating_pl_chg = Column(DOUBLE, default=0.0)
     floating_pl_cum = Column(DOUBLE, default=0.0)
     rr = Column(DOUBLE, default=0.0)  # floating_pl_cum / margin 如果是清仓，则使用前一时刻 margin
@@ -249,13 +250,12 @@ class PosStatusDetail(BaseModel):
                f" update_dt='{datetime_2_str(self.trade_dt)}', trade_idx='{self.trade_idx}', symbol='{self.symbol}', " \
                f"direction='{self.direction}', position='{self.position}', avg_price='{self.avg_price}')>"
 
-    def __init__(self, stg_run_id=None, trade_agent_key=None, trade_idx=None, trade_dt=None,
-                 trade_date=None, trade_time=None, trade_millisec=None, direction=None, symbol=None, position=None,
-                 position_chg=0.0,
-                 avg_price=None, cur_price=None, floating_pl=0.0, floating_pl_rate=0.00, floating_pl_chg=0.0,
-                 floating_pl_cum=0.0, rr=0.0,
-                 margin=0, margin_chg=0, position_date_type=PositionDateType.Today.value, commission=0.0,
-                 commission_tot=0.0, multiple=None, margin_ratio=None):
+    def __init__(self, stg_run_id=None, trade_agent_key=None, trade_idx=None, trade_dt=None, trade_date=None,
+                 trade_time=None, trade_millisec=None, direction=None, symbol=None, position=None, position_chg=0.0,
+                 avg_price=None, cur_price=None, floating_pl=0.0, floating_pl_rate=0.0, floating_pl_chg=0.0,
+                 floating_pl_cum=0.0, rr=0.0, margin=0.0, margin_chg=0.0,
+                 position_date_type=PositionDateType.Today.value, commission=0.0, commission_tot=0.0, multiple=None,
+                 margin_ratio=None):
         self.stg_run_id = stg_run_id
         self.pos_status_detail_idx = None if stg_run_id is None else idx_generator(stg_run_id, PosStatusDetail)
         self.trade_agent_key = trade_agent_key
@@ -268,6 +268,7 @@ class PosStatusDetail(BaseModel):
         self.symbol = symbol
         self.position = position
         self.position_chg = position_chg
+        self.position_value = position * cur_price
         self.avg_price = avg_price
         self.cur_price = cur_price
         self.floating_pl = floating_pl
@@ -286,9 +287,6 @@ class PosStatusDetail(BaseModel):
     @staticmethod
     def create_by_trade_detail(trade_detail: TradeDetail):
         direction, action, instrument_id = trade_detail.direction, trade_detail.action, trade_detail.symbol
-        # trade_price, trade_vol, trade_idx = trade_detail.trade_price, trade_detail.trade_vol, trade_detail.trade_idx
-        # trade_date, trade_time, trade_millisec = trade_detail.trade_date, trade_detail.trade_time, trade_detail.trade_millisec
-        # stg_run_id = trade_detail.stg_run_id
         if action == int(Action.Close):
             raise ValueError('trade_detail.action 不能为 close')
         trade_vol = trade_detail.trade_vol
@@ -391,10 +389,10 @@ class PosStatusDetail(BaseModel):
                     # 计算浮动收益 floating_pl floating_pl_rate
                     # 与其他地方计算公式的区别在于 position_curr == 0 因此使用 position_last
                     pos_status_detail.floating_pl = (trade_price - avg_price_last) * position_last * multiple * int(
-                            pos_status_detail.direction) - commission
+                        pos_status_detail.direction) - commission
                     pos_status_detail.floating_pl_rate = ((trade_price - avg_price_last) * int(
                         pos_status_detail.direction) - commission / position_last) / avg_price_last * multiple \
-                            if avg_price_last > 0.001 else MAX_RATE
+                        if avg_price_last > 0.001 else MAX_RATE
 
                 else:
                     # 减仓
@@ -425,9 +423,11 @@ class PosStatusDetail(BaseModel):
         pos_status_detail.trade_time = trade_detail.trade_time
         pos_status_detail.trade_millisec = trade_detail.trade_millisec
 
-        # 计算 margin、margin_chg
+        # 计算 position_value、margin、margin_chg
         # cur_price = pos_status_detail.cur_price
-        pos_status_detail.margin = position_cur * trade_price * multiple * margin_ratio
+        position_value = position_cur * trade_price * multiple
+        pos_status_detail.position_value = position_value
+        pos_status_detail.margin = position_value * margin_ratio
         # 如果前一状态仓位为 0,  且不是多空切换的情况，则保留上一状态的浮动收益
         if self.position == 0 and self.trade_dt != trade_detail.trade_dt:
             pos_status_detail.margin_chg = pos_status_detail.margin
@@ -473,7 +473,7 @@ class PosStatusDetail(BaseModel):
                                             floating_pl_rate=0.0,
                                             floating_pl_cum=self.floating_pl_cum,
                                             margin=self.margin,
-                                            margin_chg=self.margin_chg,
+                                            margin_chg=0,
                                             position_date_type=self.position_date_type,
                                             commission=0.0,
                                             commission_tot=self.commission_tot,
@@ -507,20 +507,25 @@ class TradeAgentStatusDetail(BaseModel):
     trade_date = Column(Date)  # 对应行情数据中 ActionDate
     trade_time = Column(Time)  # 对应行情数据中 ActionTime
     trade_millisec = Column(Integer)  # 对应行情数据中 ActionMillisec
-    available_cash = Column(DOUBLE, default=0.0)  # 可用资金, double
+    # 可用资金, double
+    # detail.cash_init + close_profit - curr_margin - commission + (position_value - curr_margin)
+    # 对于没有杠杆的产品 position_value == curr_margin 因此 (position_value - curr_margin) == 0
+    cash_available = Column(DOUBLE, default=0.0)
+    position_value = Column(DOUBLE, default=0.0)
     curr_margin = Column(DOUBLE, default=0.0)  # 当前保证金总额, double
     close_profit = Column(DOUBLE, default=0.0)
     position_profit = Column(DOUBLE, default=0.0)
     floating_pl_cum = Column(DOUBLE, default=0.0)
     commission_tot = Column(DOUBLE, default=0.0)
-    balance_init = Column(DOUBLE, default=0.0)
-    balance_tot = Column(DOUBLE, default=0.0)
+    cash_init = Column(DOUBLE, default=0.0)
+    cash_and_margin = Column(DOUBLE, default=0.0)
     rr = Column(DOUBLE, default=0.0)
 
     def __init__(self, stg_run_id=None, trade_agent_key=None,
                  trade_dt=None, trade_date=None, trade_time=None, trade_millisec=None,
-                 available_cash=None, curr_margin=None, close_profit=None, position_profit=None, floating_pl_cum=None,
-                 commission_tot=None, balance_init=None, balance_tot=None):
+                 cash_available=0.0, position_value=0.0, curr_margin=0.0, close_profit=0.0, position_profit=0.0,
+                 floating_pl_cum=0.0,
+                 commission_tot=0.0, cash_init=0.0):
         self.stg_run_id = stg_run_id
         self.trade_agent_status_detail_idx = None if stg_run_id is None else idx_generator(
             stg_run_id, TradeAgentStatusDetail)
@@ -529,15 +534,16 @@ class TradeAgentStatusDetail(BaseModel):
         self.trade_date = trade_date
         self.trade_time = trade_time
         self.trade_millisec = trade_millisec
-        self.available_cash = available_cash
+        self.cash_available = cash_available
+        self.position_value = position_value
         self.curr_margin = curr_margin
         self.close_profit = close_profit
         self.position_profit = position_profit
         self.floating_pl_cum = floating_pl_cum
         self.commission_tot = commission_tot
-        self.balance_init = balance_init
-        self.balance_tot = balance_tot
-        self.rr = balance_tot / balance_init - 1
+        self.cash_init = cash_init
+        self.cash_and_margin = cash_available + curr_margin
+        self.rr = 0
 
     @staticmethod
     def create(stg_run_id, trade_agent_key, init_cash: int, md: dict):
@@ -552,15 +558,20 @@ class TradeAgentStatusDetail(BaseModel):
         warnings.warn('该函数为范例函数，需要根据实际情况改写', UserWarning)
         trade_date = str_2_date(md['ActionDay']) - timedelta(days=1)
         trade_time = pd_timedelta_2_timedelta(md['ActionTime'])
+        trade_dt = datetime_2_str(date_time_2_str(trade_date, trade_time))
         trade_millisec = int(md.setdefault('ActionMillisec', 0))
         acc_status_detail = TradeAgentStatusDetail(stg_run_id=stg_run_id,
                                                    trade_agent_key=trade_agent_key,
+                                                   trade_dt=trade_dt,
                                                    trade_date=trade_date,
                                                    trade_time=trade_time,
                                                    trade_millisec=trade_millisec,
-                                                   available_cash=init_cash,
-                                                   balance_init=init_cash,
-                                                   balance_tot=init_cash,
+                                                   cash_available=init_cash,
+                                                   position_value=0,
+                                                   curr_margin=0,
+                                                   close_profit=0,
+                                                   position_profit=0,
+                                                   cash_init=init_cash,
                                                    )
         if UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
@@ -579,14 +590,13 @@ class TradeAgentStatusDetail(BaseModel):
                                                            trade_date=self.trade_date,
                                                            trade_time=self.trade_time,
                                                            trade_millisec=self.trade_millisec,
-                                                           available_cash=self.available_cash,
+                                                           cash_available=self.cash_available,
                                                            curr_margin=self.curr_margin,
                                                            close_profit=self.close_profit,
                                                            position_profit=self.position_profit,
                                                            floating_pl_cum=self.floating_pl_cum,
-                                                           fee_tot=self.commission_tot,
-                                                           balance_init=self.balance_init,
-                                                           balance_tot=self.balance_tot,
+                                                           commission_tot=self.commission_tot,
+                                                           cash_init=self.cash_init,
                                                            )
         return trade_agent_status_detail
 
@@ -594,54 +604,58 @@ class TradeAgentStatusDetail(BaseModel):
         """
         根据 持仓列表更新账户信息
         :param pos_status_detail_dic:
-        :return: 
+        :param md:
+        :return:
         """
         warnings.warn('该函数为范例函数，需要根据实际情况改写', UserWarning)
-        trade_agent_status_detail = self.create_by_self()
+        detail = self.create_by_self()
         # 更新日期、时间
         trade_date = md['ActionDay']
         trade_time = pd_timedelta_2_timedelta(md['ActionTime'])
         trade_millisec = int(md.setdefault('ActionMillisec', 0))
 
         curr_margin = 0
-        close_profit = 0
+        position_value = 0
+        close_profit_new = 0
         position_profit = 0
-        floating_pl_chg = 0
-        margin_chg = 0
         floating_pl_cum = 0
+        commission_tot = 0
         for instrument_id, pos_status_detail in pos_status_detail_dic.items():
+            position_value += pos_status_detail.position_value
             curr_margin += pos_status_detail.margin
             if pos_status_detail.position == 0:
-                close_profit += pos_status_detail.floating_pl
+                close_profit_new += pos_status_detail.floating_pl
             else:
                 position_profit += pos_status_detail.floating_pl
-            floating_pl_chg += pos_status_detail.floating_pl_chg
-            margin_chg += pos_status_detail.margin_chg
             floating_pl_cum += pos_status_detail.floating_pl_cum
+            commission_tot += pos_status_detail.commission_tot
 
-        available_cash_chg = floating_pl_chg - margin_chg
-        trade_agent_status_detail.curr_margin = curr_margin
         # # 对于同一时间，平仓后又开仓的情况，不能将close_profit重置为0
         # if trade_date == trade_date_last and trade_time == trade_time_last and trade_millisec == trade_millisec_last:
         #     trade_agent_status_detail.close_profit += close_profit
         # else:
         # 一个单位时段只允许一次，不需要考虑上面的情况
-        trade_agent_status_detail.close_profit = close_profit
-        trade_agent_status_detail.position_profit = position_profit
-        trade_agent_status_detail.available_cash += available_cash_chg
-        trade_agent_status_detail.floating_pl_cum = floating_pl_cum
-        trade_agent_status_detail.balance_tot = trade_agent_status_detail.available_cash + curr_margin
-        trade_agent_status_detail.rr = trade_agent_status_detail.balance_tot / trade_agent_status_detail.balance_init
+        close_profit = detail.close_profit + close_profit_new
+        cash_available = detail.cash_init + close_profit - curr_margin - commission_tot + (position_value - curr_margin)
+        detail.cash_available = cash_available
+        detail.position_value = position_value
+        detail.curr_margin = curr_margin
+        detail.close_profit = close_profit
+        detail.position_profit = position_profit
+        detail.floating_pl_cum = floating_pl_cum
+        detail.commission_tot += commission_tot
+        detail.cash_and_margin = detail.cash_available + position_value
+        detail.rr = detail.cash_and_margin / detail.cash_init
 
-        trade_agent_status_detail.trade_date = trade_date
-        trade_agent_status_detail.trade_time = trade_time
-        trade_agent_status_detail.trade_millisec = trade_millisec
+        detail.trade_date = trade_date
+        detail.trade_time = trade_time
+        detail.trade_millisec = trade_millisec
         if UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
-                session.add(trade_agent_status_detail)
+                session.add(detail)
                 session.commit()
-        return trade_agent_status_detail
+        return detail
 
 
 class StgRunStatusDetail(BaseModel):

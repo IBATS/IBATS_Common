@@ -8,7 +8,7 @@
 @desc    : 
 """
 from ibats_common.backend.orm import *
-from datetime import date, datetime
+from datetime import date, datetime, time
 import unittest
 
 from ibats_common.common import ExchangeName
@@ -59,9 +59,12 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertEqual(info.stg_run_id, info2.stg_run_id)
 
     @staticmethod
-    def add_order():
-        info = InitTest.add_stg_run_info()
-        order = OrderDetail(info.stg_run_id, trade_agent_key=ExchangeName.DataIntegration,
+    def add_order(stg_run_id=None):
+        if stg_run_id is None:
+            info = InitTest.add_stg_run_info()
+            stg_run_id = info.stg_run_id
+
+        order = OrderDetail(stg_run_id, trade_agent_key=ExchangeName.DataIntegration,
                             order_dt=datetime.now(), order_date=date.today(), order_time=datetime.now().time(),
                             order_millisec=99, direction=int(Direction.Long), action=int(Action.Open), symbol='RB1801',
                             order_price=1000.0, order_vol=20
@@ -77,7 +80,10 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertGreater(order.order_idx, -1)
 
         with with_db_session(engine_ibats) as session:
-            order2 = session.query(OrderDetail).filter(OrderDetail.order_idx == order.order_idx).first()
+            order2 = session.query(OrderDetail).filter(
+                OrderDetail.order_idx == order.order_idx,
+                OrderDetail.stg_run_id == order.stg_run_id
+            ).first()
 
         self.assertIsInstance(order2, OrderDetail)
         self.assertEqual(order2.order_idx, order.order_idx)
@@ -89,7 +95,10 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertGreater(trade.trade_idx, -1)
 
         with with_db_session(engine_ibats) as session:
-            trade2 = session.query(TradeDetail).filter(TradeDetail.trade_idx == trade.trade_idx).first()
+            trade2 = session.query(TradeDetail).filter(
+                TradeDetail.trade_idx == trade.trade_idx,
+                TradeDetail.stg_run_id == trade.stg_run_id
+            ).first()
 
         self.assertIsInstance(trade2, TradeDetail)
         self.assertEqual(trade.trade_idx, trade2.trade_idx)
@@ -118,7 +127,9 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
 
         with with_db_session(engine_ibats) as session:
             pos_status2 = session.query(PosStatusDetail).filter(
-                PosStatusDetail.pos_status_detail_idx == pos_status.pos_status_detail_idx).first()
+                PosStatusDetail.pos_status_detail_idx == pos_status.pos_status_detail_idx,
+                PosStatusDetail.stg_run_id == pos_status.stg_run_id
+            ).first()
 
         self.assertIsInstance(pos_status2, PosStatusDetail)
         self.assertEqual(pos_status.pos_status_detail_idx, pos_status2.pos_status_detail_idx)
@@ -159,7 +170,9 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
 
         with with_db_session(engine_ibats) as session:
             status2 = session.query(TradeAgentStatusDetail).filter(
-                TradeAgentStatusDetail.trade_agent_status_detail_idx == status.trade_agent_status_detail_idx).first()
+                TradeAgentStatusDetail.trade_agent_status_detail_idx == status.trade_agent_status_detail_idx,
+                TradeAgentStatusDetail.stg_run_id == status.stg_run_id
+            ).first()
 
         self.assertIsInstance(status2, TradeAgentStatusDetail)
         self.assertEqual(status.trade_agent_status_detail_idx, status2.trade_agent_status_detail_idx)
@@ -167,16 +180,21 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
     @staticmethod
     def add_trade_agent_status():
         pos_status = InitTest.add_pos_status()
+        cash_init = 100000
+        cash_available = cash_init - pos_status.margin - pos_status.commission
         status = TradeAgentStatusDetail(
             pos_status.stg_run_id, trade_agent_key=pos_status.trade_agent_key,
             trade_dt=pos_status.trade_dt, trade_date=pos_status.trade_date,
             trade_time=pos_status.trade_time,
-            trade_millisec=pos_status.trade_millisec, available_cash=0,
+            trade_millisec=pos_status.trade_millisec,
+            cash_available=cash_available,
             curr_margin=pos_status.margin,
             close_profit=0, position_profit=pos_status.floating_pl,
             floating_pl_cum=pos_status.floating_pl_cum,
-            commission_tot=pos_status.commission_tot, balance_init=10000,
-            balance_tot=pos_status.cur_price * pos_status.position * pos_status.multiple)
+            commission_tot=pos_status.commission_tot,
+            cash_init=cash_init
+            )
+        status.cash_and_margin_value = cash_available + pos_status.margin
         with with_db_session(engine_ibats, expire_on_commit=False) as session:
             session.add(status)
             session.commit()
@@ -190,7 +208,9 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
 
         with with_db_session(engine_ibats) as session:
             detail2 = session.query(StgRunStatusDetail).filter(
-                StgRunStatusDetail.stg_run_status_detail_idx == detail.stg_run_status_detail_idx).first()
+                StgRunStatusDetail.stg_run_status_detail_idx == detail.stg_run_status_detail_idx,
+                StgRunStatusDetail.stg_run_id == detail.stg_run_id
+            ).first()
 
         self.assertIsInstance(detail2, StgRunStatusDetail)
         self.assertEqual(detail.stg_run_status_detail_idx, detail2.stg_run_status_detail_idx)
@@ -205,8 +225,8 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
             curr_margin=status.curr_margin,
             close_profit=status.close_profit, position_profit=status.position_profit,
             floating_pl_cum=status.floating_pl_cum,
-            commission_tot=status.commission_tot, balance_init=status.balance_init,
-            balance_tot=status.balance_tot)
+            commission_tot=status.commission_tot, balance_init=status.cash_init,
+            balance_tot=status.cash_and_margin)
         with with_db_session(engine_ibats, expire_on_commit=False) as session:
             session.add(detail)
             session.commit()
@@ -298,6 +318,27 @@ class PosStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertEqual(status.multiple, trade.multiple)
         self.assertEqual(status.margin_ratio, trade.margin_ratio)
 
+    def test_create_self(self):
+        trade = PosStatusDetailTest.add_trade()
+        status = PosStatusDetail.create_by_trade_detail(trade)
+        status2 = status.create_by_self()
+        self.assertIsInstance(status2, PosStatusDetail)
+        self.assertEqual(status2.direction, status.direction)
+        self.assertEqual(status2.symbol, status.symbol)
+        self.assertEqual(status2.position, status.position)
+        self.assertEqual(status2.position_chg, 0)
+        self.assertEqual(status2.margin, status.margin)
+        self.assertEqual(status2.margin_chg, 0)
+        self.assertEqual(status2.floating_pl, status.floating_pl)
+        self.assertEqual(status2.floating_pl_rate, 0)
+        self.assertEqual(status2.floating_pl_chg, 0)
+        self.assertEqual(status2.floating_pl_cum, status.floating_pl_cum)
+        self.assertEqual(status2.rr, 0)
+        self.assertEqual(status2.commission, 0)
+        self.assertEqual(status2.position_date_type, status.position_date_type)
+        self.assertEqual(status2.multiple, status.multiple)
+        self.assertEqual(status2.margin_ratio, status.margin_ratio)
+
     def test_update_by_trade_detail1(self):
         # 多头加仓
         trade = PosStatusDetailTest.add_trade()
@@ -313,10 +354,11 @@ class PosStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertEqual(status2.margin, trade.margin + trade2.margin)
         self.assertEqual(status2.margin_chg, trade2.margin)
         self.assertEqual(status2.floating_pl // 1, -(trade.commission + trade2.commission) // 1)
-        self.assertEqual(status2.floating_pl_rate*10000//1, -(trade.commission + trade2.commission) / status2.margin *10000//1)  # 初次建仓时浮动收益就等于手续费 / 保证金 "*10000//1" 指在 万分之一以上精度相等即可
+        self.assertEqual(status2.floating_pl_rate * 10000 // 1, -(
+                    trade.commission + trade2.commission) / status2.margin * 10000 // 1)  # 初次建仓时浮动收益就等于手续费 / 保证金 "*10000//1" 指在 万分之一以上精度相等即可
         self.assertEqual(status2.floating_pl_chg, status2.floating_pl - status.floating_pl)
         self.assertEqual(status2.floating_pl_cum, status2.floating_pl)
-        self.assertEqual(status2.rr*10000//1, status2.floating_pl_rate*10000//1)
+        self.assertEqual(status2.rr * 10000 // 1, status2.floating_pl_rate * 10000 // 1)
         self.assertEqual(status2.commission, trade2.commission)
         self.assertEqual(status2.commission_tot, trade.commission + trade2.commission)
         self.assertEqual(status2.position_date_type, PositionDateType.Today.value)
@@ -338,10 +380,11 @@ class PosStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertEqual(status2.margin, trade.margin - trade2.margin)
         self.assertEqual(status2.margin_chg, -trade2.margin)
         self.assertEqual(status2.floating_pl // 1, -(trade.commission + trade2.commission) // 1)
-        self.assertEqual(status2.floating_pl_rate*10000//1, -(trade.commission + trade2.commission) / status2.margin *10000//1)  # 初次建仓时浮动收益就等于手续费 / 保证金 "*10000//1" 指在 万分之一以上精度相等即可
+        self.assertEqual(status2.floating_pl_rate * 10000 // 1, -(
+                    trade.commission + trade2.commission) / status2.margin * 10000 // 1)  # 初次建仓时浮动收益就等于手续费 / 保证金 "*10000//1" 指在 万分之一以上精度相等即可
         self.assertEqual(status2.floating_pl_chg, status2.floating_pl - status.floating_pl)
         self.assertEqual(status2.floating_pl_cum, status2.floating_pl)
-        self.assertEqual(status2.rr*10000//1, status2.floating_pl_rate*10000//1)
+        self.assertEqual(status2.rr * 10000 // 1, status2.floating_pl_rate * 10000 // 1)
         self.assertEqual(status2.commission, trade2.commission)
         self.assertEqual(status2.commission_tot, trade.commission + trade2.commission)
         self.assertEqual(status2.position_date_type, PositionDateType.Today.value)
@@ -363,10 +406,11 @@ class PosStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertEqual(status2.margin, 0)
         self.assertEqual(status2.margin_chg, -trade2.margin)
         self.assertEqual(status2.floating_pl // 1, -(trade.commission + trade2.commission) // 1)
-        self.assertEqual(status2.floating_pl_rate*10000//1, -(trade.commission + trade2.commission) / status.margin *10000//1)  # 初次建仓时浮动收益就等于手续费 / 保证金 "*10000//1" 指在 万分之一以上精度相等即可
+        self.assertEqual(status2.floating_pl_rate * 10000 // 1, -(
+                    trade.commission + trade2.commission) / status.margin * 10000 // 1)  # 初次建仓时浮动收益就等于手续费 / 保证金 "*10000//1" 指在 万分之一以上精度相等即可
         self.assertEqual(status2.floating_pl_chg, status2.floating_pl - status.floating_pl)
         self.assertEqual(status2.floating_pl_cum, status2.floating_pl)
-        self.assertEqual(status2.rr*10000//1, status2.floating_pl_rate*10000//1)
+        self.assertEqual(status2.rr * 10000 // 1, status2.floating_pl_rate * 10000 // 1)
         self.assertEqual(status2.commission, trade2.commission)
         self.assertEqual(status2.commission_tot, trade.commission + trade2.commission)
         self.assertEqual(status2.position_date_type, PositionDateType.Today.value)
@@ -374,8 +418,8 @@ class PosStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertEqual(status2.margin_ratio, trade.margin_ratio)
 
     @staticmethod
-    def add_trade():
-        order = InitTest.add_order()
+    def add_trade(stg_run_id=None):
+        order = InitTest.add_order(stg_run_id)
         trade = TradeDetail.create_by_order_detail(order)
         return trade
 
@@ -406,6 +450,96 @@ class PosStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         trade.trade_date += timedelta(days=1)
         trade.trade_dt += timedelta(days=1)
         return trade
+
+
+class TradeAgentStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
+    def tearDown(self):
+        pass
+
+    def setUp(self):
+        # 每个测试用例执行之前做操作
+        pass
+
+    @classmethod
+    def tearDownClass(cls):
+        # 必须使用 @ classmethod装饰器, 所有test运行完后运行一次
+        pass
+
+    @classmethod
+    def setUpClass(cls):
+        from ibats_common.config import update_db_config, ConfigBase
+        update_db_config({
+            ConfigBase.DB_SCHEMA_IBATS: 'mysql://mg:Dcba1234@localhost/' + ConfigBase.DB_SCHEMA_IBATS,
+        })
+        # 必须使用@classmethod 装饰器,所有test运行前运行一次
+        init()
+        global engine_ibats
+        engine_ibats = engines.engine_ibats
+
+    def test_create(self):
+        _, status = TradeAgentStatusDetailTest.add_trade_agent_status_detail()
+        with with_db_session(engine_ibats) as session:
+            status2 = session.query(TradeAgentStatusDetail).filter(
+                TradeAgentStatusDetail.trade_agent_status_detail_idx == status.trade_agent_status_detail_idx,
+                TradeAgentStatusDetail.stg_run_id == status.stg_run_id
+            ).first()
+        self.assertIsInstance(status2, TradeAgentStatusDetail)
+        self.assertGreater(status2.trade_agent_status_detail_idx, -1)
+        self.assertGreater(status2.cash_init, 0)
+        self.assertEqual(status2.cash_init, status2.cash_available)
+        self.assertEqual(status2.cash_init, status2.cash_and_margin)
+        self.assertEqual(status2.commission_tot, 0)
+        self.assertEqual(status2.floating_pl_cum, 0)
+        self.assertEqual(status2.position_profit, 0)
+        self.assertEqual(status2.close_profit, 0)
+        self.assertEqual(status2.curr_margin, 0)
+        self.assertIsInstance(status2.trade_dt, datetime)
+        self.assertIsInstance(status2.trade_time, time)
+        self.assertIsInstance(status2.trade_millisec, int)
+
+    def test_update_by_pos_status_detail(self):
+        info, status = TradeAgentStatusDetailTest.add_trade_agent_status_detail()
+        pos_status = TradeAgentStatusDetailTest.add_pos_status_detail(info)
+        md = {
+            'ActionDay': '2018-12-15',
+            'ActionTime': '13:24:35',
+        }
+        status2 = status.update_by_pos_status_detail({pos_status.symbol: pos_status}, md=md)
+        self.assertIsInstance(status2, TradeAgentStatusDetail)
+        self.assertEqual(status2.stg_run_id, info.stg_run_id)
+        self.assertGreater(status2.trade_agent_status_detail_idx, status.trade_agent_status_detail_idx)
+        self.assertEqual(status2.cash_available, status2.cash_init - pos_status.margin - pos_status.commission)
+        self.assertEqual(status2.position_value, pos_status.position_value)
+        self.assertEqual(status2.curr_margin, pos_status.margin)
+        self.assertEqual(status2.close_profit, 0)
+        self.assertEqual(status2.position_profit, pos_status.floating_pl)
+        self.assertEqual(status2.floating_pl_cum, pos_status.floating_pl_cum)
+        self.assertEqual(status2.commission_tot, pos_status.commission)
+        self.assertEqual(status2.cash_init, status.cash_init)
+        self.assertEqual(status2.cash_and_margin, status2.cash_available + status2.curr_margin)
+
+    @staticmethod
+    def add_trade_agent_status_detail():
+        info = InitTest.add_stg_run_info()
+        init_cash = 1000000
+        md = {
+            'ActionDay': '2018-12-14',
+            'ActionTime': '13:24:35',
+        }
+        status = TradeAgentStatusDetail.create(info.stg_run_id, ExchangeName.DataIntegration, init_cash, md)
+        with with_db_session(engine_ibats, expire_on_commit=False) as session:
+            session.add(status)
+            session.commit()
+        return info, status
+
+    @staticmethod
+    def add_pos_status_detail(info):
+        trade = PosStatusDetailTest.add_trade(info.stg_run_id)
+        pos_status = PosStatusDetail.create_by_trade_detail(trade)
+        with with_db_session(engine_ibats, expire_on_commit=False) as session:
+            session.add(pos_status)
+            session.commit()
+        return pos_status
 
 
 if __name__ == '__main__':

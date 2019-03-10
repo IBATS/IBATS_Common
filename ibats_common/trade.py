@@ -16,6 +16,7 @@ from ibats_common.config import config
 from ibats_common.backend.orm import OrderDetail, engine_ibats, TradeDetail, PosStatusDetail, TradeAgentStatusDetail
 from ibats_common.common import RunMode, ExchangeName, BacktestTradeMode, Action, Direction, PositionDateType
 from ibats_common.utils.db import with_db_session
+from ibats_common.utils.mess import date_time_2_str, str_2_datetime
 
 logger = logging.getLogger(__package__)
 
@@ -253,9 +254,8 @@ class BacktestTraderAgentBase(TraderAgentBase):
                                                            trade_date=trade_date,
                                                            trade_time=trade_time,
                                                            trade_millisec=trade_millisec,
-                                                           available_cash=init_cash,
-                                                           balance_init=init_cash,
-                                                           balance_tot=init_cash,
+                                                           cash_available=init_cash,
+                                                           cash_init=init_cash
                                                            )
         if config.BACKTEST_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
@@ -615,11 +615,12 @@ class FixPositionBacktestTraderAgentBase(TraderAgentBase):
         trade_agent_status_detail = TradeAgentStatusDetail(
             stg_run_id=stg_run_id,
             trade_agent_key=self.agent_name,
+            trade_dt=str_2_datetime(date_time_2_str(trade_date, trade_time)),
             trade_date=trade_date,
             trade_time=trade_time,
             trade_millisec=trade_millisec,
-            available_cash=init_cash,
-            balance_tot=init_cash,
+            cash_available=init_cash,
+            cash_init=init_cash,
         )
         if config.BACKTEST_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
