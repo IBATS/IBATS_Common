@@ -11,7 +11,8 @@ import pandas as pd
 from ibats_common.backend import engines
 from ibats_common.utils.db import with_db_session, get_db_session
 from ibats_common.common import Action, Direction
-from ibats_common.utils.mess import str_2_date, pd_timedelta_2_timedelta, date_2_str, datetime_2_str, date_time_2_str
+from ibats_common.utils.mess import str_2_date, pd_timedelta_2_timedelta, date_2_str, datetime_2_str, date_time_2_str, \
+    str_2_datetime, STR_FORMAT_DATETIME2
 import logging
 from collections import defaultdict
 import warnings
@@ -59,7 +60,7 @@ class OrderDetail(BaseModel):
     order_time = Column(Time)  # 对应行情数据中 ActionTime
     order_millisec = Column(Integer, default=0, server_default='0')  # 对应行情数据中 ActionMillisec
     direction = Column(TINYINT)  # -1：空；1：多
-    action = Column(Integer)  # 0：关：1：开
+    action = Column(Integer)  # 0：开仓：1-6：平仓，具体参见 ibats_common.common.Action 对象
     symbol = Column(String(30))
     order_price = Column(DOUBLE)
     order_vol = Column(DOUBLE)  # 订单量
@@ -113,7 +114,7 @@ class TradeDetail(BaseModel):
     trade_time = Column(Time)  # 对应行情数据中 ActionTime
     trade_millisec = Column(Integer)  # 对应行情数据中 ActionMillisec
     direction = Column(TINYINT)  # -1：空；1：多
-    action = Column(Integer)  # 0：关：1：开
+    action = Column(Integer)  # 0：开仓：1-6：平仓，具体参见 ibats_common.common.Action 对象
     symbol = Column(String(30))
     trade_price = Column(DOUBLE)  # , comment="成交价格"
     trade_vol = Column(DOUBLE)  # 订单量 , comment="成交数量"
@@ -132,7 +133,8 @@ class TradeDetail(BaseModel):
         self.order_idx = order_idx
         self.order_price = order_price
         self.order_vol = order_vol
-        self.trade_dt = date_time_2_str(trade_date, trade_time) if trade_dt is None else trade_dt
+        self.trade_dt = str_2_datetime(date_time_2_str(trade_date, trade_time),
+                                       format=STR_FORMAT_DATETIME2) if trade_dt is None else trade_dt
         self.trade_date = trade_date
         self.trade_time = trade_time
         self.trade_millisec = trade_millisec
@@ -177,9 +179,9 @@ class TradeDetail(BaseModel):
         # instrument_info = Config.instrument_info_dic[symbol]
         # multiple = instrument_info['VolumeMultiple']
         # margin_ratio = instrument_info['LongMarginRatio']
-        multiple, margin_ratio = 1, 1
+        multiple, margin_ratio, commission_rate = 1, 1, 0.0005
         margin = order_vol * order_price * multiple * margin_ratio
-        commission = 0
+        commission = order_vol * order_price * multiple * commission_rate
         trade_detail = TradeDetail(stg_run_id=order_detail.stg_run_id,
                                    trade_agent_key=order_detail.trade_agent_key,
                                    order_idx=order_detail.order_idx,
@@ -232,7 +234,7 @@ class PosStatusDetail(BaseModel):
                               default=0.0)  # (trade_price - avg_price_last) / avg_price_last * multiple - commission / position_last
     floating_pl_chg = Column(DOUBLE, default=0.0)
     floating_pl_cum = Column(DOUBLE, default=0.0)
-    rr = Column(DOUBLE, default=0.0)  # floating_pl_cum / 前一时刻的margin
+    rr = Column(DOUBLE, default=0.0)  # floating_pl_cum / margin 如果是清仓，则使用前一时刻 margin
     margin = Column(DOUBLE, default=0.0)
     margin_chg = Column(DOUBLE, default=0.0)
     position_date_type = Column(TINYINT, default=0)
@@ -272,6 +274,7 @@ class PosStatusDetail(BaseModel):
         self.floating_pl_rate = floating_pl_rate
         self.floating_pl_chg = floating_pl_chg
         self.floating_pl_cum = floating_pl_cum
+        self.rr = rr
         self.margin = margin
         self.margin_chg = margin_chg
         self.position_date_type = position_date_type
@@ -291,12 +294,12 @@ class PosStatusDetail(BaseModel):
         trade_vol = trade_detail.trade_vol
         trade_price = trade_detail.trade_price
         commission = trade_detail.commission
-        tot_cost = trade_vol * trade_price
-        tot_value = tot_cost - commission
-        avg_price = tot_value / trade_vol
-        floating_pl = tot_value - tot_cost
-        floating_pl_rate = (avg_price - trade_price) / avg_price * trade_detail.multiple * (
-            1 if direction == Direction.Long else -1)
+        tot_value = trade_vol * trade_price
+        margin = trade_detail.margin
+        tot_cost = tot_value + commission
+        avg_price = tot_cost / trade_vol
+        floating_pl = -commission
+        floating_pl_rate = floating_pl / margin
         pos_status_detail = PosStatusDetail(stg_run_id=trade_detail.stg_run_id,
                                             trade_agent_key=trade_detail.trade_agent_key,
                                             trade_idx=trade_detail.trade_idx,
@@ -307,14 +310,14 @@ class PosStatusDetail(BaseModel):
                                             direction=trade_detail.direction,
                                             symbol=trade_detail.symbol,
                                             position=trade_vol,
-                                            position_chg=-trade_vol,
+                                            position_chg=trade_vol,
                                             avg_price=avg_price,
                                             cur_price=trade_price,
-                                            margin=tot_cost,
-                                            margin_chg=-tot_cost,
+                                            margin=margin,
+                                            margin_chg=margin,
                                             floating_pl=floating_pl,
                                             floating_pl_rate=floating_pl_rate,
-                                            floating_pl_chg=-floating_pl,
+                                            floating_pl_chg=floating_pl,
                                             floating_pl_cum=floating_pl,
                                             rr=floating_pl_rate,
                                             commission=commission,
@@ -356,27 +359,25 @@ class PosStatusDetail(BaseModel):
         pos_direction_last = self.direction
         position_last = self.position
         avg_price_last = self.avg_price
+
+        if position_last == 0:
+            # 如果前一状态仓位为 0 则本次方向与当前订单方向相同
+            pos_status_detail.direction = trade_detail.direction
+
         if pos_direction_last == direction:
             if action == Action.Open:
                 # 方向相同：开仓 or 加仓；
                 position_cur = position_last + trade_vol
                 pos_status_detail.position_chg = trade_vol
-                pos_status_detail.avg_price = \
-                    (position_last * avg_price_last + trade_price * trade_vol + commission) / position_cur
                 pos_status_detail.position = position_cur
+                avg_price = (position_last * avg_price_last + trade_price * trade_vol +
+                             commission * int(pos_status_detail.direction)) / position_cur
+                pos_status_detail.avg_price = avg_price
                 # 计算浮动收益 floating_pl floating_pl_rate
-                if pos_status_detail.direction == Direction.Long:
-                    pos_status_detail.floating_pl = \
-                        (trade_price - avg_price_last) * position_cur * multiple - commission
-                    pos_status_detail.floating_pl_rate = \
-                        (trade_price - avg_price_last) / avg_price_last * multiple - commission / position_cur \
-                            if avg_price_last > 0.001 else MAX_RATE
-                else:
-                    pos_status_detail.floating_pl = \
-                        (avg_price_last - trade_price) * position_cur * multiple - commission
-                    pos_status_detail.floating_pl_rate = \
-                        (avg_price_last - trade_price) / avg_price_last * multiple - commission / position_cur \
-                            if avg_price_last > 0.001 else MAX_RATE
+                pos_status_detail.floating_pl = (trade_price - avg_price) * position_cur * multiple * int(
+                    pos_status_detail.direction)
+                pos_status_detail.floating_pl_rate = (trade_price - avg_price) / avg_price * multiple * int(
+                    pos_status_detail.direction)
             else:
                 # 方向相反：清仓 or 减仓；
                 pos_status_detail.position_chg = - trade_vol
@@ -389,59 +390,23 @@ class PosStatusDetail(BaseModel):
                     pos_status_detail.position = position_cur
                     # 计算浮动收益 floating_pl floating_pl_rate
                     # 与其他地方计算公式的区别在于 position_curr == 0 因此使用 position_last
-                    if pos_status_detail.direction == Direction.Long:
-                        pos_status_detail.floating_pl = \
-                            (trade_price - avg_price_last) * position_last * multiple - commission
-                        pos_status_detail.floating_pl_rate = \
-                            (trade_price - avg_price_last) / avg_price_last * multiple - commission / position_last \
-                                if avg_price_last > 0.001 else MAX_RATE
-                    else:
-                        pos_status_detail.floating_pl = \
-                            (avg_price_last - trade_price) * position_last * multiple - commission
-                        pos_status_detail.floating_pl_rate = \
-                            (avg_price_last - trade_price) / avg_price_last * multiple - commission / position_last \
-                                if avg_price_last > 0.001 else MAX_RATE
-
+                    pos_status_detail.floating_pl = (trade_price - avg_price_last) * position_last * multiple * int(
+                            pos_status_detail.direction) - commission
+                    pos_status_detail.floating_pl_rate = ((trade_price - avg_price_last) * int(
+                        pos_status_detail.direction) - commission / position_last) / avg_price_last * multiple \
+                            if avg_price_last > 0.001 else MAX_RATE
 
                 else:
                     # 减仓
                     position_cur = position_last - trade_vol
-                    pos_status_detail.avg_price = \
-                        (position_last * avg_price_last - trade_price * trade_vol + commission) / position_cur
+                    avg_price = (position_last * avg_price_last - trade_price * trade_vol + commission) / position_cur
+                    pos_status_detail.avg_price = avg_price
                     pos_status_detail.position = position_cur
                     # 计算浮动收益 floating_pl floating_pl_rate
-                    if pos_status_detail.direction == Direction.Long:
-                        pos_status_detail.floating_pl = \
-                            (trade_price - avg_price_last) * position_cur * multiple - commission
-                        pos_status_detail.floating_pl_rate = \
-                            (trade_price - avg_price_last) / avg_price_last * multiple - commission / position_cur \
-                                if avg_price_last > 0.001 else MAX_RATE
-                    else:
-                        pos_status_detail.floating_pl = \
-                            (avg_price_last - trade_price) * position_cur * multiple - commission
-                        pos_status_detail.floating_pl_rate = \
-                            (avg_price_last - trade_price) / avg_price_last * multiple - commission / position_cur \
-                                if avg_price_last > 0.001 else MAX_RATE
-
-        elif position_last == 0:
-            position_cur = trade_vol
-            pos_status_detail.position_chg = trade_vol
-            pos_status_detail.avg_price = trade_price
-            pos_status_detail.position = trade_vol
-            pos_status_detail.direction = direction
-            # 计算浮动收益 floating_pl floating_pl_rate
-            if pos_status_detail.direction == Direction.Long:
-                pos_status_detail.floating_pl = \
-                    (trade_price - avg_price_last) * position_cur * multiple - commission
-                pos_status_detail.floating_pl_rate = \
-                    (trade_price - avg_price_last) / avg_price_last * multiple - commission / position_cur \
-                        if avg_price_last > 0.001 else MAX_RATE
-            else:
-                pos_status_detail.floating_pl = \
-                    (avg_price_last - trade_price) * position_cur * multiple - commission
-                pos_status_detail.floating_pl_rate = \
-                    (avg_price_last - trade_price) / avg_price_last * multiple - commission / position_cur \
-                        if avg_price_last > 0.001 else MAX_RATE
+                    pos_status_detail.floating_pl = (trade_price - avg_price) * position_cur * multiple * int(
+                        pos_status_detail.direction)
+                    pos_status_detail.floating_pl_rate = (trade_price - avg_price) / avg_price * multiple * int(
+                        pos_status_detail.direction)
 
         else:
             # 方向相反
@@ -474,7 +439,8 @@ class PosStatusDetail(BaseModel):
         # 计算 commission、commission_tot、rr、position_date_type
         pos_status_detail.commission += commission
         pos_status_detail.commission_tot += commission
-        pos_status_detail.rr = pos_status_detail.floating_pl_cum / margin_last
+        pos_status_detail.rr = pos_status_detail.floating_pl_cum / (
+            pos_status_detail.margin if pos_status_detail.margin > 0 else margin_last)
         pos_status_detail.position_date_type = PositionDateType.Today.value
 
         if UPDATE_OR_INSERT_PER_ACTION:
