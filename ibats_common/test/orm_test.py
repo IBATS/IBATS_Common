@@ -221,11 +221,11 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
         detail = StgRunStatusDetail(
             status.stg_run_id, trade_dt=status.trade_dt, trade_date=status.trade_date,
             trade_time=status.trade_time,
-            trade_millisec=status.trade_millisec, available_cash=0,
+            trade_millisec=status.trade_millisec, cash_available=0,
             curr_margin=status.curr_margin,
             close_profit=status.close_profit, position_profit=status.position_profit,
             floating_pl_cum=status.floating_pl_cum,
-            commission_tot=status.commission_tot, balance_init=status.cash_init,
+            commission_tot=status.commission_tot, cash_init=status.cash_init,
             balance_tot=status.cash_and_margin)
         with with_db_session(engine_ibats, expire_on_commit=False) as session:
             session.add(detail)
@@ -540,6 +540,35 @@ class TradeAgentStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
             session.add(pos_status)
             session.commit()
         return pos_status
+
+
+class StgRunStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
+    def tearDown(self):
+        pass
+
+    def setUp(self):
+        # 每个测试用例执行之前做操作
+        pass
+
+    @classmethod
+    def tearDownClass(cls):
+        # 必须使用 @ classmethod装饰器, 所有test运行完后运行一次
+        pass
+
+    @classmethod
+    def setUpClass(cls):
+        from ibats_common.config import update_db_config, ConfigBase
+        update_db_config({
+            ConfigBase.DB_SCHEMA_IBATS: 'mysql://mg:Dcba1234@localhost/' + ConfigBase.DB_SCHEMA_IBATS,
+        })
+        # 必须使用@classmethod 装饰器,所有test运行前运行一次
+        init()
+        global engine_ibats
+        engine_ibats = engines.engine_ibats
+
+    def test_create_by_trade_agent_status_detail_list(self):
+        detail = TradeAgentStatusDetailTest.add_trade_agent_status_detail()
+
 
 
 if __name__ == '__main__':

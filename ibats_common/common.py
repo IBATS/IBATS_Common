@@ -59,6 +59,15 @@ class RunMode(IntEnum):
 
 
 @unique
+class CalcMode(IntEnum):
+    """
+    收益及账户计算模式
+    """
+    Normal = 0
+    Margin = 1
+
+
+@unique
 class ExchangeName(IntEnum):
     """
     交易所名称
