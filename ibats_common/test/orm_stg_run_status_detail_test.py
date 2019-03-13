@@ -37,7 +37,21 @@ class StgRunStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         engine_ibats = engines.engine_ibats
 
     def test_create_by_trade_agent_status_detail_list(self):
-        detail = TradeAgentStatusDetailTest.add_trade_agent_status_detail()
+        info, status = TradeAgentStatusDetailTest.add_trade_agent_status_detail()
+        detail = StgRunStatusDetail.create_by_trade_agent_status_detail_list(info.stg_run_id, [status])
+        self.assertEqual(detail.stg_run_id, info.stg_run_id)
+        self.assertEqual(detail.cash_available, status.cash_available)
+        self.assertEqual(detail.position_value, status.position_value)
+        self.assertEqual(detail.curr_margin, status.curr_margin)
+        self.assertEqual(detail.close_profit, status.close_profit)
+        self.assertEqual(detail.position_profit, status.position_profit)
+        self.assertEqual(detail.floating_pl_cum, status.floating_pl_cum)
+        self.assertEqual(detail.commission_tot, status.commission_tot)
+        self.assertEqual(detail.cash_init, status.cash_init)
+        self.assertEqual(detail.cash_and_margin, status.cash_and_margin)
+        self.assertEqual(detail.cashflow, status.cashflow)
+        self.assertEqual(detail.cashflow_cum, status.cashflow_cum)
+        self.assertEqual(detail.rr, status.rr)
 
 
 if __name__ == '__main__':
