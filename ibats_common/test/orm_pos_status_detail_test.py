@@ -8,11 +8,8 @@
 @desc    : 
 """
 from ibats_common.backend.orm import *
-from datetime import date, datetime, time
 import unittest
 from ibats_common.test.orm_init_test import InitTest
-
-from ibats_common.common import ExchangeName
 
 
 class PosStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
