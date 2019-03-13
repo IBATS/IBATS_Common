@@ -450,7 +450,7 @@ class PosStatusDetail(BaseModel):
 
             # 计算 position_value、margin、margin_chg
             # cur_price = pos_status_detail.cur_price
-            pos_status_detail.margin = position_cur * avg_price
+            pos_status_detail.margin = position_cur * trade_price
             # 如果前一状态仓位为 0,  且不是多空切换的情况，则保留上一状态的浮动收益
             if self.position == 0 and self.trade_dt != trade_detail.trade_dt:
                 margin_last = pos_status_detail.margin  # 新建仓情况下，margin_last 为当前 margin
@@ -691,7 +691,7 @@ class TradeAgentStatusDetail(BaseModel):
         :param md: 
         :return: 
         """
-        warnings.warn('该函数为范例函数，需要根据实际情况改写', UserWarning)
+        warnings.warn('该函数为范例函数，可能需要根据实际情况改写', UserWarning)
         trade_date = str_2_date(md['ActionDay']) - timedelta(days=1)
         trade_time = pd_timedelta_2_timedelta(md['ActionTime'])
         trade_dt = datetime_2_str(date_time_2_str(trade_date, trade_time))
