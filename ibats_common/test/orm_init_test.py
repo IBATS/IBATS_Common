@@ -8,7 +8,7 @@
 @desc    : 
 """
 from ibats_common.backend.orm import *
-from datetime import date, datetime, time
+from datetime import date, datetime
 import unittest
 
 from ibats_common.common import ExchangeName
@@ -148,7 +148,7 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
             avg_price=trade.trade_price,
             cur_price=trade.trade_price, floating_pl=-1, floating_pl_rate=-commission_rate,
             floating_pl_chg=trade.trade_price * trade.trade_vol * trade.multiple * commission_rate,
-            floating_pl_cum=-13, rr=-commission_rate,
+            floating_pl_cum=-13, cashflow=123, cashflow_cum=1234, rr=-commission_rate,
             margin=trade.trade_price * trade.trade_vol,
             margin_chg=-trade.trade_price * trade.trade_vol,
             position_date_type=PositionDateType.Today.value,
@@ -156,6 +156,7 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
             commission_tot=trade.trade_vol * trade.trade_price * commission_rate * trade.multiple,
             multiple=multiple,
             margin_ratio=margin_ratio,
+            calc_mode=CalcMode.Margin.value
         )
         with with_db_session(engine_ibats, expire_on_commit=False) as session:
             session.add(pos_status)
@@ -226,7 +227,10 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
             close_profit=status.close_profit, position_profit=status.position_profit,
             floating_pl_cum=status.floating_pl_cum,
             commission_tot=status.commission_tot, cash_init=status.cash_init,
-            balance_tot=status.cash_and_margin)
+            cashflow=status.cashflow,
+            cashflow_cum=status.cashflow_cum,
+            rr=status.rr,
+        )
         with with_db_session(engine_ibats, expire_on_commit=False) as session:
             session.add(detail)
             session.commit()

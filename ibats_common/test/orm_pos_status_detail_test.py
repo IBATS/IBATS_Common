@@ -53,6 +53,9 @@ class PosStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertEqual(status.floating_pl_rate, -trade.commission / status.margin)  # 初次建仓时浮动收益就等于手续费 / 保证金
         self.assertEqual(status.floating_pl_chg, status.floating_pl)
         self.assertEqual(status.floating_pl_cum, status.floating_pl)
+        self.assertEqual(status.cashflow, status.cashflow)
+        self.assertEqual(status.cashflow_cum, status.cashflow_cum)
+        self.assertEqual(status.calc_mode, status.calc_mode)
         self.assertEqual(status.rr, status.floating_pl_rate)
         self.assertEqual(status.commission, trade.commission)
         self.assertEqual(status.position_date_type, PositionDateType.Today.value)
@@ -74,6 +77,9 @@ class PosStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertEqual(status2.floating_pl_rate, 0)
         self.assertEqual(status2.floating_pl_chg, 0)
         self.assertEqual(status2.floating_pl_cum, status.floating_pl_cum)
+        self.assertEqual(status2.cashflow, 0)
+        self.assertEqual(status2.cashflow_cum, status.cashflow_cum)
+        self.assertEqual(status2.calc_mode, status.calc_mode)
         self.assertEqual(status2.rr, 0)
         self.assertEqual(status2.commission, 0)
         self.assertEqual(status2.position_date_type, status.position_date_type)
@@ -95,10 +101,14 @@ class PosStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertEqual(status2.margin, trade.margin + trade2.margin)
         self.assertEqual(status2.margin_chg, trade2.margin)
         self.assertEqual(status2.floating_pl // 1, -(trade.commission + trade2.commission) // 1)
+        # 初次建仓时浮动收益就等于手续费 / 保证金 "*10000//1" 指在 万分之一以上精度相等即可
         self.assertEqual(status2.floating_pl_rate * 10000 // 1, -(
-                    trade.commission + trade2.commission) / status2.margin * 10000 // 1)  # 初次建仓时浮动收益就等于手续费 / 保证金 "*10000//1" 指在 万分之一以上精度相等即可
+                    trade.commission + trade2.commission) / status2.margin * 10000 // 1)
         self.assertEqual(status2.floating_pl_chg, status2.floating_pl - status.floating_pl)
         self.assertEqual(status2.floating_pl_cum, status2.floating_pl)
+        self.assertEqual(status2.cashflow, - status.margin_chg - status.commission)
+        self.assertEqual(status2.cashflow_cum, status.cashflow_cum + status2.cashflow)
+        self.assertEqual(status2.calc_mode, status.calc_mode)
         self.assertEqual(status2.rr * 10000 // 1, status2.floating_pl_rate * 10000 // 1)
         self.assertEqual(status2.commission, trade2.commission)
         self.assertEqual(status2.commission_tot, trade.commission + trade2.commission)
@@ -121,10 +131,14 @@ class PosStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertEqual(status2.margin, trade.margin - trade2.margin)
         self.assertEqual(status2.margin_chg, -trade2.margin)
         self.assertEqual(status2.floating_pl // 1, -(trade.commission + trade2.commission) // 1)
+        # 初次建仓时浮动收益就等于手续费 / 保证金 "*10000//1" 指在 万分之一以上精度相等即可
         self.assertEqual(status2.floating_pl_rate * 10000 // 1, -(
-                    trade.commission + trade2.commission) / status2.margin * 10000 // 1)  # 初次建仓时浮动收益就等于手续费 / 保证金 "*10000//1" 指在 万分之一以上精度相等即可
+                    trade.commission + trade2.commission) / status2.margin * 10000 // 1)
         self.assertEqual(status2.floating_pl_chg, status2.floating_pl - status.floating_pl)
         self.assertEqual(status2.floating_pl_cum, status2.floating_pl)
+        self.assertEqual(status2.cashflow, - status.margin_chg - status.commission)
+        self.assertEqual(status2.cashflow_cum, status.cashflow_cum + status2.cashflow)
+        self.assertEqual(status2.calc_mode, status.calc_mode)
         self.assertEqual(status2.rr * 10000 // 1, status2.floating_pl_rate * 10000 // 1)
         self.assertEqual(status2.commission, trade2.commission)
         self.assertEqual(status2.commission_tot, trade.commission + trade2.commission)
@@ -147,10 +161,14 @@ class PosStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertEqual(status2.margin, 0)
         self.assertEqual(status2.margin_chg, -trade2.margin)
         self.assertEqual(status2.floating_pl // 1, -(trade.commission + trade2.commission) // 1)
+        # 初次建仓时浮动收益就等于手续费 / 保证金 "*10000//1" 指在 万分之一以上精度相等即可
         self.assertEqual(status2.floating_pl_rate * 10000 // 1, -(
-                    trade.commission + trade2.commission) / status.margin * 10000 // 1)  # 初次建仓时浮动收益就等于手续费 / 保证金 "*10000//1" 指在 万分之一以上精度相等即可
+                    trade.commission + trade2.commission) / status.margin * 10000 // 1)
         self.assertEqual(status2.floating_pl_chg, status2.floating_pl - status.floating_pl)
         self.assertEqual(status2.floating_pl_cum, status2.floating_pl)
+        self.assertEqual(status2.cashflow, - status.margin_chg - status.commission)
+        self.assertEqual(status2.cashflow_cum, status.cashflow_cum + status2.cashflow)
+        self.assertEqual(status2.calc_mode, status.calc_mode)
         self.assertEqual(status2.rr * 10000 // 1, status2.floating_pl_rate * 10000 // 1)
         self.assertEqual(status2.commission, trade2.commission)
         self.assertEqual(status2.commission_tot, trade.commission + trade2.commission)
