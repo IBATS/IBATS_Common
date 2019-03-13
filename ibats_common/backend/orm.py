@@ -245,6 +245,8 @@ class PosStatusDetail(BaseModel):
     # 加仓，将导致净现金流为负，减仓则净现金流为正
     # 在保证金交易的情况下，价格波动引起的保证金占用变化，也会使得净现金流产生变化
     cashflow = Column(DOUBLE, default=0.0)
+    # 累计现金流，持仓期间累计现金流。对于同一bar内多空反转的情况，不清零直接继续计算。
+    cashflow_cum = Column(DOUBLE, default=0.0)
     rr = Column(DOUBLE, default=0.0)  # floating_pl_cum / margin 如果是清仓，则使用前一时刻 margin
     margin = Column(DOUBLE, default=0.0)
     margin_chg = Column(DOUBLE, default=0.0)
@@ -264,7 +266,7 @@ class PosStatusDetail(BaseModel):
     def __init__(self, stg_run_id=None, trade_agent_key=None, trade_idx=None, trade_dt=None, trade_date=None,
                  trade_time=None, trade_millisec=None, direction=None, symbol=None, position=None, position_chg=0.0,
                  avg_price=None, cur_price=None, floating_pl=0.0, floating_pl_rate=0.0, floating_pl_chg=0.0,
-                 floating_pl_cum=0.0, cashflow=0.0, rr=0.0, margin=0.0, margin_chg=0.0,
+                 floating_pl_cum=0.0, cashflow=0.0, cashflow_cum=0.0, rr=0.0, margin=0.0, margin_chg=0.0,
                  position_date_type=PositionDateType.Today.value, commission=0.0, commission_tot=0.0, multiple=0,
                  margin_ratio=0.0, calc_mode: (int, CalcMode) = CalcMode.Normal.value):
         self.stg_run_id = stg_run_id
@@ -287,6 +289,7 @@ class PosStatusDetail(BaseModel):
         self.floating_pl_chg = floating_pl_chg
         self.floating_pl_cum = floating_pl_cum
         self.cashflow = cashflow
+        self.cashflow_cum = cashflow_cum
         self.rr = rr
         self.margin = margin
         self.margin_chg = margin_chg
@@ -331,6 +334,7 @@ class PosStatusDetail(BaseModel):
                                             floating_pl_chg=floating_pl,
                                             floating_pl_cum=floating_pl,
                                             cashflow=-margin - commission,
+                                            cashflow_cum=-margin - commission,
                                             rr=floating_pl_rate,
                                             commission=commission,
                                             commission_tot=commission,
@@ -422,7 +426,8 @@ class PosStatusDetail(BaseModel):
                         position_cur = position_last - trade_vol
                         position_value = position_cur * trade_price
                         pos_status_detail.position_value = position_value
-                        avg_price = (position_last * avg_price_last - trade_price * trade_vol + commission) / position_cur
+                        avg_price = (
+                                            position_last * avg_price_last - trade_price * trade_vol + commission) / position_cur
                         pos_status_detail.avg_price = avg_price
                         pos_status_detail.position = position_cur
                         # 计算浮动收益 floating_pl floating_pl_rate
@@ -443,7 +448,6 @@ class PosStatusDetail(BaseModel):
             pos_status_detail.floating_pl_chg = pos_status_detail.floating_pl - self.floating_pl
             pos_status_detail.floating_pl_cum += pos_status_detail.floating_pl_chg
 
-
             # 计算 position_value、margin、margin_chg
             # cur_price = pos_status_detail.cur_price
             pos_status_detail.margin = position_cur * avg_price
@@ -455,8 +459,9 @@ class PosStatusDetail(BaseModel):
                 margin_last = self.margin
                 pos_status_detail.margin_chg = margin_chg = pos_status_detail.margin - margin_last
 
-            # 计算 cashflow、commission、commission_tot、rr、position_date_type
-            pos_status_detail.cashflow = - margin_chg - commission
+            # 计算 cashflow, cashflow_cum, commission, commission_tot, rr, position_date_type
+            pos_status_detail.cashflow = cashflow = - margin_chg - commission
+            pos_status_detail.cashflow_cum += cashflow
             pos_status_detail.commission = commission
             pos_status_detail.commission_tot += commission
             pos_status_detail.rr = pos_status_detail.floating_pl_cum / (
@@ -547,7 +552,8 @@ class PosStatusDetail(BaseModel):
             pos_status_detail.floating_pl_cum += pos_status_detail.floating_pl_chg
 
             # 计算 cashflow、commission、commission_tot、rr、position_date_type
-            pos_status_detail.cashflow = - margin_chg - commission
+            pos_status_detail.cashflow = cashflow = - margin_chg - commission
+            pos_status_detail.cashflow_cum += cashflow
             pos_status_detail.commission += commission
             pos_status_detail.commission_tot += commission
             pos_status_detail.rr = pos_status_detail.floating_pl_cum / (
@@ -592,6 +598,8 @@ class PosStatusDetail(BaseModel):
                                             floating_pl=self.floating_pl if position > 0 else 0,
                                             floating_pl_rate=0.0,
                                             floating_pl_cum=self.floating_pl_cum,
+                                            cashflow=0.0,
+                                            cashflow_cum=self.cashflow_cum,
                                             margin=self.margin,
                                             margin_chg=0,
                                             position_date_type=self.position_date_type,
@@ -640,13 +648,16 @@ class TradeAgentStatusDetail(BaseModel):
     commission_tot = Column(DOUBLE, default=0.0)
     cash_init = Column(DOUBLE, default=0.0)
     cash_and_margin = Column(DOUBLE, default=0.0)
+    cashflow = Column(DOUBLE, default=0.0)
+    cashflow_cum = Column(DOUBLE, default=0.0)
     rr = Column(DOUBLE, default=0.0)
     calc_mode = Column(TINYINT)  # 计算模式：0 普通模式，1 保证金模式
+    logger = logging.getLogger(f'<Table:{__tablename__}>')
 
     def __init__(self, stg_run_id=None, trade_agent_key=None,
                  trade_dt=None, trade_date=None, trade_time=None, trade_millisec=None,
                  cash_available=0.0, position_value=0.0, curr_margin=0.0, close_profit=0.0, position_profit=0.0,
-                 floating_pl_cum=0.0,
+                 floating_pl_cum=0.0, cashflow=0.0, cashflow_cum=0.0,
                  commission_tot=0.0, cash_init=0.0, calc_mode: (int, CalcMode) = CalcMode.Normal.value):
         self.stg_run_id = stg_run_id
         self.trade_agent_status_detail_idx = None if stg_run_id is None else idx_generator(
@@ -665,6 +676,8 @@ class TradeAgentStatusDetail(BaseModel):
         self.commission_tot = commission_tot
         self.cash_init = cash_init
         self.cash_and_margin = cash_available + curr_margin
+        self.cashflow = cashflow
+        self.cashflow_cum = cashflow_cum
         self.rr = 0
         self.calc_mode = calc_mode.value if calc_mode is CalcMode else calc_mode
 
@@ -718,8 +731,10 @@ class TradeAgentStatusDetail(BaseModel):
                                                            close_profit=self.close_profit,
                                                            position_profit=self.position_profit,
                                                            floating_pl_cum=self.floating_pl_cum,
+                                                           cashflow_cum=self.cashflow_cum,
                                                            commission_tot=self.commission_tot,
                                                            cash_init=self.cash_init,
+                                                           calc_mode=self.calc_mode,
                                                            )
         return trade_agent_status_detail
 
@@ -742,6 +757,7 @@ class TradeAgentStatusDetail(BaseModel):
         close_profit_new = 0
         position_profit = 0
         floating_pl_cum = 0
+        cashflow, cashflow_cum = 0, 0
         commission_tot = 0
         for instrument_id, pos_status_detail in pos_status_detail_dic.items():
             position_value += pos_status_detail.position_value
@@ -751,6 +767,8 @@ class TradeAgentStatusDetail(BaseModel):
             else:
                 position_profit += pos_status_detail.floating_pl
             floating_pl_cum += pos_status_detail.floating_pl_cum
+            cashflow += pos_status_detail.cashflow
+            cashflow_cum += pos_status_detail.cashflow_cum
             commission_tot += pos_status_detail.commission_tot
 
         # # 对于同一时间，平仓后又开仓的情况，不能将close_profit重置为0
@@ -759,14 +777,22 @@ class TradeAgentStatusDetail(BaseModel):
         # else:
         # 一个单位时段只允许一次，不需要考虑上面的情况
         close_profit = detail.close_profit + close_profit_new
-        cash_available = detail.cash_init + close_profit - curr_margin - commission_tot + (position_value - curr_margin)
+        # cash_available = self.cash_available + cashflow
+        cash_available = self.cash_init + cashflow_cum
+        if cash_available != (self.cash_available + cashflow):
+            self.logger.warning("%s cash_init + cashflow_cum = .2f 与 cash_available + cashflow = .2f 应该保持一致。"
+                                "cash_init=%.2f cashflow_cum=%.2f cash_available_last=%.2f cashflow=%.2f",
+                                self.cash_init + cashflow_cum, self.cash_available + cashflow,
+                                self.cash_init, cashflow_cum, self.cash_available, cashflow)
         detail.cash_available = cash_available
         detail.position_value = position_value
         detail.curr_margin = curr_margin
         detail.close_profit = close_profit
         detail.position_profit = position_profit
         detail.floating_pl_cum = floating_pl_cum
-        detail.commission_tot += commission_tot
+        detail.cashflow = cashflow
+        detail.cashflow_cum = cashflow_cum
+        detail.commission_tot = commission_tot
         detail.cash_and_margin = detail.cash_available + position_value
         detail.rr = detail.cash_and_margin / detail.cash_init
 
@@ -799,12 +825,14 @@ class StgRunStatusDetail(BaseModel):
     commission_tot = Column(DOUBLE, default=0.0)
     cash_init = Column(DOUBLE, default=0.0)
     cash_and_margin = Column(DOUBLE, default=0.0)
+    cashflow = Column(DOUBLE, default=0.0)
+    cashflow_cum = Column(DOUBLE, default=0.0)
     rr = Column(DOUBLE, default=0.0)
 
     def __init__(self, stg_run_id=None,
                  trade_dt=None, trade_date=None, trade_time=None, trade_millisec=None,
                  cash_available=None, curr_margin=None, close_profit=None, position_profit=None, floating_pl_cum=None,
-                 commission_tot=None, cash_init=None, rr=0):
+                 commission_tot=None, cash_init=None, cashflow=0.0, cashflow_cum=0.0, rr=0):
         self.stg_run_id = stg_run_id
         self.stg_run_status_detail_idx = None if stg_run_id is None else idx_generator(
             stg_run_id, StgRunStatusDetail)
@@ -820,6 +848,8 @@ class StgRunStatusDetail(BaseModel):
         self.commission_tot = commission_tot
         self.cash_init = cash_init
         self.cash_and_margin = cash_available + curr_margin
+        self.cashflow = cashflow
+        self.cashflow_cum = cashflow_cum
         self.rr = rr
 
     @staticmethod
@@ -832,7 +862,7 @@ class StgRunStatusDetail(BaseModel):
         stg_run_id = stg_run_id
         trade_dt, trade_date, trade_time, trade_millisec = None, None, None, None
         available_cash, curr_margin, close_profit, position_profit = 0, 0, 0, 0
-        floating_pl_cum, commission_tot, cash_init, cash_and_margin, rr = 0, 0, 0, 0, 0
+        floating_pl_cum, commission_tot, cash_init, cash_and_margin, cashflow, cashflow_cum, rr = 0, 0, 0, 0, 0, 0, 0
         for detail in trade_agent_status_detail_list:
             if trade_dt is None or trade_dt < detail.trade_dt:
                 trade_dt = detail.trade_dt
@@ -848,6 +878,8 @@ class StgRunStatusDetail(BaseModel):
             commission_tot += 0 if detail.commission_tot is None else detail.commission_tot
             cash_init += 0 if detail.cash_init is None else detail.cash_init
             cash_and_margin += 0 if detail.cash_and_margin is None else detail.cash_and_margin
+            cashflow += cashflow
+            cashflow_cum += cashflow_cum
 
         stg_run_status_detail = StgRunStatusDetail(
             stg_run_id=stg_run_id,
@@ -862,6 +894,8 @@ class StgRunStatusDetail(BaseModel):
             floating_pl_cum=floating_pl_cum,
             commission_tot=commission_tot,
             cash_init=cash_init,
+            cashflow=cashflow,
+            cashflow_cum=cashflow_cum,
             rr=rr,
         )
         return stg_run_status_detail
