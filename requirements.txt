@@ -5,3 +5,4 @@ redis>=2.10.6
 SQLAlchemy>=1.2.8
 xlrd>=1.1.0
 pytest>=4.3.0
+IBATS-Utils
