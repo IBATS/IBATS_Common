@@ -15,8 +15,8 @@ from functools import partial
 from ibats_common.config import config
 from ibats_common.backend.orm import OrderDetail, engine_ibats, TradeDetail, PosStatusDetail, TradeAgentStatusDetail
 from ibats_common.common import RunMode, ExchangeName, BacktestTradeMode, Action, Direction, PositionDateType
-from ibats_common.utils.db import with_db_session
-from ibats_common.utils.mess import date_time_2_str, str_2_datetime
+from ibats_utils.db import with_db_session
+from ibats_utils.mess import date_time_2_str, str_2_datetime
 
 logger = logging.getLogger(__package__)
 

@@ -21,8 +21,8 @@ from ibats_common.backend.orm import StgRunInfo, StgRunStatusDetail
 from ibats_common.common import ExchangeName, RunMode, ContextKey
 from ibats_common.md import md_agent_factory
 from ibats_common.strategy import StgBase
-from ibats_common.utils.db import with_db_session
-from ibats_common.utils.mess import try_2_date
+from ibats_utils.db import with_db_session
+from ibats_utils.mess import try_2_date
 from ibats_common.trade import trader_agent_factory
 from ibats_common.config import config
 

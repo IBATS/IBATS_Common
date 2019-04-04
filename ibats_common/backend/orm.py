@@ -9,9 +9,9 @@ from sqlalchemy.dialects.mysql import DOUBLE, TINYINT
 from sqlalchemy.ext.declarative import declarative_base
 import pandas as pd
 from ibats_common.backend import engines
-from ibats_common.utils.db import with_db_session, get_db_session
+from ibats_utils.db import with_db_session, get_db_session
 from ibats_common.common import Action, Direction, CalcMode
-from ibats_common.utils.mess import str_2_date, pd_timedelta_2_timedelta, date_2_str, datetime_2_str, date_time_2_str, \
+from ibats_utils.mess import str_2_date, pd_timedelta_2_timedelta, date_2_str, datetime_2_str, date_time_2_str, \
     str_2_datetime, STR_FORMAT_DATETIME2
 import logging
 from collections import defaultdict
@@ -902,7 +902,7 @@ class StgRunStatusDetail(BaseModel):
 
 
 def init():
-    from ibats_common.utils.db import alter_table_2_myisam
+    from ibats_utils.db import alter_table_2_myisam
     global engine_ibats
     engine_ibats = engines.engine_ibats
     BaseModel.metadata.create_all(engine_ibats)

@@ -15,7 +15,7 @@ import pandas as pd
 import logging
 from abc import ABC, abstractmethod
 from functools import partial
-from ibats_common.utils.mess import str_2_date, active_coroutine
+from ibats_utils.mess import str_2_date, active_coroutine
 
 logger = logging.getLogger(__package__)
 

@@ -8,7 +8,7 @@
 @desc    : 
 """
 from ibats_common.config import config
-from ibats_common.utils.db import DynamicEngine
+from ibats_utils.db import DynamicEngine
 import logging
 from datetime import datetime
 
