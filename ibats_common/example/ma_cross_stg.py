@@ -12,19 +12,22 @@ import logging
 from ibats_common.common import PeriodType, RunMode, BacktestTradeMode, ExchangeName, ContextKey, Direction
 from ibats_common.strategy import StgBase
 from ibats_common.strategy_handler import strategy_handler_factory
+from ibats_local_trader.agent.td_agent import *
+from ibats_local_trader.agent.md_agent import *
 
 logger = logging.getLogger(__name__)
 
 
 class MACrossStg(StgBase):
 
-    def __init__(self):
+    def __init__(self, unit=1):
         super().__init__()
+        self.unit = unit
         self.ma5 = []
         self.ma10 = []
 
     def on_prepare_min1(self, md_df, context):
-        if md_df:
+        if md_df is not None:
             self.ma5 = list(md_df['close'].rolling(5, 5).mean())[10:]
             self.ma10 = list(md_df['close'].rolling(10, 10).mean())[10:]
 
@@ -44,7 +47,7 @@ class MACrossStg(StgBase):
                     elif direction == Direction.Long:
                         no_target_position = False
             if no_target_position:
-                self.open_long(instrument_id, close, 1)
+                self.open_long(instrument_id, close, self.unit)
         elif self.ma5[-2] > self.ma10[-2] and self.ma5[-1] < self.ma10[-1]:
             position_date_pos_info_dic = self.get_position(instrument_id)
             no_target_position = True
@@ -56,7 +59,7 @@ class MACrossStg(StgBase):
                     elif direction == Direction.Short:
                         no_target_position = False
             if no_target_position:
-                self.open_short(instrument_id, close, 1)
+                self.open_short(instrument_id, close, self.unit)
 
 
 def _test_use():
@@ -65,9 +68,12 @@ def _test_use():
     strategy_params = {'unit': 100}
     md_agent_params_list = [{
         'md_period': PeriodType.Min1,
-        'instrument_id_list': ['ETHUSD'],
+        'instrument_id_list': ['RU'],
+        'datetime_key': 'trade_date',
         'init_md_date_from': '2018-7-19',  # 行情初始化加载历史数据，供策略分析预加载使用
         'init_md_date_to': '2018-10-21',
+        'file_path': '/home/mg/github/IBATS_Common/ibats_common/example/ru_price2.csv',  # 需要根据实际路径进行调整
+        'symbol_key': 'instrument_id',
     }]
     if run_mode == RunMode.Realtime:
         trade_agent_params = {
@@ -88,7 +94,7 @@ def _test_use():
         stg_class=MACrossStg,
         strategy_params=strategy_params,
         md_agent_params_list=md_agent_params_list,
-        exchange_name=ExchangeName.BitMex,
+        exchange_name=ExchangeName.LocalFile,
         run_mode=RunMode.Backtest,
         trade_agent_params=trade_agent_params,
         strategy_handler_param=strategy_handler_param,

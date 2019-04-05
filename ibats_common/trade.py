@@ -272,7 +272,9 @@ class BacktestTraderAgentBase(TraderAgentBase):
         trade_agent_status_detail = self.trade_agent_status_detail_latest.create_by_self()
         # 上一次更新日期、时间
         # trade_date_last, trade_time_last, trade_millisec_last = \
-        #     trade_agent_status_detail.trade_date, trade_agent_status_detail.trade_time, trade_agent_status_detail.trade_millisec
+        #     trade_agent_status_detail.trade_date,
+        #     trade_agent_status_detail.trade_time,
+        #     trade_agent_status_detail.trade_millisec
         # 更新日期、时间
         trade_date = timestamp_curr.date()
         trade_time = timestamp_curr.time()

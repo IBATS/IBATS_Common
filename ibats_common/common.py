@@ -76,6 +76,7 @@ class ExchangeName(IntEnum):
     HuoBi = 1
     BitMex = 2
     DataIntegration = 3
+    LocalFile = 4           # Local test use only
 
 
 @unique

@@ -3,5 +3,7 @@ twine>=1.13.0
 pandas>=0.23.0
 redis>=2.10.6
 SQLAlchemy>=1.2.8
+mysqlclient
 xlrd>=1.1.0
 pytest>=4.3.0
+ibats_utils>=1.0.1
