@@ -6,4 +6,4 @@ SQLAlchemy>=1.2.8
 mysqlclient
 xlrd>=1.1.0
 pytest>=4.3.0
-ibats_utils>=1.0.1
+IBATS-Utils
