@@ -16,7 +16,7 @@ import pandas as pd
 class MdAgentPub(MdAgentBase):
 
     def __init__(self, instrument_id_list, md_period: PeriodType, exchange_name, file_path, agent_name=None,
-                 init_load_md_count=None, init_md_date_from=None, init_md_date_to=None, **kwargs):
+                 init_load_md_count=None, init_md_date_from=None, init_md_date_to=None, ffill_on_load_history=True, **kwargs):
         MdAgentBase.__init__(
             self, instrument_id_list, md_period, exchange_name, agent_name=agent_name,
             init_load_md_count=init_load_md_count, init_md_date_from=init_md_date_from,
@@ -36,6 +36,7 @@ class MdAgentPub(MdAgentBase):
             self.microseconds_key = None
 
         self.factors = kwargs['factors'] if 'factors' in kwargs else None
+        self.ffill_on_load_history = ffill_on_load_history
 
     def load_history(self, date_from=None, date_to=None, load_md_count=None) -> (pd.DataFrame, dict):
         """
@@ -61,6 +62,8 @@ class MdAgentPub(MdAgentBase):
         if None in date_col_name_set:
             date_col_name_set.remove(None)
         md_df = pd.read_csv(self.file_path, parse_dates=list(date_col_name_set))
+        if self.ffill_on_load_history:
+            md_df = md_df.ffill()
         # self.md_df = md_df
         ret_data = {'md_df': md_df, 'datetime_key': self.datetime_key, 'date_key': self.date_key,
                     'time_key': self.time_key, 'microseconds_key': self.microseconds_key,

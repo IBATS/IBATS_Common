@@ -17,6 +17,7 @@ from ibats_common.backend.orm import OrderDetail, engine_ibats, TradeDetail, Pos
 from ibats_common.common import RunMode, ExchangeName, BacktestTradeMode, Action, Direction, PositionDateType
 from ibats_utils.db import with_db_session
 from ibats_utils.mess import date_time_2_str, str_2_datetime
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__package__)
 
@@ -296,7 +297,7 @@ class BacktestTraderAgentBase(TraderAgentBase):
             margin_chg += pos_status_detail.margin_chg
             floating_pl_cum += pos_status_detail.floating_pl_cum
 
-        available_cash_chg = floating_pl_chg - margin_chg
+        cash_available_chg = floating_pl_chg - margin_chg
         trade_agent_status_detail.curr_margin = curr_margin
         # # 对于同一时间，平仓后又开仓的情况，不能将close_profit重置为0
         # if trade_date == trade_date_last and trade_time == trade_time_last and trade_millisec == trade_millisec_last:
@@ -306,9 +307,9 @@ class BacktestTraderAgentBase(TraderAgentBase):
         trade_agent_status_detail.close_profit = close_profit
 
         trade_agent_status_detail.position_profit = position_profit
-        trade_agent_status_detail.available_cash += available_cash_chg
+        trade_agent_status_detail.cash_available += cash_available_chg
         trade_agent_status_detail.floating_pl_cum = floating_pl_cum
-        trade_agent_status_detail.balance_tot = trade_agent_status_detail.available_cash + curr_margin
+        trade_agent_status_detail.balance_tot = trade_agent_status_detail.cash_available + curr_margin
 
         trade_agent_status_detail.trade_date = trade_date
         trade_agent_status_detail.trade_time = trade_time
@@ -432,19 +433,38 @@ class BacktestTraderAgentBase(TraderAgentBase):
         raise NotImplementedError()
 
     def release(self):
-        try:
-            with with_db_session(engine_ibats) as session:
+        with with_db_session(engine_ibats) as session:
+            try:
                 session.add_all(self.order_detail_list)
-                self.logger.debug("%d 条 order_detail_list 被保存", len(self.order_detail_list))
-                session.add_all(self.trade_detail_list)
-                self.logger.debug("%d 条 trade_detail_list 被保存", len(self.trade_detail_list))
-                session.add_all(self.pos_status_detail_dic.values())
-                self.logger.debug("%d 条 pos_status_detail_dic 被保存", len(self.pos_status_detail_dic))
-                session.add_all(self.trade_agent_detail_list)
-                self.logger.debug("%d 条 trade_agent_detail_list 被保存", len(self.trade_agent_detail_list))
+                self.logger.debug("%d 条 order_detail 被保存", len(self.order_detail_list))
                 session.commit()
-        except:
-            self.logger.exception("release exception")
+            except SQLAlchemyError:
+                logger.exception("%d 条 order_detail 被保存时发生异常", len(self.order_detail_list))
+                session.rollback()
+
+            try:
+                session.add_all(self.trade_detail_list)
+                self.logger.debug("%d 条 trade_detail 被保存", len(self.trade_detail_list))
+                session.commit()
+            except SQLAlchemyError:
+                logger.exception("%d 条 trade_detail 被保存时发生异常", len(self.order_detail_list))
+                session.rollback()
+
+            try:
+                session.add_all(self.pos_status_detail_dic.values())
+                self.logger.debug("%d 条 pos_status_detail 被保存", len(self.pos_status_detail_dic))
+                session.commit()
+            except SQLAlchemyError:
+                logger.exception("%d 条 pos_status_detail 被保存时发生异常", len(self.order_detail_list))
+                session.rollback()
+
+            try:
+                session.add_all(self.trade_agent_detail_list)
+                self.logger.debug("%d 条 trade_agent_detail 被保存", len(self.trade_agent_detail_list))
+                session.commit()
+            except SQLAlchemyError:
+                logger.exception("%d 条 trade_agent_detail 被保存时发生异常", len(self.order_detail_list))
+                session.rollback()
 
     def get_order(self, symbol) -> (OrderDetail, None):
         if symbol in self._order_detail_dic:
@@ -657,13 +677,13 @@ class FixPositionBacktestTraderAgentBase(TraderAgentBase):
         trade_millisec = 0
 
         curr_margin = self.position_max if weight_tot > 0 else 0  # 只要有仓位就保持固定仓位比例
-        available_cash = 1 - self.position_max if weight_tot > 0 else 1  # 只要有仓位就保持固定仓位比例
+        cash_available = 1 - self.position_max if weight_tot > 0 else 1  # 只要有仓位就保持固定仓位比例
         close_profit = 0.0
         position_profit = 0.0
         floating_pl_chg = 0.0
         floating_pl_cum = 0.0
         fee_tot = self.trade_agent_status_detail_latest.fee_tot
-        balance_tot = trade_agent_status_detail.available_cash + curr_margin  # 总体永远是 1
+        balance_tot = trade_agent_status_detail.cash_available + curr_margin  # 总体永远是 1
         rr = 0.0  # 所有子产品的加权 rr
         for symbol, pos_status_detail in pos_status_detail_dic.items():
             weight = symbol_weight_dic[symbol]
@@ -686,7 +706,7 @@ class FixPositionBacktestTraderAgentBase(TraderAgentBase):
         trade_agent_status_detail.close_profit = close_profit
 
         trade_agent_status_detail.position_profit = position_profit
-        trade_agent_status_detail.available_cash = available_cash
+        trade_agent_status_detail.cash_available = cash_available
         trade_agent_status_detail.floating_pl_cum = floating_pl_cum
         trade_agent_status_detail.fee_tot = fee_tot
         trade_agent_status_detail.balance_tot = balance_tot

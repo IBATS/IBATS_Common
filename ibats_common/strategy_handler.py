@@ -16,6 +16,9 @@ from queue import Empty
 import time
 from datetime import date, datetime
 from abc import ABC
+
+from sqlalchemy.exc import SQLAlchemyError
+
 from ibats_common.backend import engines
 from ibats_common.backend.orm import StgRunInfo, StgRunStatusDetail
 from ibats_common.common import ExchangeName, RunMode, ContextKey
@@ -59,12 +62,16 @@ class StgHandlerBase(Thread, ABC):
         with with_db_session(engine_ibats) as session:
             session.query(StgRunInfo).filter(StgRunInfo.stg_run_id == self.stg_run_id).update(
                 {StgRunInfo.dt_to: datetime.now()})
-            session.bulk_save_objects(self.stg_run_status_detail_list)
-            # sql_str = StgRunInfo.update().where(
-            # StgRunInfo.c.stg_run_id == self.stg_run_id).values(dt_to=datetime.now())
-            # session.execute(sql_str)
-            session.commit()
-            self.logger.debug("%d 条 stg_run_status_detail 被保存", len(self.stg_run_status_detail_list))
+            try:
+                session.bulk_save_objects(self.stg_run_status_detail_list)
+                # sql_str = StgRunInfo.update().where(
+                # StgRunInfo.c.stg_run_id == self.stg_run_id).values(dt_to=datetime.now())
+                # session.execute(sql_str)
+                session.commit()
+                self.logger.debug("%d 条 stg_run_status_detail 被保存", len(self.stg_run_status_detail_list))
+            except SQLAlchemyError:
+                logger.exception("%d 条 stg_run_status_detail 被保存时发生异常", len(self.stg_run_status_detail_list))
+                session.rollback()
 
         self.is_working = False
         self.is_done = True

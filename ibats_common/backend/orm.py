@@ -383,7 +383,7 @@ class PosStatusDetail(BaseModel):
         if self.calc_mode == CalcMode.Normal.value:
             # 普通模式：非保证金交易模式
             # 普通模式 默认 margin_rate, multiple 均为 1
-            if pos_direction_last == direction:
+            if pos_direction_last == direction or position_last == 0:
                 if action == Action.Open:
                     # 方向相同：开仓 or 加仓；
                     position_cur = position_last + trade_vol
@@ -859,7 +859,7 @@ class StgRunStatusDetail(BaseModel):
 
         stg_run_id = stg_run_id
         trade_dt, trade_date, trade_time, trade_millisec = None, None, None, None
-        available_cash, curr_margin, close_profit, position_profit = 0, 0, 0, 0
+        cash_available, curr_margin, close_profit, position_profit = 0, 0, 0, 0
         floating_pl_cum, commission_tot, cash_init, cash_and_margin, cashflow, cashflow_cum, rr = 0, 0, 0, 0, 0, 0, 0
         for detail in trade_agent_status_detail_list:
             if trade_dt is None or trade_dt < detail.trade_dt:
@@ -868,7 +868,7 @@ class StgRunStatusDetail(BaseModel):
                 trade_time = detail.trade_time
                 trade_millisec = detail.trade_millisec
 
-            available_cash += 0 if detail.available_cash is None else detail.available_cash
+            cash_available += 0 if detail.cash_available is None else detail.cash_available
             curr_margin += 0 if detail.curr_margin is None else detail.curr_margin
             close_profit += 0 if detail.close_profit is None else detail.close_profit
             position_profit += 0 if detail.position_profit is None else detail.position_profit
@@ -885,7 +885,7 @@ class StgRunStatusDetail(BaseModel):
             trade_date=trade_date,
             trade_time=trade_time,
             trade_millisec=trade_millisec,
-            cash_available=available_cash,
+            cash_available=cash_available,
             curr_margin=curr_margin,
             close_profit=close_profit,
             position_profit=position_profit,

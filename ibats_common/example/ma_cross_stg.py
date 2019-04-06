@@ -63,6 +63,8 @@ class MACrossStg(StgBase):
 
 
 def _test_use():
+    from ibats_common import local_model_folder_path
+    import os
     # 参数设置
     run_mode = RunMode.Backtest
     strategy_params = {'unit': 100}
@@ -72,7 +74,8 @@ def _test_use():
         'datetime_key': 'trade_date',
         'init_md_date_from': '2018-7-19',  # 行情初始化加载历史数据，供策略分析预加载使用
         'init_md_date_to': '2018-10-21',
-        'file_path': '/home/mg/github/IBATS_Common/ibats_common/example/ru_price2.csv',  # 需要根据实际路径进行调整
+        # 'C:\GitHub\IBATS_Common\ibats_common\example\ru_price2.csv'
+        'file_path': os.path.abspath(os.path.join(local_model_folder_path, r'example\ru_price2.csv')),
         'symbol_key': 'instrument_id',
     }]
     if run_mode == RunMode.Realtime:
