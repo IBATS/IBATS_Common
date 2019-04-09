@@ -37,7 +37,8 @@ class StgRunInfo(BaseModel):
 
     __tablename__ = 'stg_run_info'
     stg_run_id = Column(Integer, autoincrement=True, primary_key=True)
-    stg_name = Column(String(300))
+    stg_name = Column(String(100))
+    stg_module = Column(String(500))
     dt_from = Column(DateTime())
     dt_to = Column(DateTime())
     run_mode = Column(SmallInteger)
