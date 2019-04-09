@@ -25,7 +25,7 @@ from ibats_common.common import ExchangeName, RunMode, ContextKey
 from ibats_common.md import md_agent_factory
 from ibats_common.strategy import StgBase
 from ibats_utils.db import with_db_session
-from ibats_utils.mess import try_2_date
+from ibats_utils.mess import try_2_date, load_class
 from ibats_common.trade import trader_agent_factory
 from ibats_common.config import config
 
@@ -348,7 +348,7 @@ def strategy_handler_factory(
 
 def strategy_handler_factory_multi_exchange(
         stg_class: type(StgBase), strategy_params, md_agent_params_list, run_mode: RunMode,
-        trade_agent_params_list: list, strategy_handler_param: dict) -> StgHandlerBase:
+        trade_agent_params_list: list, strategy_handler_param: dict, add_2_db=True, stg_run_id=None) -> StgHandlerBase:
     """
     多交易所策略处理具备
     建立策略对象
@@ -361,9 +361,12 @@ def strategy_handler_factory_multi_exchange(
     :param run_mode: 运行模式 RunMode.Realtime  或 RunMode.Backtest
     :param trade_agent_params_list: 运行参数，回测模式下：运行起止时间，实时行情下：加载定时器等设置
     :param strategy_handler_param: strategy_handler 运行参数
+    :param add_2_db: 默认情况下，自动将 stg_run_info 添加到数据库
+    :param stg_run_id: 仅在 add_2_db == False 时需要添加 stg_run_id
     :return: 策略执行对象实力
     """
-    stg_run_info = StgRunInfo(stg_name=stg_class.__name__,  # '{.__name__}'.format(stg_class)
+    stg_run_info = StgRunInfo(stg_name=stg_class.__name__,      # 例如："MACrossStg"
+                              stg_module=stg_class.__module__,  # 例如："ibats_common.example.ma_cross_stg"
                               dt_from=datetime.now(),
                               # dt_to=None,
                               stg_params=json.dumps(strategy_params),
@@ -372,10 +375,12 @@ def strategy_handler_factory_multi_exchange(
                               trade_agent_params_list=json.dumps(trade_agent_params_list),
                               strategy_handler_param=json.dumps(strategy_handler_param),
                               )
-    with with_db_session(engine_ibats) as session:
-        session.add(stg_run_info)
-        session.commit()
-        stg_run_id = stg_run_info.stg_run_id
+    if add_2_db:
+        with with_db_session(engine_ibats) as session:
+            session.add(stg_run_info)
+            session.commit()
+            stg_run_id = stg_run_info.stg_run_id
+
     # 初始化策略实体，传入参数
     stg_base = stg_class(**strategy_params)
     stg_base.stg_run_id = stg_run_id
@@ -461,4 +466,39 @@ def strategy_handler_factory_multi_exchange(
         raise ValueError('run_mode %d error' % run_mode)
 
     logger.debug('初始化 %r 完成', stg_handler)
+    return stg_handler
+
+
+def stategy_handler_loader(stg_run_id, module_name_replacement_if_main=None) -> StgHandlerBase:
+    """
+    根据 stg_run_id 从数据库中加载相应参数，动态加载策略类，实例化 stg_handler 类
+    :param stg_run_id:
+    :param module_name_replacement_if_main: 当 stg_module == '__main__' 时，用来替代的 module_name，
+        例如："ibats_common.example.ma_cross_stg"
+    :return:
+    """
+    with with_db_session(engine_ibats) as session:
+        stg_run_info = session.query(StgRunInfo).filter(StgRunInfo.stg_run_id == stg_run_id).first()
+    if stg_run_info is None:
+        raise KeyError(f'stg_run_id={stg_run_id} 无效，数据库中没有相关数据')
+    if module_name_replacement_if_main is not None and stg_run_info.stg_module == '__main__':
+        # stg_run_info.stg_module = "ibats_common.example.ma_cross_stg"
+        stg_run_info.stg_module = module_name_replacement_if_main
+
+    stg_class = load_class(stg_run_info.stg_module, stg_run_info.stg_name)
+    strategy_params = json.loads(stg_run_info.stg_params)
+    md_agent_params_list = json.loads(stg_run_info.md_agent_params_list)
+    run_mode = RunMode(stg_run_info.run_mode)
+    trade_agent_params_list = json.loads(stg_run_info.trade_agent_params_list)
+    strategy_handler_param = json.loads(stg_run_info.strategy_handler_param)
+    stg_handler = strategy_handler_factory_multi_exchange(
+        stg_class=stg_class,
+        strategy_params=strategy_params,
+        md_agent_params_list=md_agent_params_list,
+        run_mode=run_mode,
+        trade_agent_params_list=trade_agent_params_list,
+        strategy_handler_param=strategy_handler_param,
+        add_2_db=False,
+        stg_run_id=stg_run_info.stg_run_id,
+    )
     return stg_handler
