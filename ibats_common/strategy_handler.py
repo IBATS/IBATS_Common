@@ -219,6 +219,19 @@ class StgHandlerBacktest(StgHandlerBase):
 
                 break
 
+    def get_periods_history_iterator(self):
+        """
+        获取各个周期的 历史数据的迭代器
+        :return:
+        """
+        md_agent_key_cor_func_dic = {}
+        # 每一个 md_agent 抓取第一条记录，放入 md_list_sorted_by_datetime_tag 并按 datetime_tag 排序
+        for md_agent_key, period_agent_dic in self.md_key_period_agent_dic.items():
+            for period, md_agent in period_agent_dic.items():
+                cor_func = md_agent.cor_load_history_record(self.date_from, self.date_to, load_md_count=0)
+                md_agent_key_cor_func_dic[(md_agent_key, period)] = cor_func
+        return md_agent_key_cor_func_dic
+
     def load_history_record(self):
         """
         迭代器方法，用于产生行情数据
@@ -429,7 +442,8 @@ def strategy_handler_factory_multi_exchange(
         stg_base.load_md_period_df(period, md_df, context)
         logger.debug('加载 %s 历史数据 %s 条', period, 'None' if md_df is None else str(md_df.shape[0]))
 
-    # 设置 md_td_agent_key_list_map
+    # 设置 md_td_agent_key_list_map 用于标识 md_agent_key 与 trade_agent_key 之间的对应关系
+    # md_agent_key 与 trade_agent_key 是 1对多 关系
     if 'md_td_agent_key_list_map' in strategy_handler_param:
         md_td_agent_key_list_map = strategy_handler_param['md_td_agent_key_list_map']
     else:
@@ -447,6 +461,7 @@ def strategy_handler_factory_multi_exchange(
             td_agent_key_list = list(set(md_td_agent_key_list_map[md_agent_key]))
             md_td_agent_key_list_map[md_agent_key] = td_agent_key_list
         strategy_handler_param['md_td_agent_key_list_map'] = md_td_agent_key_list_map
+    # TODO: 可以增加一个合法性检查，检查是否 md_agent_key 与 trade_agent_key 是 1对多 关系
     logger.debug('md_td_agent_key_list_map: %s', md_td_agent_key_list_map)
 
     # 为 stg_base 设置 md_td_agent_key_list_map

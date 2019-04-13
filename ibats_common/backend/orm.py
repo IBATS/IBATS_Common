@@ -10,7 +10,7 @@ from sqlalchemy.ext.declarative import declarative_base
 import pandas as pd
 from ibats_common.backend import engines
 from ibats_utils.db import with_db_session, get_db_session
-from ibats_common.common import Action, Direction, CalcMode
+from ibats_common.common import Action, Direction, CalcMode, ExchangeName
 from ibats_utils.mess import str_2_date, pd_timedelta_2_timedelta, datetime_2_str, date_time_2_str, try_2_datetime
 import logging
 from collections import defaultdict
@@ -69,7 +69,7 @@ class OrderDetail(BaseModel):
                  order_millisec=0, direction=None, action=None, symbol=None, order_price=0, order_vol=0):
         self.stg_run_id = stg_run_id
         self.order_idx = None if stg_run_id is None else idx_generator(stg_run_id, OrderDetail)
-        self.trade_agent_key = trade_agent_key
+        self.trade_agent_key = trade_agent_key.name if isinstance(trade_agent_key, ExchangeName) else trade_agent_key
         self.order_dt = date_time_2_str(order_date, order_time) if order_dt is None else order_dt
         self.order_date = order_date
         self.order_time = order_time
@@ -129,7 +129,7 @@ class TradeDetail(BaseModel):
                  margin_ratio=None):
         self.stg_run_id = stg_run_id
         self.trade_idx = None if stg_run_id is None else idx_generator(stg_run_id, TradeDetail)
-        self.trade_agent_key = trade_agent_key
+        self.trade_agent_key = trade_agent_key.name if isinstance(trade_agent_key, ExchangeName) else trade_agent_key
         self.order_idx = order_idx
         self.order_price = order_price
         self.order_vol = order_vol
@@ -270,7 +270,7 @@ class PosStatusDetail(BaseModel):
                  margin_ratio=0.0, calc_mode: (int, CalcMode) = CalcMode.Normal.value):
         self.stg_run_id = stg_run_id
         self.pos_status_detail_idx = None if stg_run_id is None else idx_generator(stg_run_id, PosStatusDetail)
-        self.trade_agent_key = trade_agent_key
+        self.trade_agent_key = trade_agent_key.name if isinstance(trade_agent_key, ExchangeName) else trade_agent_key
         self.trade_idx = trade_idx
         self.trade_dt = date_time_2_str(trade_date, trade_time) if trade_dt is None else trade_dt
         self.trade_date = trade_date
@@ -661,7 +661,7 @@ class TradeAgentStatusDetail(BaseModel):
         self.stg_run_id = stg_run_id
         self.trade_agent_status_detail_idx = None if stg_run_id is None else idx_generator(
             stg_run_id, TradeAgentStatusDetail)
-        self.trade_agent_key = trade_agent_key
+        self.trade_agent_key = trade_agent_key.name if isinstance(trade_agent_key, ExchangeName) else trade_agent_key
         self.trade_dt = date_time_2_str(trade_date, trade_time) if trade_dt is None else trade_dt
         self.trade_date = trade_date
         self.trade_time = trade_time

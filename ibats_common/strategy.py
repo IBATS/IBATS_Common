@@ -25,6 +25,7 @@ class StgBase:
         self._md_agent_key_period_context_dic = defaultdict(dict)
         # 记录各个md_agent_key对应的 td_agent_key list
         self._md_td_agent_key_list_map = defaultdict(list)
+        self._td_md_agent_key_map = {}
         # 记录在行情推送过程中最新的一笔md数据
         # self._period_curr_md_dic = {}
         self.trade_agent = None
@@ -47,6 +48,19 @@ class StgBase:
 
     def set_md_td_agent_key_list_map(self, md_td_agent_key_list_map):
         self._md_td_agent_key_list_map = md_td_agent_key_list_map
+        # 反过来 td_md_agent_key_list_map 建立 trade_agent_key 与 md_agent_key 之间的对应关系
+        self.logger.debug('trade_agent_key 与 md_agent_key 对应关系')
+        num = 0
+        for md_agent_key, td_agent_key_list in md_td_agent_key_list_map.items():
+            for num, td_agent_key in enumerate(td_agent_key_list, start=num + 1):
+                self._td_md_agent_key_map[td_agent_key] = md_agent_key
+                if isinstance(td_agent_key, ExchangeName):
+                    self._td_md_agent_key_map[str(td_agent_key)] = md_agent_key
+                    self._td_md_agent_key_map[td_agent_key.value] = md_agent_key
+                if isinstance(td_agent_key, int):
+                    self._td_md_agent_key_map[ExchangeName(td_agent_key)] = md_agent_key
+                    self._td_md_agent_key_map[ExchangeName(td_agent_key).name] = md_agent_key
+                self.logger.debug("%d) %s -> %s", num, td_agent_key, md_agent_key)
 
     def on_timer(self):
         pass
