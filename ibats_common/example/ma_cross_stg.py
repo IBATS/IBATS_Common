@@ -107,6 +107,7 @@ def _test_use():
     stghandler.keep_running = False
     stghandler.join()
     logging.info("执行结束")
+    return stghandler.stg_run_id
 
 
 if __name__ == '__main__':

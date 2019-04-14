@@ -11,7 +11,7 @@ from collections import defaultdict
 from ibats_utils.db import with_db_session, get_db_session
 from ibats_common.backend import engines
 import pandas as pd
-from ibats_common.backend.orm import StgRunStatusDetail, OrderDetail
+from ibats_common.backend.orm import StgRunStatusDetail, OrderDetail, TradeDetail
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import logging
@@ -45,7 +45,7 @@ def show_cash_and_margin(stg_run_id):
     plt.show()
 
 
-def show_order(stg_run_id):
+def show_order(stg_run_id) -> defaultdict(lambda: defaultdict(list)):
     """
     plot candle and buy and sell point
     :param stg_run_id:
@@ -135,16 +135,115 @@ def show_order(stg_run_id):
                     )
 
     # show
+    show_plot_data(data_dict, title=f"[{stg_run_id}] MD and Order figure")
+    return data_dict
+
+
+def show_trade(stg_run_id) -> defaultdict(lambda: defaultdict(list)):
+    """
+    plot candle and buy and sell point
+    :param stg_run_id:
+    :return:
+    """
+    # stg_run_id=1
+    stg_handler = stategy_handler_loader(stg_run_id,
+                                         module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
+    # 加载数据库 engine
+    engine_ibats = engines.engine_ibats
+    # 获取全部订单
+    # session = get_db_session(engine_ibats)
+    with with_db_session(engine_ibats) as session:
+        data_list_tot = session.query(
+            TradeDetail
+        ).filter(
+            TradeDetail.stg_run_id == stg_run_id
+        ).all()
+    # 根据 md_agent 进行分组
+    md_agent_key_order_detail_list_dic = defaultdict(list)
+    for num, detail in enumerate(data_list_tot):
+        md_agent_key = stg_handler.stg_base._td_md_agent_key_map[detail.trade_agent_key]
+        md_agent_key_order_detail_list_dic[md_agent_key].append(detail)
+
+    # 获取历史行情数据
+    md_agent_key_cor_func_dic = stg_handler.get_periods_history_iterator()
+    agent_count = len(md_agent_key_cor_func_dic)
+    data_dict = defaultdict(lambda: defaultdict(list))
+    # 根据 md_agent 对每一组行情 以及 对应的 order_detail_list 进行 plot
+    # fig = plt.figure(1, figsize=(20, 4.8 * agent_count))
+    for num, ((md_agent_key, period), (cor_func, meta_dic)) in enumerate(md_agent_key_cor_func_dic.items(), start=1):
+        detail_list = md_agent_key_order_detail_list_dic[md_agent_key]
+        df = pd.DataFrame([md_s for num, datetime_tag, md_s in cor_func])
+        if df.shape[0] == 0:
+            continue
+        # ax = fig.add_subplot(num, 1, 1)
+        # 行情
+        symbol_key = meta_dic['symbol_key']
+        close_key = meta_dic['close_key']
+        timestamp_key = meta_dic['timestamp_key']
+        for symbol, df_by_symbol in df.groupby(symbol_key):
+            # df_by_symbol.set_index(timestamp_key)[close_key].plot(ax=ax, colormap='jet')
+            data_dict[(md_agent_key, period, symbol)]['md'].append(df_by_symbol.set_index(timestamp_key)[close_key])
+            # 开仓
+            detail_list_sub = [_ for _ in detail_list
+                               if _.symbol == symbol
+                               and ((_.direction == Direction.Long.value and _.action == Action.Open.value)
+                                    or (_.direction == Direction.Short.value and _.action != Action.Open.value)
+                                    )
+                               ]
+            trade_date_list = [_.order_dt for _ in detail_list_sub]
+            price = [_.trade_price for _ in detail_list_sub]
+            # ax.scatter(trade_date_list, price, c='r', marker='^')
+            data_dict[(md_agent_key, period, symbol)]['long_open_or_short_close'].append((trade_date_list, price))
+            # 关仓
+            detail_list_sub = [_ for _ in detail_list
+                               if (_.direction == Direction.Long.value and _.action != Action.Open.value)
+                               or (_.direction == Direction.Short.value and _.action == Action.Open.value)]
+            trade_date_list = [_.order_dt for _ in detail_list_sub]
+            price = [_.trade_price for _ in detail_list_sub]
+            # ax.scatter(trade_date_list, price, c='g', marker='v')
+            data_dict[(md_agent_key, period, symbol)]['short_open_or_long_close'].append((trade_date_list, price))
+            # 建立连线
+            detail_list_symbol = [_ for _ in detail_list if _.symbol == symbol]
+            for point1, point2 in zip(detail_list_symbol[:-1], detail_list_symbol[1:]):
+                if point1.trade_dt == point2.trade_dt:
+                    # logger.debug("%s %f %s ignore", point2.order_dt, point2.order_price, point2.action)
+                    continue
+                # logger.debug("%s %f -> %s %f %d",
+                #              point1.order_dt, point1.order_price, point2.order_dt, point2.order_price, point2.action)
+                # ax.plot([point1.order_dt, point2.order_dt], [point1.order_price, point2.order_price],
+                #         c='r' if point2.direction != Direction.Long.value else 'g')
+                if point2.direction != Direction.Long:
+                    data_dict[(md_agent_key, period, symbol)]['buy_sell_point_pair'].append(
+                        ([point1.trade_dt, point2.trade_dt], [point1.trade_price, point2.trade_price])
+                    )
+                else:
+                    data_dict[(md_agent_key, period, symbol)]['sell_buy_point_pair'].append(
+                        ([point1.trade_dt, point2.trade_dt], [point1.trade_price, point2.trade_price])
+                    )
+
+    # show
+    show_plot_data(data_dict, title=f"[{stg_run_id}] MD and Trade figure")
+    return data_dict
+
+
+def show_plot_data(data_dict: dict, title=None):
+    """
+    将数据plot展示出来
+    :param data_dict:
+    :param title:
+    :return:
+    """
     data_len = len(data_dict)
     # fig = plt.figure(1, figsize=(20, 4.8 * data_len))
     fig, axs = plt.subplots(
         data_len, 1,
         constrained_layout=True, figsize=(20, 4.8 * data_len))
-    fig.suptitle(f"[%d] MD and Order figure", fontsize=16)
+    if title is not None:
+        fig.suptitle(title, fontsize=16)
     for num, ((md_agent_key, period, symbol), plot_data_dic) in enumerate(data_dict.items()):
         # ax = fig.add_subplot(num, 1, 1)
         ax = axs[num] if data_len > 1 else axs
-        ax.set_title(f"{md_agent_key} - {period} - {symbol}")
+        ax.set_title(f"md_agent_key:{md_agent_key} - period:{period} - symbol:{symbol}")
         for md in plot_data_dic['md']:
             md.plot(ax=ax, colormap='jet')
         for x, y in plot_data_dic['long_open_or_short_close']:
@@ -163,4 +262,4 @@ def show_order(stg_run_id):
 if __name__ == '__main__':
     stg_run_id = 1
     # show_cash_and_margin(stg_run_id)
-    show_order(stg_run_id)
+    data_dict = show_order(stg_run_id)
