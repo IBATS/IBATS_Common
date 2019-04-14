@@ -38,8 +38,8 @@ class SomeTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertEqual(len(data_dict), 1)
         key = list(data_dict.keys())[0]
         self.assertEqual(len(data_dict[key]['md']), 1)
-        self.assertGreater(len(data_dict[key]['long_open_or_short_close']), 2)
-        self.assertGreater(len(data_dict[key]['short_open_or_long_close']), 2)
+        self.assertEqual(len(data_dict[key]['long_open_or_short_close']), 1)
+        self.assertEqual(len(data_dict[key]['short_open_or_long_close']), 1)
         self.assertGreater(len(data_dict[key]['buy_sell_point_pair']), 2)
         self.assertGreater(len(data_dict[key]['sell_buy_point_pair']), 2)
 
@@ -48,8 +48,8 @@ class SomeTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertEqual(len(data_dict), 1)
         key = list(data_dict.keys())[0]
         self.assertEqual(len(data_dict[key]['md']), 1)
-        self.assertGreater(len(data_dict[key]['long_open_or_short_close']), 2)
-        self.assertGreater(len(data_dict[key]['short_open_or_long_close']), 2)
+        self.assertEqual(len(data_dict[key]['long_open_or_short_close']), 1)
+        self.assertEqual(len(data_dict[key]['short_open_or_long_close']), 1)
         self.assertGreater(len(data_dict[key]['buy_sell_point_pair']), 2)
         self.assertGreater(len(data_dict[key]['sell_buy_point_pair']), 2)
 
