@@ -219,7 +219,7 @@ class StgHandlerBacktest(StgHandlerBase):
 
                 break
 
-    def get_periods_history_iterator(self):
+    def get_periods_history_iterator(self) -> dict:
         """
         获取各个周期的 历史数据的迭代器
         :return:
@@ -229,7 +229,12 @@ class StgHandlerBacktest(StgHandlerBase):
         for md_agent_key, period_agent_dic in self.md_key_period_agent_dic.items():
             for period, md_agent in period_agent_dic.items():
                 cor_func = md_agent.cor_load_history_record(self.date_from, self.date_to, load_md_count=0)
-                md_agent_key_cor_func_dic[(md_agent_key, period)] = cor_func
+                meta_dic = {
+                        'symbol_key': md_agent.symbol_key,
+                        'close_key': md_agent.close_key,
+                        'timestamp_key': md_agent.timestamp_key
+                    }
+                md_agent_key_cor_func_dic[(md_agent_key, period)] = (cor_func, meta_dic)
         return md_agent_key_cor_func_dic
 
     def load_history_record(self):
@@ -468,7 +473,7 @@ def strategy_handler_factory_multi_exchange(
     stg_base.set_md_td_agent_key_list_map(md_td_agent_key_list_map)
 
     # 初始化 StgHandlerBase 实例
-    logger.debug("stg_run_id=%d, strategy_handler_param: %s", stg_run_id, strategy_handler_param)
+    logger.debug("stg_run_id=%d,\n\tstrategy_handler_param: %s", stg_run_id, strategy_handler_param)
     if run_mode == RunMode.Realtime:
         stg_handler = StgHandlerRealtime(
             stg_run_id=stg_run_id, stg_base=stg_base, md_key_period_agent_dic=md_key_period_agent_dic,
