@@ -7,6 +7,7 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
+from ibats_utils.mess import str_2_datetime
 from ibats_common.backend.orm import *
 from datetime import date, datetime, time
 import unittest
@@ -38,6 +39,7 @@ class TradeAgentStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         init()
         global engine_ibats
         engine_ibats = engines.engine_ibats
+        config.ORM_UPDATE_OR_INSERT_PER_ACTION = True
 
     def test_create(self):
         _, status = TradeAgentStatusDetailTest.add_trade_agent_status_detail()
@@ -63,11 +65,8 @@ class TradeAgentStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
     def test_update_by_pos_status_detail(self):
         info, status = TradeAgentStatusDetailTest.add_trade_agent_status_detail()
         pos_status = TradeAgentStatusDetailTest.add_pos_status_detail(info)
-        md = {
-            'ActionDay': '2018-12-15',
-            'ActionTime': '13:24:35',
-        }
-        status2 = status.update_by_pos_status_detail({pos_status.symbol: pos_status}, md=md)
+        timestamp_curr = pd.Timestamp(str_2_datetime('2018-12-15 13:24:35'))
+        status2 = status.update_by_pos_status_detail({pos_status.symbol: pos_status}, timestamp_curr=timestamp_curr)
         self.assertIsInstance(status2, TradeAgentStatusDetail)
         self.assertEqual(status2.stg_run_id, info.stg_run_id)
         self.assertGreater(status2.trade_agent_status_detail_idx, status.trade_agent_status_detail_idx)

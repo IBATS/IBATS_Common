@@ -246,79 +246,32 @@ class BacktestTraderAgentBase(TraderAgentBase):
     def _record_trade_agent_status_detail(self) -> TradeAgentStatusDetail:
         stg_run_id, init_cash = self.stg_run_id, self.init_cash
         timestamp_curr = self.curr_timestamp
-        trade_date = timestamp_curr.date()
-        trade_time = timestamp_curr.time()
-        trade_millisec = 0
+        # trade_date = timestamp_curr.date()
+        # trade_time = timestamp_curr.time()
+        # trade_millisec = 0
         # trade_price = float(self.curr_md['close'])
-        trade_agent_status_detail = TradeAgentStatusDetail(stg_run_id=stg_run_id,
-                                                           trade_agent_key=self.agent_name,
-                                                           trade_date=trade_date,
-                                                           trade_time=trade_time,
-                                                           trade_millisec=trade_millisec,
-                                                           cash_available=init_cash,
-                                                           cash_init=init_cash
-                                                           )
-        if config.BACKTEST_UPDATE_OR_INSERT_PER_ACTION:
-            # 更新最新持仓纪录
-            with with_db_session(engine_ibats, expire_on_commit=False) as session:
-                session.add(trade_agent_status_detail)
-                session.commit()
+        # trade_agent_status_detail = TradeAgentStatusDetail(stg_run_id=stg_run_id,
+        #                                                    trade_agent_key=self.agent_name,
+        #                                                    trade_date=trade_date,
+        #                                                    trade_time=trade_time,
+        #                                                    trade_millisec=trade_millisec,
+        #                                                    cash_available=init_cash,
+        #                                                    cash_init=init_cash
+        #                                                    )
+        # if config.BACKTEST_UPDATE_OR_INSERT_PER_ACTION:
+        #     # 更新最新持仓纪录
+        #     with with_db_session(engine_ibats, expire_on_commit=False) as session:
+        #         session.add(trade_agent_status_detail)
+        #         session.commit()
+        trade_agent_status_detail = TradeAgentStatusDetail.create(
+            stg_run_id, trade_agent_key=self.agent_name, init_cash=init_cash, timestamp_curr=timestamp_curr)
         return trade_agent_status_detail
 
     def _update_by_pos_status_detail(self) -> TradeAgentStatusDetail:
         """根据 持仓列表更新账户信息"""
-
         pos_status_detail_dic = self._pos_status_detail_dic
-        timestamp_curr = self.curr_timestamp
-        trade_agent_status_detail = self.trade_agent_status_detail_latest.create_by_self()
-        # 上一次更新日期、时间
-        # trade_date_last, trade_time_last, trade_millisec_last = \
-        #     trade_agent_status_detail.trade_date,
-        #     trade_agent_status_detail.trade_time,
-        #     trade_agent_status_detail.trade_millisec
-        # 更新日期、时间
-        trade_date = timestamp_curr.date()
-        trade_time = timestamp_curr.time()
-        trade_millisec = 0
-
-        curr_margin = 0
-        close_profit = 0
-        position_profit = 0
-        floating_pl_chg = 0
-        margin_chg = 0
-        floating_pl_cum = 0
-        for symbol, pos_status_detail in pos_status_detail_dic.items():
-            curr_margin += pos_status_detail.margin
-            if pos_status_detail.position == 0:
-                close_profit += pos_status_detail.floating_pl
-            else:
-                position_profit += pos_status_detail.floating_pl
-            floating_pl_chg += pos_status_detail.floating_pl_chg
-            margin_chg += pos_status_detail.margin_chg
-            floating_pl_cum += pos_status_detail.floating_pl_cum
-
-        cash_available_chg = floating_pl_chg - margin_chg
-        trade_agent_status_detail.curr_margin = curr_margin
-        # # 对于同一时间，平仓后又开仓的情况，不能将close_profit重置为0
-        # if trade_date == trade_date_last and trade_time == trade_time_last and trade_millisec == trade_millisec_last:
-        #     trade_agent_status_detail.close_profit += close_profit
-        # else:
-        # 一个单位时段只允许一次，不需要考虑上面的情况
-        trade_agent_status_detail.close_profit = close_profit
-
-        trade_agent_status_detail.position_profit = position_profit
-        trade_agent_status_detail.cash_available += cash_available_chg
-        trade_agent_status_detail.floating_pl_cum = floating_pl_cum
-        trade_agent_status_detail.balance_tot = trade_agent_status_detail.cash_available + curr_margin
-
-        trade_agent_status_detail.trade_date = trade_date
-        trade_agent_status_detail.trade_time = trade_time
-        trade_agent_status_detail.trade_millisec = trade_millisec
-        if config.BACKTEST_UPDATE_OR_INSERT_PER_ACTION:
-            # 更新最新持仓纪录
-            with with_db_session(engine_ibats, expire_on_commit=False) as session:
-                session.add(trade_agent_status_detail)
-                session.commit()
+        trade_agent_status_detail = self.trade_agent_status_detail_latest.update_by_pos_status_detail(
+            pos_status_detail_dic, self.curr_timestamp)
         return trade_agent_status_detail
 
     def _update_pos_status_detail_by_md(self, pos_status_detail_last) -> PosStatusDetail:

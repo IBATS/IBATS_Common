@@ -16,11 +16,11 @@ import logging
 from collections import defaultdict
 import warnings
 from ibats_common.common import PositionDateType
+from ibats_common.config import config
+
 
 engine_ibats = engines.engine_ibats
 BaseModel = declarative_base()
-# 每一次实务均产生数据库插入或更新动作（默认：否）
-UPDATE_OR_INSERT_PER_ACTION = False
 _key_idx = defaultdict(lambda: defaultdict(int))
 MAX_RATE = 9.99  # 相当于 999%
 
@@ -199,7 +199,7 @@ class TradeDetail(BaseModel):
                                    multiple=multiple,
                                    margin_ratio=margin_ratio,
                                    )
-        if UPDATE_OR_INSERT_PER_ACTION:
+        if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
                 session.add(trade_detail)
                 session.commit()
@@ -244,7 +244,8 @@ class PosStatusDetail(BaseModel):
     # 加仓，将导致净现金流为负，减仓则净现金流为正
     # 在保证金交易的情况下，价格波动引起的保证金占用变化，也会使得净现金流产生变化
     cashflow = Column(DOUBLE, default=0.0)
-    # 累计现金流，持仓期间累计现金流。对于同一bar内多空反转的情况，不清零直接继续计算。
+    # 累计现金流，整个执行周期内的累计现金净流入量。
+    # 该字段将用于与 TradeAgentStatusDetail.cash_init 相加，计算 cash_available 当前可用现金
     cashflow_cum = Column(DOUBLE, default=0.0)
     rr = Column(DOUBLE, default=0.0)  # floating_pl_cum / margin 如果是清仓，则使用前一时刻 margin
     margin = Column(DOUBLE, default=0.0)
@@ -343,7 +344,7 @@ class PosStatusDetail(BaseModel):
                                             calc_mode=CalcMode.Normal.value if trade_detail.margin_ratio == 1
                                             else CalcMode.Margin.value
                                             )
-        if UPDATE_OR_INSERT_PER_ACTION:
+        if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
                 session.add(pos_status_detail)
@@ -568,7 +569,7 @@ class PosStatusDetail(BaseModel):
         pos_status_detail.trade_time = trade_detail.trade_time
         pos_status_detail.trade_millisec = trade_detail.trade_millisec
 
-        if UPDATE_OR_INSERT_PER_ACTION:
+        if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
                 session.add(pos_status_detail)
@@ -681,20 +682,38 @@ class TradeAgentStatusDetail(BaseModel):
         self.calc_mode = calc_mode.value if calc_mode is CalcMode else calc_mode
 
     @staticmethod
-    def create(stg_run_id, trade_agent_key, init_cash: int, md: dict):
+    def create(stg_run_id, trade_agent_key, init_cash: int, timestamp_curr: (datetime, pd.Timestamp)=None,
+               md: dict=None, timestamp_key=None, date_key=None, time_key=None, milli_sec_key=None):
         """
         根据 md 及 初始化资金 创建对象，默认日期为当前md数据-1天
         :param stg_run_id:
         :param trade_agent_key:
         :param init_cash: 
-        :param md: 
-        :return: 
+        :param timestamp_curr: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param md: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param timestamp_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param date_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param time_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param milli_sec_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :return:
         """
         warnings.warn('该函数为范例函数，可能需要根据实际情况改写', UserWarning)
-        trade_date = str_2_date(md['ActionDay']) - timedelta(days=1)
-        trade_time = pd_timedelta_2_timedelta(md['ActionTime'])
-        trade_dt = datetime_2_str(date_time_2_str(trade_date, trade_time))
-        trade_millisec = int(md.setdefault('ActionMillisec', 0))
+        if timestamp_curr is not None:
+            timestamp_curr -= pd.Timedelta(days=1)
+        elif timestamp_key is not None:
+            timestamp_curr = md[timestamp_key] - pd.Timedelta(days=1)
+
+        if timestamp_curr is None:
+            trade_date = str_2_date(md[date_key]) - timedelta(days=1)
+            trade_time = pd_timedelta_2_timedelta(md[time_key])
+            trade_dt = datetime_2_str(date_time_2_str(trade_date, trade_time))
+            trade_millisec = int(md.setdefault(milli_sec_key, 0)) if milli_sec_key is not None else 0
+        else:
+            trade_date = timestamp_curr.date()
+            trade_time = timestamp_curr.time()
+            trade_dt = timestamp_curr
+            trade_millisec = int(md.setdefault(milli_sec_key, 0)) if milli_sec_key is not None else 0
+
         acc_status_detail = TradeAgentStatusDetail(stg_run_id=stg_run_id,
                                                    trade_agent_key=trade_agent_key,
                                                    trade_dt=trade_dt,
@@ -708,7 +727,7 @@ class TradeAgentStatusDetail(BaseModel):
                                                    position_profit=0,
                                                    cash_init=init_cash,
                                                    )
-        if UPDATE_OR_INSERT_PER_ACTION:
+        if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
                 session.add(acc_status_detail)
@@ -737,20 +756,38 @@ class TradeAgentStatusDetail(BaseModel):
                                                            )
         return trade_agent_status_detail
 
-    def update_by_pos_status_detail(self, pos_status_detail_dic, md: dict):
+    def update_by_pos_status_detail(self, pos_status_detail_dic, timestamp_curr: (datetime, pd.Timestamp)=None,
+                                    md: dict=None,
+                                    timestamp_key=None, date_key=None, time_key=None, milli_sec_key=None):
         """
         根据 持仓列表更新账户信息
         :param pos_status_detail_dic:
-        :param md:
+        :param timestamp_curr: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param md: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param timestamp_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param date_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param time_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param milli_sec_key: timestamp_curr 或 md + key 参数 两组参数二选其一
         :return:
         """
         warnings.warn('该函数为范例函数，需要根据实际情况改写', UserWarning)
         detail = self.create_by_self()
         # 更新日期、时间
-        trade_date = md['ActionDay']
-        trade_time = pd_timedelta_2_timedelta(md['ActionTime'])
-        trade_millisec = int(md.setdefault('ActionMillisec', 0))
+        if timestamp_curr is None:
+            timestamp_curr = md[timestamp_key]
 
+        if timestamp_curr is None:
+            trade_date = str_2_date(md[date_key]) - timedelta(days=1)
+            trade_time = pd_timedelta_2_timedelta(md[time_key])
+            trade_dt = datetime_2_str(date_time_2_str(trade_date, trade_time))
+            trade_millisec = int(md.setdefault(milli_sec_key, 0)) if milli_sec_key is not None else 0
+        else:
+            trade_date = timestamp_curr.date()
+            trade_time = timestamp_curr.time()
+            trade_dt = timestamp_curr
+            trade_millisec = int(md.setdefault(milli_sec_key, 0)) if milli_sec_key is not None else 0
+
+        # 更新非日期数据
         curr_margin = 0
         position_value = 0
         close_profit_new = 0
@@ -779,8 +816,9 @@ class TradeAgentStatusDetail(BaseModel):
         # cash_available = self.cash_available + cashflow
         cash_available = self.cash_init + cashflow_cum
         if cash_available != (self.cash_available + cashflow):
-            self.logger.warning("%s cash_init + cashflow_cum = .2f 与 cash_available + cashflow = .2f 应该保持一致。"
+            self.logger.warning("%s cash_init + cashflow_cum = %.2f 与 cash_available + cashflow = %.2f 应该保持一致。"
                                 "cash_init=%.2f cashflow_cum=%.2f cash_available_last=%.2f cashflow=%.2f",
+                                self.trade_dt,
                                 self.cash_init + cashflow_cum, self.cash_available + cashflow,
                                 self.cash_init, cashflow_cum, self.cash_available, cashflow)
         detail.cash_available = cash_available
@@ -795,10 +833,11 @@ class TradeAgentStatusDetail(BaseModel):
         detail.cash_and_margin = detail.cash_available + position_value
         detail.rr = detail.cash_and_margin / detail.cash_init
 
+        detail.trade_dt = trade_dt
         detail.trade_date = trade_date
         detail.trade_time = trade_time
         detail.trade_millisec = trade_millisec
-        if UPDATE_OR_INSERT_PER_ACTION:
+        if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
                 session.add(detail)

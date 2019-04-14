@@ -67,7 +67,7 @@ def _test_use():
     import os
     # 参数设置
     run_mode = RunMode.Backtest
-    strategy_params = {'unit': 100}
+    strategy_params = {'unit': 1}
     md_agent_params_list = [{
         'md_period': PeriodType.Min1,
         'instrument_id_list': ['RU'],
@@ -106,7 +106,7 @@ def _test_use():
     time.sleep(10)
     stghandler.keep_running = False
     stghandler.join()
-    logging.info("执行结束")
+    logging.info("执行结束 stg_run_id = %d", stghandler.stg_run_id)
     return stghandler.stg_run_id
 
 
