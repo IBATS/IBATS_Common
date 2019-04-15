@@ -274,43 +274,47 @@ class BacktestTraderAgentBase(TraderAgentBase):
             pos_status_detail_dic, self.curr_timestamp)
         return trade_agent_status_detail
 
-    def _update_pos_status_detail_by_md(self, pos_status_detail_last) -> PosStatusDetail:
+    def _update_pos_status_detail_by_md(self, pos_status_detail_last: PosStatusDetail) -> PosStatusDetail:
         """创建新的对象，根据 trade_detail 更新相关信息"""
         timestamp_curr = self.curr_timestamp
-        trade_date = timestamp_curr.date()
-        trade_time = timestamp_curr.time()
-        trade_millisec = 0
         trade_price = self.curr_close
-        # symbol = md['symbol']
+        pos_status_detail = pos_status_detail_last.update_by_md(trade_price=trade_price, timestamp_curr=timestamp_curr)
 
-        pos_status_detail = pos_status_detail_last.create_by_self()
-        pos_status_detail.cur_price = trade_price
-        pos_status_detail.trade_date = trade_date
-        pos_status_detail.trade_time = trade_time
-        pos_status_detail.trade_millisec = trade_millisec
-
-        # 计算 floating_pl margin
-        # instrument_info = config.instrument_info_dic[symbol]
-        # multiple = instrument_info['VolumeMultiple']
-        # margin_ratio = instrument_info['LongMarginRatio']
-        multiple, margin_ratio = 1, 1
-        position = pos_status_detail.position
-        cur_price = pos_status_detail.cur_price
-        avg_price = pos_status_detail.avg_price
-        pos_status_detail.margin = position * cur_price * multiple * margin_ratio
-        pos_status_detail.margin_chg = pos_status_detail.margin - pos_status_detail_last.margin
-        if pos_status_detail.direction == Direction.Long:
-            pos_status_detail.floating_pl = (cur_price - avg_price) * position * multiple
-        else:
-            pos_status_detail.floating_pl = (avg_price - cur_price) * position * multiple
-        pos_status_detail.floating_pl_chg = pos_status_detail.floating_pl - pos_status_detail_last.floating_pl
-        pos_status_detail.floating_pl_cum += pos_status_detail.floating_pl_chg
-
-        if config.BACKTEST_UPDATE_OR_INSERT_PER_ACTION:
-            # 更新最新持仓纪录
-            with with_db_session(engine_ibats, expire_on_commit=False) as session:
-                session.add(pos_status_detail)
-                session.commit()
+        # 以下代码被 pos_status_detail_last.update_by_md 替代
+        # trade_date = timestamp_curr.date()
+        # trade_time = timestamp_curr.time()
+        # trade_millisec = 0
+        # trade_price = self.curr_close
+        # # symbol = md['symbol']
+        #
+        # pos_status_detail = pos_status_detail_last.create_by_self()
+        # pos_status_detail.cur_price = trade_price
+        # pos_status_detail.trade_date = trade_date
+        # pos_status_detail.trade_time = trade_time
+        # pos_status_detail.trade_millisec = trade_millisec
+        #
+        # # 计算 floating_pl margin
+        # # instrument_info = config.instrument_info_dic[symbol]
+        # # multiple = instrument_info['VolumeMultiple']
+        # # margin_ratio = instrument_info['LongMarginRatio']
+        # multiple, margin_ratio = 1, 1
+        # position = pos_status_detail.position
+        # cur_price = pos_status_detail.cur_price
+        # avg_price = pos_status_detail.avg_price
+        # pos_status_detail.margin = position * cur_price * multiple * margin_ratio
+        # pos_status_detail.margin_chg = pos_status_detail.margin - pos_status_detail_last.margin
+        # if pos_status_detail.direction == Direction.Long:
+        #     pos_status_detail.floating_pl = (cur_price - avg_price) * position * multiple
+        # else:
+        #     pos_status_detail.floating_pl = (avg_price - cur_price) * position * multiple
+        # pos_status_detail.floating_pl_chg = pos_status_detail.floating_pl - pos_status_detail_last.floating_pl
+        # pos_status_detail.floating_pl_cum += pos_status_detail.floating_pl_chg
+        #
+        # if config.BACKTEST_UPDATE_OR_INSERT_PER_ACTION:
+        #     # 更新最新持仓纪录
+        #     with with_db_session(engine_ibats, expire_on_commit=False) as session:
+        #         session.add(pos_status_detail)
+        #         session.commit()
         return pos_status_detail
 
     def update_trade_agent_status_detail(self):

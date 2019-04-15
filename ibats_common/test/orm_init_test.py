@@ -227,7 +227,7 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
             close_profit=status.close_profit, position_profit=status.position_profit,
             floating_pl_cum=status.floating_pl_cum,
             commission_tot=status.commission_tot, cash_init=status.cash_init,
-            cashflow=status.cashflow,
+            cashflow_daily=status.cashflow_daily,
             cashflow_cum=status.cashflow_cum,
             rr=status.rr,
         )

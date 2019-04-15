@@ -79,8 +79,8 @@ class TradeAgentStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         self.assertEqual(status2.commission_tot, pos_status.commission)
         self.assertEqual(status2.cash_init, status.cash_init)
         self.assertEqual(status2.cash_and_margin, status2.cash_available + status2.curr_margin)
-        self.assertEqual(status2.cashflow,  - pos_status.margin - pos_status.commission)
-        self.assertEqual(status2.cashflow_cum, status.cashflow_cum + status2.cashflow)
+        self.assertEqual(status2.cashflow_daily, - pos_status.margin - pos_status.commission)
+        self.assertEqual(status2.cashflow_cum, status.cashflow_cum + status2.cashflow_daily)
 
     @staticmethod
     def add_trade_agent_status_detail():
