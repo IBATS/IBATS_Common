@@ -17,6 +17,8 @@ from collections import defaultdict
 import warnings
 from ibats_common.common import PositionDateType
 from ibats_common.config import config
+import numpy as np
+
 
 engine_ibats = engines.engine_ibats
 BaseModel = declarative_base()
@@ -637,100 +639,48 @@ class PosStatusDetail(BaseModel):
         detail.trade_time = trade_time
         detail.trade_millisec = trade_millisec
 
+        multiple, margin_ratio = 1, 1
+
+        # 没有交易，不产生手续费
+        commission = 0
+
         # TODO: 以下代码从 update_by_trade_detail copy 尚需修改后方可使用
         if self.calc_mode == CalcMode.Normal.value:
             # 普通模式：非保证金交易模式
             # 普通模式 默认 margin_rate, multiple 均为 1
-            if pos_direction_last == direction or position_last == 0:
-                if action == Action.Open:
-                    # 方向相同：开仓 or 加仓；
-                    position_cur = position_last + trade_vol
-                    position_value = position_cur * trade_price
-                    pos_status_detail.position_value = position_value
-                    pos_status_detail.position_chg = trade_vol
-                    pos_status_detail.position = position_cur
-                    avg_price = (position_last * avg_price_last + trade_price * trade_vol +
-                                 commission * int(pos_status_detail.direction)) / position_cur
-                    pos_status_detail.avg_price = avg_price
-                    # 计算浮动收益 floating_pl floating_pl_rate
-                    pos_status_detail.floating_pl = (trade_price - avg_price) * position_cur * int(
-                        pos_status_detail.direction)
-                    pos_status_detail.floating_pl_rate = (trade_price - avg_price) / avg_price * int(
-                        pos_status_detail.direction)
-                else:
-                    # 方向相反：清仓 or 减仓；
-                    pos_status_detail.position_chg = - trade_vol
-                    if trade_vol > position_last:
-                        raise ValueError("当前持仓%d，平仓%d，错误" % (position_last, trade_vol))
-                    elif trade_vol == position_last:
-                        # 清仓
-                        position_cur = 0
-                        position_value = position_cur * trade_price
-                        pos_status_detail.position_value = position_value
-                        pos_status_detail.avg_price = avg_price = 0
-                        pos_status_detail.position = position_cur
-                        # 计算浮动收益 floating_pl floating_pl_rate
-                        # 与其他地方计算公式的区别在于 position_curr == 0 因此使用 position_last
-                        pos_status_detail.floating_pl = (trade_price - avg_price_last) * position_last * int(
-                            pos_status_detail.direction) - commission
-                        pos_status_detail.floating_pl_rate = ((trade_price - avg_price_last) * int(
-                            pos_status_detail.direction) - commission / position_last) / avg_price_last \
-                            if avg_price_last > 0.001 else MAX_RATE
-
-                    else:
-                        # 减仓
-                        position_cur = position_last - trade_vol
-                        position_value = position_cur * trade_price
-                        pos_status_detail.position_value = position_value
-                        avg_price = (
-                                            position_last * avg_price_last - trade_price * trade_vol + commission) / position_cur
-                        pos_status_detail.avg_price = avg_price
-                        pos_status_detail.position = position_cur
-                        # 计算浮动收益 floating_pl floating_pl_rate
-                        pos_status_detail.floating_pl = (trade_price - avg_price) * position_cur * int(
-                            pos_status_detail.direction)
-                        pos_status_detail.floating_pl_rate = (trade_price - avg_price) / avg_price * int(
-                            pos_status_detail.direction)
-
-            else:
-                # 方向相反
-                raise ValueError("当前仓位：%s %d手，目标操作：%s %d手，请先平仓在开仓" % (
-                    "多头" if pos_direction_last == Direction.Long else "空头", position_last,
-                    "多头" if direction == Direction.Long else "空头", trade_vol,
-                ))
-
+            position_cur = detail.position
+            position_value = position_cur * trade_price
+            detail.position_value = position_value
+            # 计算 floating_pl
+            floating_pl = (trade_price - detail.avg_price) * position_cur * multiple * int(detail.direction)
+            detail.floating_pl = floating_pl
             # 设置其他属性 floating_pl_chg、floating_pl_cum、cur_price、trade_dt、trade_date、trade_time、trade_millisec
             # position_cur = pos_status_detail.position     # 上面代码已经赋值
-            pos_status_detail.floating_pl_chg = pos_status_detail.floating_pl - self.floating_pl
-            pos_status_detail.floating_pl_cum += pos_status_detail.floating_pl_chg
+            floating_pl_chg = floating_pl - self.floating_pl
+            detail.floating_pl_chg = floating_pl_chg
+            detail.floating_pl_cum += floating_pl_chg
 
             # 计算 position_value、margin、margin_chg
             # cur_price = pos_status_detail.cur_price
-            pos_status_detail.margin = position_cur * trade_price
-            # 如果前一状态仓位为 0,  且不是多空切换的情况，则保留上一状态的浮动收益
-            if self.position == 0 and self.trade_dt != trade_detail.trade_dt:
-                margin_last = pos_status_detail.margin  # 新建仓情况下，margin_last 为当前 margin
-                pos_status_detail.margin_chg = margin_chg = pos_status_detail.margin
-            else:
-                margin_last = self.margin
-                pos_status_detail.margin_chg = margin_chg = pos_status_detail.margin - margin_last
+            detail.margin = position_cur * trade_price
+            margin_last = self.margin
+            detail.margin_chg = margin_chg = detail.margin - margin_last
 
             # 计算 cashflow_daily, cashflow_cum, commission, commission_tot, rr, position_date_type
             # 本次现金流
-            pos_status_detail.cashflow = cashflow = - margin_chg - commission
+            detail.cashflow = cashflow = - margin_chg
             # 每日现金流
-            if self.trade_date != trade_detail.trade_date:
-                pos_status_detail.cashflow_daily = cashflow
+            if self.trade_date != trade_date:
+                detail.cashflow_daily = cashflow
             else:
-                pos_status_detail.cashflow_daily += cashflow
+                detail.cashflow_daily += cashflow
 
             # 累计现金流
-            pos_status_detail.cashflow_cum += cashflow
-            pos_status_detail.commission = commission
-            pos_status_detail.commission_tot += commission
-            pos_status_detail.rr = pos_status_detail.floating_pl_cum / (
-                pos_status_detail.margin if pos_status_detail.margin > 0 else margin_last)
-            pos_status_detail.position_date_type = PositionDateType.Today.value
+            detail.cashflow_cum += cashflow
+            detail.commission = commission
+            detail.commission_tot += commission
+            # 如果无法计算收益率则暂时记 np.nan
+            detail.rr = (detail.floating_pl_cum / detail.margin) if detail.margin > 0 else np.nan
 
         elif self.calc_mode == CalcMode.Margin.value:
             # 保证金交易模式
