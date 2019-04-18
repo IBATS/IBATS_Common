@@ -304,14 +304,19 @@ class StgHandlerBacktest(StgHandlerBase):
             for data_count, (datetime_tag, md_agent_key, period, num, md_s) in enumerate(
                     self.load_history_record(), start=1):
                 md = md_s.to_dict()
+                # self.logger.debug("md: %s", md)
                 # 在回测阶段，需要对 trade_agent 设置最新的md数据，一遍交易接口确认相应的k线日期
                 for trade_agent_key in self.md_td_agent_key_list_map[md_agent_key]:
+                    if trade_agent_key == ExchangeName.Default:
+                        continue
                     self.stg_base.trade_agent_dic[trade_agent_key].set_curr_md(period, md)
 
                 # 执行策略相应的事件响应函数
                 self.stg_base.on_period_md_handler(period, md, md_agent_key)
                 # 根据最新的 md 及 持仓信息 更新 账户信息
                 for trade_agent_key in self.md_td_agent_key_list_map[md_agent_key]:
+                    if trade_agent_key == ExchangeName.Default:
+                        continue
                     self.stg_base.trade_agent_dic[trade_agent_key].update_trade_agent_status_detail()
 
                 if config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 1 or (

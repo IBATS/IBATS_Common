@@ -243,30 +243,6 @@ class BacktestTraderAgentBase(TraderAgentBase):
         self._pos_status_detail_dic[symbol] = pos_status_detail
         # self.c_save_acount_info(pos_status_detail)
 
-    def _record_trade_agent_status_detail(self) -> TradeAgentStatusDetail:
-        stg_run_id, init_cash = self.stg_run_id, self.init_cash
-        timestamp_curr = self.curr_timestamp
-        # trade_date = timestamp_curr.date()
-        # trade_time = timestamp_curr.time()
-        # trade_millisec = 0
-        # trade_price = float(self.curr_md['close'])
-        # trade_agent_status_detail = TradeAgentStatusDetail(stg_run_id=stg_run_id,
-        #                                                    trade_agent_key=self.agent_name,
-        #                                                    trade_date=trade_date,
-        #                                                    trade_time=trade_time,
-        #                                                    trade_millisec=trade_millisec,
-        #                                                    cash_available=init_cash,
-        #                                                    cash_init=init_cash
-        #                                                    )
-        # if config.BACKTEST_UPDATE_OR_INSERT_PER_ACTION:
-        #     # 更新最新持仓纪录
-        #     with with_db_session(engine_ibats, expire_on_commit=False) as session:
-        #         session.add(trade_agent_status_detail)
-        #         session.commit()
-        trade_agent_status_detail = TradeAgentStatusDetail.create(
-            stg_run_id, trade_agent_key=self.agent_name, init_cash=init_cash, timestamp_curr=timestamp_curr)
-        return trade_agent_status_detail
-
     def _update_by_pos_status_detail(self) -> TradeAgentStatusDetail:
         """根据 持仓列表更新账户信息"""
         pos_status_detail_dic = self._pos_status_detail_dic
@@ -289,21 +265,31 @@ class BacktestTraderAgentBase(TraderAgentBase):
         if self.curr_md is None:
             return
         if self.trade_agent_status_detail_latest is None:
-            # self.trade_agent_status_detail_latest = AccountStatusInfo.create(self.stg_run_id, self.init_cash, self.curr_md)
-            self.trade_agent_status_detail_latest = self._record_trade_agent_status_detail()
+            stg_run_id, init_cash = self.stg_run_id, self.init_cash
+            timestamp_curr = self.curr_timestamp
+            # 首次创建 TradeAgentStatusDetail 需要创建当期交易日 - 1 的 TradeAgentStatusDetail 记录
+            trade_agent_status_detail = TradeAgentStatusDetail.create_t_1(
+                stg_run_id, trade_agent_key=self.agent_name, init_cash=init_cash, timestamp_curr=timestamp_curr)
+            self.trade_agent_status_detail_latest = trade_agent_status_detail
+            self.trade_agent_detail_list.append(self.trade_agent_status_detail_latest)
+            # 根据上一交易日 TradeAgentStatusDetail 记录更新当期交易日记录
+            trade_agent_status_detail = self._update_by_pos_status_detail()
+            self.trade_agent_status_detail_latest = trade_agent_status_detail
             self.trade_agent_detail_list.append(self.trade_agent_status_detail_latest)
 
         symbol = self.curr_symbol
         if symbol in self._pos_status_detail_dic:
             pos_status_detail_last = self._pos_status_detail_dic[symbol]
-            trade_date = pos_status_detail_last.trade_date
-            trade_time = pos_status_detail_last.trade_time
+            # trade_date = pos_status_detail_last.trade_date
+            # trade_time = pos_status_detail_last.trade_time
+            # 2019-04-18 每一次行情变化均进行 self._update_pos_status_detail_by_md(pos_status_detail_last) 更新
             # 如果当前K线以及更新则不需再次更新。如果当前K线以及有交易产生，则 pos_info 将会在 _save_pos_status_detail 函数中被更新，因此无需再次更新
-            if trade_date == self.curr_timestamp.date() and trade_time == self.curr_timestamp.time():
-                return
+            # if trade_date == self.curr_timestamp.date() and trade_time == self.curr_timestamp.time():
+            #     return
+            # 2019-04-18 已清仓的状态不再清除，而是继续进行后续计算
             # 说明上一根K线位置已经平仓，下一根K先位置将记录清除
-            if pos_status_detail_last.position == 0:
-                del self._pos_status_detail_dic[symbol]
+            # if pos_status_detail_last.position == 0:
+            #     del self._pos_status_detail_dic[symbol]
             # 根据 md 数据更新 仓位信息
             # pos_status_detail = pos_status_detail_last.update_by_md(self.curr_md)
             pos_status_detail = self._update_pos_status_detail_by_md(pos_status_detail_last)

@@ -261,9 +261,12 @@ class PosStatusDetail(BaseModel):
     logger = logging.getLogger(f'<Table:{__tablename__}>')
 
     def __repr__(self):
-        return f"<PosStatusDetail(id='{self.pos_status_detail_idx}', trade_agent_key={self.trade_agent_key}," \
-            f" update_dt='{datetime_2_str(self.trade_dt)}', trade_idx='{self.trade_idx}', symbol='{self.symbol}', " \
-            f"direction='{self.direction}', position='{self.position}', avg_price='{self.avg_price}')>"
+        return f"<PosStatusDetail(id='{self.pos_status_detail_idx}', trade_agent_key={self.trade_agent_key}, " \
+            f"trade_dt='{datetime_2_str(self.trade_dt)}', trade_idx='{self.trade_idx}', symbol='{self.symbol}', " \
+            f"direction='{self.direction}', position='{self.position}', avg_price='{self.avg_price}', " \
+            f"floating_pl='{self.floating_pl}', floating_pl_chg='{self.floating_pl_chg}', " \
+            f"floating_pl_cum='{self.floating_pl_cum}', cashflow='{self.cashflow}', " \
+            f"cashflow_daily='{self.cashflow_daily}', cashflow_cum='{self.cashflow_cum}')>"
 
     def __init__(self, stg_run_id=None, trade_agent_key=None, trade_idx=None, trade_dt=None, trade_date=None,
                  trade_time=None, trade_millisec=None, direction=None, symbol=None, position=None, position_chg=0.0,
@@ -590,6 +593,8 @@ class PosStatusDetail(BaseModel):
         pos_status_detail.trade_time = trade_detail.trade_time
         pos_status_detail.trade_millisec = trade_detail.trade_millisec
 
+        # self.logger.debug("%s", pos_status_detail)
+
         if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
@@ -636,6 +641,7 @@ class PosStatusDetail(BaseModel):
         detail.cur_price = trade_price
         detail.trade_date = trade_date
         detail.trade_time = trade_time
+        detail.trade_dt = trade_dt
         detail.trade_millisec = trade_millisec
 
         # 乘数、保证金暂时按1来计算
@@ -653,19 +659,27 @@ class PosStatusDetail(BaseModel):
         floating_pl_chg = floating_pl - self.floating_pl
         detail.floating_pl_chg = floating_pl_chg
         detail.floating_pl_cum += floating_pl_chg
-        # 计算 position_value、margin、margin_chg
-        # cur_price = pos_status_detail.cur_price
-        detail.margin = position_cur * trade_price
-        margin_last = self.margin
-        detail.margin_chg = margin_chg = detail.margin - margin_last
-        # 计算 cashflow_daily, cashflow_cum, commission, commission_tot, rr, position_date_type
-        # 本次现金流
-        detail.cashflow = cashflow = - margin_chg - commission
-        # 每日现金流
-        if self.trade_date != trade_date:
-            detail.cashflow_daily = cashflow
-        else:
-            detail.cashflow_daily += cashflow
+
+        if self.calc_mode == CalcMode.Normal.value:
+            # 普通模式：非保证金交易模式
+            # 非保证金模式下，行情变化，不会对现金流产生影响，只会引起浮动收益变化
+            detail.cashflow = cashflow = 0
+        elif self.calc_mode == CalcMode.Margin.value:
+            # 保证金交易模式
+
+            # 计算 position_value、margin、margin_chg
+            # cur_price = pos_status_detail.cur_price
+            detail.margin = position_cur * trade_price
+            margin_last = self.margin
+            detail.margin_chg = margin_chg = detail.margin - margin_last
+            # 计算 cashflow_daily, cashflow_cum, commission, commission_tot, rr, position_date_type
+            # 本次现金流
+            detail.cashflow = cashflow = - margin_chg - commission
+            # 每日现金流
+            if self.trade_date != trade_date:
+                detail.cashflow_daily = cashflow
+            else:
+                detail.cashflow_daily += cashflow
 
         # 累计现金流
         detail.cashflow_cum += cashflow
@@ -692,7 +706,7 @@ class PosStatusDetail(BaseModel):
         position = self.position
         if is_new_day:
             cashflow_daily = 0
-            position_date_type = PositionDateType.History
+            position_date_type = PositionDateType.History.value
         else:
             cashflow_daily = self.cashflow_daily
             position_date_type = self.position_date_type
@@ -798,8 +812,16 @@ class TradeAgentStatusDetail(BaseModel):
         self.rr = 0
         self.calc_mode = calc_mode.value if calc_mode is CalcMode else calc_mode
 
+    def __repr__(self):
+        return f"<TradeAgentStatusDetail(id='{self.trade_agent_status_detail_idx}', " \
+            f"trade_agent_key={self.trade_agent_key}, trade_dt='{datetime_2_str(self.trade_dt)}', " \
+            f"cash_available='{self.cash_available}', cash_available_last_day='{self.cash_available_last_day}', " \
+            f"cashflow_daily='{self.cashflow_daily}', cashflow_cum='{self.cashflow_cum}', " \
+            f"cash_and_margin='{self.cashflow_cum}', cash_and_margin='{self.cashflow_cum}', " \
+            f"floating_pl_cum='{self.floating_pl_cum}')>"
+
     @staticmethod
-    def create(stg_run_id, trade_agent_key, init_cash: int, timestamp_curr: (datetime, pd.Timestamp) = None,
+    def create_t_1(stg_run_id, trade_agent_key, init_cash: int, timestamp_curr: (datetime, pd.Timestamp) = None,
                md: dict = None, timestamp_key=None, date_key=None, time_key=None, milli_sec_key=None):
         """
         根据 md 及 初始化资金 创建对象，默认日期为当前md数据-1天
@@ -909,6 +931,11 @@ class TradeAgentStatusDetail(BaseModel):
 
         is_new_day = self.trade_date != trade_date
         detail = self.create_by_self(is_new_day=is_new_day)
+        detail.trade_dt = trade_dt
+        detail.trade_date = trade_date
+        detail.trade_time = trade_time
+        detail.trade_millisec = trade_millisec
+
         # 更新非日期数据
         curr_margin = 0
         position_value = 0
@@ -924,6 +951,7 @@ class TradeAgentStatusDetail(BaseModel):
                 close_profit_new += pos_status_detail.floating_pl
             else:
                 position_profit += pos_status_detail.floating_pl
+
             floating_pl_cum += pos_status_detail.floating_pl_cum
             cashflow_daily += pos_status_detail.cashflow_daily
             cashflow_cum += pos_status_detail.cashflow_cum
@@ -940,14 +968,18 @@ class TradeAgentStatusDetail(BaseModel):
 
         # 记录当前可用现金
         detail.cash_available = cash_available
-        if cash_available != (self.cash_available_last_day + cashflow_daily):
+        cash_available_last_day = detail.cash_available_last_day
+        calc_gap = cash_available - (cash_available_last_day + cashflow_daily)
+        if calc_gap < -0.01 or 0.01 < calc_gap:
             self.logger.warning(
-                "%s cash_init + cashflow_cum = %10.2f 比 cash_available_last_day + cashflow_daily = %10.2f 少 %10.2f。"
+                "%s cash_init + cashflow_cum = %10.2f 比 cash_available_last_day + cashflow_daily = %10.2f 多 %10.2f。"
                 "cash_init=%10.2f cashflow_cum=%10.2f cash_available_last_day=%10.2f cashflow_daily=%10.2f",
-                self.trade_dt,
-                cash_available, self.cash_available_last_day + cashflow_daily,
-                (self.cash_available_last_day + cashflow_daily) - cash_available,
-                self.cash_init, cashflow_cum, self.cash_available_last_day, cashflow_daily)
+                detail.trade_dt,
+                cash_available, cash_available_last_day + cashflow_daily,
+                cash_available - (cash_available_last_day + cashflow_daily),
+                self.cash_init, cashflow_cum, cash_available_last_day, cashflow_daily)
+        else:
+            pass
 
         detail.position_value = position_value
         detail.curr_margin = curr_margin
@@ -960,10 +992,6 @@ class TradeAgentStatusDetail(BaseModel):
         detail.cash_and_margin = detail.cash_available + position_value
         detail.rr = detail.cash_and_margin / detail.cash_init
 
-        detail.trade_dt = trade_dt
-        detail.trade_date = trade_date
-        detail.trade_time = trade_time
-        detail.trade_millisec = trade_millisec
         if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
             with with_db_session(engine_ibats, expire_on_commit=False) as session:

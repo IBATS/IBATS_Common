@@ -87,7 +87,7 @@ class TradeAgentStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
         info = InitTest.add_stg_run_info()
         init_cash = 1000000
         timestamp_curr = pd.Timestamp(str_2_datetime('2018-12-14 13:24:35'))
-        status = TradeAgentStatusDetail.create(info.stg_run_id, ExchangeName.DataIntegration, init_cash, timestamp_curr=timestamp_curr)
+        status = TradeAgentStatusDetail.create_t_1(info.stg_run_id, ExchangeName.DataIntegration, init_cash, timestamp_curr=timestamp_curr)
         with with_db_session(engine_ibats, expire_on_commit=False) as session:
             session.add(status)
             session.commit()
