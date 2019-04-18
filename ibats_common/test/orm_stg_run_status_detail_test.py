@@ -27,10 +27,10 @@ class StgRunStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
 
     @classmethod
     def setUpClass(cls):
-        from ibats_common.config import update_db_config, ConfigBase
-        update_db_config({
-            ConfigBase.DB_SCHEMA_IBATS: 'mysql://mg:Dcba1234@localhost/' + ConfigBase.DB_SCHEMA_IBATS,
-        })
+        # from ibats_common.config import update_db_config, ConfigBase
+        # update_db_config({
+        #     ConfigBase.DB_SCHEMA_IBATS: 'mysql://mg:Dcba1234@localhost/' + ConfigBase.DB_SCHEMA_IBATS,
+        # })
         # 必须使用@classmethod 装饰器,所有test运行前运行一次
         init()
         global engine_ibats

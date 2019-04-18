@@ -31,10 +31,10 @@ class TradeAgentStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
 
     @classmethod
     def setUpClass(cls):
-        from ibats_common.config import update_db_config, ConfigBase
-        update_db_config({
-            ConfigBase.DB_SCHEMA_IBATS: 'mysql://mg:Dcba1234@localhost/' + ConfigBase.DB_SCHEMA_IBATS,
-        })
+        # from ibats_common.config import update_db_config, ConfigBase
+        # update_db_config({
+        #     ConfigBase.DB_SCHEMA_IBATS: 'mysql://mg:Dcba1234@localhost/' + ConfigBase.DB_SCHEMA_IBATS,
+        # })
         # 必须使用@classmethod 装饰器,所有test运行前运行一次
         init()
         global engine_ibats
@@ -86,11 +86,8 @@ class TradeAgentStatusDetailTest(unittest.TestCase):  # 继承unittest.TestCase
     def add_trade_agent_status_detail():
         info = InitTest.add_stg_run_info()
         init_cash = 1000000
-        md = {
-            'ActionDay': '2018-12-14',
-            'ActionTime': '13:24:35',
-        }
-        status = TradeAgentStatusDetail.create(info.stg_run_id, ExchangeName.DataIntegration, init_cash, md)
+        timestamp_curr = pd.Timestamp(str_2_datetime('2018-12-14 13:24:35'))
+        status = TradeAgentStatusDetail.create(info.stg_run_id, ExchangeName.DataIntegration, init_cash, timestamp_curr=timestamp_curr)
         with with_db_session(engine_ibats, expire_on_commit=False) as session:
             session.add(status)
             session.commit()
