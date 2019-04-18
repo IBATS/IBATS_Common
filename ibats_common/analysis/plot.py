@@ -190,7 +190,7 @@ def show_trade(stg_run_id) -> defaultdict(lambda: defaultdict(list)):
                                     or (_.direction == Direction.Short.value and _.action != Action.Open.value)
                                     )
                                ]
-            trade_date_list = [_.order_dt for _ in detail_list_sub]
+            trade_date_list = [_.trade_dt for _ in detail_list_sub]
             price = [_.trade_price for _ in detail_list_sub]
             # ax.scatter(trade_date_list, price, c='r', marker='^')
             data_dict[(md_agent_key, period, symbol)]['long_open_or_short_close'].append((trade_date_list, price))
