@@ -5,7 +5,7 @@
 @Time    : 2018/11/7 10:42
 @File    : ma_cross_stg.py
 @contact : mmmaaaggg@163.com
-@desc    : 
+@desc    : 简单的 MA5、MA10金叉、死叉多空策略，仅供测试及演示使用
 """
 import time
 import logging
