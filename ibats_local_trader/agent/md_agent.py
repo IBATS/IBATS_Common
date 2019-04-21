@@ -8,6 +8,9 @@
 @desc    : 
 """
 import time
+
+from ibats_utils.mess import str_2_date
+
 from ibats_common.md import MdAgentBase, md_agent
 from ibats_common.common import PeriodType, RunMode, ExchangeName
 import pandas as pd
@@ -16,7 +19,8 @@ import pandas as pd
 class MdAgentPub(MdAgentBase):
 
     def __init__(self, instrument_id_list, md_period: PeriodType, exchange_name, file_path, agent_name=None,
-                 init_load_md_count=None, init_md_date_from=None, init_md_date_to=None, ffill_on_load_history=True, **kwargs):
+                 init_load_md_count=None, init_md_date_from=None, init_md_date_to=None, ffill_on_load_history=True,
+                 **kwargs):
         MdAgentBase.__init__(
             self, instrument_id_list, md_period, exchange_name, agent_name=agent_name,
             init_load_md_count=init_load_md_count, init_md_date_from=init_md_date_from,
@@ -64,8 +68,45 @@ class MdAgentPub(MdAgentBase):
         md_df = pd.read_csv(self.file_path, parse_dates=list(date_col_name_set))
         if self.ffill_on_load_history:
             md_df = md_df.ffill()
-        # self.md_df = md_df
-        ret_data = {'md_df': md_df, 'datetime_key': self.datetime_key, 'date_key': self.date_key,
+        if self.timestamp_key is not None:
+            timestamp_key = self.timestamp_key
+        elif self.datetime_key is not None:
+            timestamp_key = self.datetime_key
+        elif self.date_key is not None:
+            timestamp_key = self.date_key
+        else:
+            timestamp_key = None
+            self.logger.warning('没有设置 timestamp_key、datetime_key、date_key 中的任何一个，无法进行日期过滤')
+
+        # 对日期区间进行过滤
+        filter_mark = None
+        if timestamp_key is not None:
+            if date_from is None:
+                date_from = pd.Timestamp(str_2_date(self.init_md_date_from))
+            else:
+                date_from = pd.Timestamp(str_2_date(date_from))
+
+            if date_from is not None:
+                filter_mark = md_df[timestamp_key] >= date_from
+
+            if date_to is None:
+                date_to = pd.Timestamp(str_2_date(self.init_md_date_to))
+            else:
+                date_to = pd.Timestamp(str_2_date(date_to))
+
+            if date_to is not None:
+                if filter_mark is None:
+                    filter_mark = md_df[timestamp_key] <= date_to
+                else:
+                    filter_mark &= md_df[timestamp_key] <= date_to
+
+        if filter_mark is not None:
+            ret_df = md_df[filter_mark]
+        else:
+            ret_df = md_df
+
+        # 返回数据
+        ret_data = {'md_df': ret_df, 'datetime_key': self.datetime_key, 'date_key': self.date_key,
                     'time_key': self.time_key, 'microseconds_key': self.microseconds_key,
                     'symbol_key': self.symbol_key, 'close_key': 'close'}
         return ret_data
