@@ -230,10 +230,10 @@ class StgHandlerBacktest(StgHandlerBase):
             for period, md_agent in period_agent_dic.items():
                 cor_func = md_agent.cor_load_history_record(self.date_from, self.date_to, load_md_count=0)
                 meta_dic = {
-                        'symbol_key': md_agent.symbol_key,
-                        'close_key': md_agent.close_key,
-                        'timestamp_key': md_agent.timestamp_key
-                    }
+                    'symbol_key': md_agent.symbol_key,
+                    'close_key': md_agent.close_key,
+                    'timestamp_key': md_agent.timestamp_key
+                }
                 md_agent_key_cor_func_dic[(md_agent_key, period)] = (cor_func, meta_dic)
         return md_agent_key_cor_func_dic
 
@@ -371,7 +371,8 @@ def strategy_handler_factory(
 
 def strategy_handler_factory_multi_exchange(
         stg_class: type(StgBase), strategy_params, md_agent_params_list, run_mode: RunMode,
-        trade_agent_params_list: list, strategy_handler_param: dict, add_2_db=True, stg_run_id=None) -> StgHandlerBase:
+        trade_agent_params_list: list, strategy_handler_param: dict, add_2_db=True, stg_run_id=None,
+        is_4_shown=False) -> StgHandlerBase:
     """
     多交易所策略处理具备
     建立策略对象
@@ -386,9 +387,10 @@ def strategy_handler_factory_multi_exchange(
     :param strategy_handler_param: strategy_handler 运行参数
     :param add_2_db: 默认情况下，自动将 stg_run_info 添加到数据库
     :param stg_run_id: 仅在 add_2_db == False 时需要添加 stg_run_id
+    :param is_4_shown: 仅供回溯展示需要，不加载 strategy_class 实例及其相关方法
     :return: 策略执行对象实力
     """
-    stg_run_info = StgRunInfo(stg_name=stg_class.__name__,      # 例如："MACrossStg"
+    stg_run_info = StgRunInfo(stg_name=stg_class.__name__,  # 例如："MACrossStg"
                               stg_module=stg_class.__module__,  # 例如："ibats_common.example.ma_cross_stg"
                               dt_from=datetime.now(),
                               # dt_to=None,
@@ -405,7 +407,11 @@ def strategy_handler_factory_multi_exchange(
             stg_run_id = stg_run_info.stg_run_id
 
     # 初始化策略实体，传入参数
-    stg_base = stg_class(**strategy_params)
+    if is_4_shown:
+        stg_base = StgBase(**strategy_params)
+    else:
+        stg_base = stg_class(**strategy_params)
+    # 设置相关属性
     stg_base.stg_run_id = stg_run_id
     logger.debug('strategy_params: %s', strategy_params)
     # 设置策略交易接口 trade_agent，这里不适用参数传递的方式而使用属性赋值，
@@ -494,12 +500,13 @@ def strategy_handler_factory_multi_exchange(
     return stg_handler
 
 
-def stategy_handler_loader(stg_run_id, module_name_replacement_if_main=None) -> StgHandlerBase:
+def stategy_handler_loader(stg_run_id, module_name_replacement_if_main=None, is_4_shown=True) -> StgHandlerBase:
     """
     根据 stg_run_id 从数据库中加载相应参数，动态加载策略类，实例化 stg_handler 类
     :param stg_run_id:
     :param module_name_replacement_if_main: 当 stg_module == '__main__' 时，用来替代的 module_name，
         例如："ibats_common.example.ma_cross_stg"
+    :param is_4_shown: 仅供回溯展示需要，不加载 strategy_class 实例及其相关方法
     :return:
     """
     with with_db_session(engine_ibats) as session:
@@ -525,5 +532,6 @@ def stategy_handler_loader(stg_run_id, module_name_replacement_if_main=None) -> 
         strategy_handler_param=strategy_handler_param,
         add_2_db=False,
         stg_run_id=stg_run_info.stg_run_id,
+        is_4_shown=is_4_shown,
     )
     return stg_handler

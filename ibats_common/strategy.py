@@ -15,7 +15,7 @@ logger_stg_base = logging.getLogger(__name__)
 
 class StgBase:
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         self.stg_run_id = None
         # 记录各个md_agent_key、各个周期 md 数据
         self._md_agent_key_period_df_dic = defaultdict(dict)
@@ -45,6 +45,8 @@ class StgBase:
             PeriodType.Mon1: EventHandlersRelation(PeriodType.Mon1,
                                                    self.on_prepare_month1, self.on_month1, pd.DataFrame),
         }
+        self.args = args
+        self.kwargs = kwargs
 
     def set_md_td_agent_key_list_map(self, md_td_agent_key_list_map):
         self._md_td_agent_key_list_map = md_td_agent_key_list_map

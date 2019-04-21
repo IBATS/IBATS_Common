@@ -65,8 +65,8 @@ def show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example
         with with_db_session(engine_ibats) as session:
             stg_run_id = session.query(func.max(StgRunInfo.stg_run_id)).scalar()
 
-    stg_handler = stategy_handler_loader(stg_run_id,
-                                         module_name_replacement_if_main=module_name_replacement_if_main)
+    stg_handler = stategy_handler_loader(
+        stg_run_id, module_name_replacement_if_main=module_name_replacement_if_main, is_4_shown=True)
     # 获取全部订单
     # session = get_db_session(engine_ibats)
     with with_db_session(engine_ibats) as session:
