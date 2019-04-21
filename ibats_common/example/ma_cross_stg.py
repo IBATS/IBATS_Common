@@ -38,27 +38,27 @@ class MACrossStg(StgBase):
         instrument_id = context[ContextKey.instrument_id_list][0]
         if self.ma5[-2] < self.ma10[-2] and self.ma5[-1] > self.ma10[-1]:
             position_date_pos_info_dic = self.get_position(instrument_id)
-            no_target_position = True
+            no_holding_target_position = True
             if position_date_pos_info_dic is not None:
                 for position_date, pos_info in position_date_pos_info_dic.items():
                     direction = pos_info.direction
                     if direction == Direction.Short:
                         self.close_short(instrument_id, close, pos_info.position)
                     elif direction == Direction.Long:
-                        no_target_position = False
-            if no_target_position:
+                        no_holding_target_position = False
+            if no_holding_target_position:
                 self.open_long(instrument_id, close, self.unit)
         elif self.ma5[-2] > self.ma10[-2] and self.ma5[-1] < self.ma10[-1]:
             position_date_pos_info_dic = self.get_position(instrument_id)
-            no_target_position = True
+            no_holding_target_position = True
             if position_date_pos_info_dic is not None:
                 for position_date, pos_info in position_date_pos_info_dic.items():
                     direction = pos_info.direction
                     if direction == Direction.Long:
                         self.close_long(instrument_id, close, pos_info.position)
                     elif direction == Direction.Short:
-                        no_target_position = False
-            if no_target_position:
+                        no_holding_target_position = False
+            if no_holding_target_position:
                 self.open_short(instrument_id, close, self.unit)
 
 

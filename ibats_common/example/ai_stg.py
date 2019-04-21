@@ -9,7 +9,6 @@
 pip3 install tensorflow
 """
 import os
-
 from ibats_utils.mess import get_last_idx, get_folder_path
 import tensorflow as tf
 import numpy as np
@@ -131,14 +130,13 @@ class AIStg(StgBase):
     def __init__(self, unit=1, train=True):
         super().__init__()
         self.unit = unit
-        self.load_model = False
-        self.input_size = None
-        self.batch_size = None
-        self.n_step = None
+        self.is_load_model_if_exist = True
+        self.input_size = 4
+        self.batch_size = 50
+        self.n_step = 20
         self.output_size = 2
-        self.n_hidden_units = None
-        self.n_classes = None
-        self.lr = None
+        self.n_hidden_units = 10
+        self.lr = 0.006
         self.normalization_model = False
         self.model = self.build_model()
         self.model_file_path = None
@@ -180,7 +178,9 @@ class AIStg(StgBase):
     def calc_label_with_future_value(self, value_arr: np.ndarray, min_pct: float, max_pct: float, max_future=None):
         """
         根据时间序列数据 pct_arr 计算每一个时点目标标示 -1 0 1
-        计算方式：当某一点未来波动首先 >（ 或 <） 上届 min_pct（或下届 max_pct），则标记为 1 （或 -1）
+        计算方式：
+        当某一点未来波动首先 > 上届 min_pct，则标记为： [0, 1]
+        当某一点未来波动首先 < 下届 max_pct，则标记为： [1, 0]
         :param value_arr:
         :param min_pct:
         :param max_pct:
@@ -204,7 +204,16 @@ class AIStg(StgBase):
                     break
         return target_arr
 
-    def get_batch_xs(self, factors: np.ndarray, num):
+    def get_batch_xs(self, factors: np.ndarray, num=None):
+        """
+        取 batch_xs
+        :param factors:
+        :param num: 样本起始坐标，如果为None，则默认取尾部一组样本
+        :return:
+        """
+        if num is None:
+            num = factors.shape[0] - self.n_step
+
         batch_xs = np.zeros((1, self.n_step, self.input_size))
         batch_xs[0, :, :] = factors[num:num + self.n_step, :]
 
@@ -245,7 +254,7 @@ class AIStg(StgBase):
         # n_hidden_units = CELL_SIZE  # neurons in hidden layer
         # n_classes = OUTPUT_SIZE  # MNIST classes (0-9 digits)
         model = LSTMRNN(
-            self.n_step, self.input_size, self.n_hidden_units, self.n_classes, self.lr, self.batch_size,
+            self.n_step, self.input_size, self.n_hidden_units, self.output_size, self.lr, self.batch_size,
             self.normalization_model)
         return model
 
@@ -299,21 +308,41 @@ class AIStg(StgBase):
 
             step += 1
 
-        # 将模型导出到文件
-        saver = tf.train.Saver()
-        folder_path = get_folder_path('my_net', create_if_not_found=False)
-        file_path = os.path.join(folder_path, f"save_net_{self.normalization_model}.ckpt")
-        save_path = saver.save(sess, file_path)
-        logger.info("Save to path: %s", save_path)
-        self.model_file_path = save_path
-
         return self.model
 
-    def predict(self, md_df):
-        logger.info('开始预测')
+    def save_model(self):
+        """
+        将模型导出到文件
+        :return:
+        """
         saver = tf.train.Saver()
+        folder_path = get_folder_path('my_net', create_if_not_found=False)
+        if folder_path is None:
+            raise ValueError('folder_path: "my_net" not exist')
+        file_path = os.path.join(folder_path, f"save_net_{self.normalization_model}.ckpt")
+        save_path = saver.save(self.session, file_path)
+        logger.info("Save to path: %s", save_path)
+        self.model_file_path = save_path
+        return save_path
+
+    def load_model_if_exist(self):
+        """
+        将模型导出到文件
+        :return:
+        """
+        if self.model_file_path is not None and os.path.exists(self.model_file_path):
+            saver = tf.train.Saver()
+            save_path = saver.restore(self.session, self.model_file_path)
+            logger.info("load from path: %s", save_path)
+            return True
+        else:
+            return False
+
+    def predict_test(self, md_df):
+        logger.info('开始预测')
         sess = self.session
-        saver.restore(sess, f"my_net/save_net_{self.model.normalization_model}.ckpt")
+        # saver = tf.train.Saver()
+        # saver.restore(sess, f"my_net/save_net_{self.model.normalization_model}.ckpt")
         factors, labels = self.get_factors_with_lables(md_df)
         logger.info("批量预测")
         batch_xs, batch_ys, _ = self.get_batch_by_random(factors, labels)
@@ -345,24 +374,67 @@ class AIStg(StgBase):
         logger.info("batch_ys: \n%s", np.argmax(batch_ys, axis=1))
         logger.info("accuracy: %.2f%%" % (sum(pred_all == np.argmax(batch_ys, axis=1)) / len(pred_all) * 100))
 
+    def predict_latest(self, md_df):
+        factors = self.get_factors(md_df)
+        batch_xs = self.get_batch_xs(factors)
+        feed_dict = {
+            self.model.xs: batch_xs,
+            self.model.is_training: True,
+            # TODO: model.is_training should be False
+        }
+        pred_mark = self.session.run(tf.argmax(self.model.pred, 1), feed_dict)
+        is_buy, is_sell = pred_mark == 1, pred_mark == 0
+        return is_buy, is_sell
+
     def on_prepare_min1(self, md_df, context):
         if md_df is None:
             return
 
-        if self.load_model:
+        if self.is_load_model_if_exist:
             # 加载模型
-            pass
+            is_load = self.load_model_if_exist()
         else:
+            is_load = False
+
+        if not is_load:
             # 训练模型
             self.train(md_df)
-            self.predict(md_df)
+            self.predict_test(md_df)
+            self.save_model()
 
     def on_min1(self, md_df, context):
-        factors = self.get_factors(md_df)
-        batch_xs = self.get_batch_xs(factors)
+        is_buy, is_sell = self.predict_latest(md_df)
+        logger.info('is_buy=%s, is_sell=%s', str(is_buy), str(is_sell))
+        close = md_df['close'].iloc[-1]
+        instrument_id = context[ContextKey.instrument_id_list][0]
+        if is_buy:
+            position_date_pos_info_dic = self.get_position(instrument_id)
+            no_target_position = True
+            if position_date_pos_info_dic is not None:
+                for position_date, pos_info in position_date_pos_info_dic.items():
+                    direction = pos_info.direction
+                    if direction == Direction.Short:
+                        self.close_short(instrument_id, close, pos_info.position)
+                    elif direction == Direction.Long:
+                        no_target_position = False
+            if no_target_position:
+                self.open_long(instrument_id, close, self.unit)
+
+        if is_sell:
+            position_date_pos_info_dic = self.get_position(instrument_id)
+            no_holding_target_position = True
+            if position_date_pos_info_dic is not None:
+                for position_date, pos_info in position_date_pos_info_dic.items():
+                    direction = pos_info.direction
+                    if direction == Direction.Long:
+                        self.close_long(instrument_id, close, pos_info.position)
+                    elif direction == Direction.Short:
+                        no_holding_target_position = False
+            if no_holding_target_position:
+                self.open_short(instrument_id, close, self.unit)
 
 
-def _test_use():
+def _test_use(is_plot):
     from ibats_common import local_model_folder_path
     import os
     # 参数设置
@@ -406,10 +478,18 @@ def _test_use():
     time.sleep(10)
     stghandler.keep_running = False
     stghandler.join()
-    logging.info("执行结束 stg_run_id = %d", stghandler.stg_run_id)
-    return stghandler.stg_run_id
+    stg_run_id = stghandler.stg_run_id
+    logging.info("执行结束 stg_run_id = %d", stg_run_id)
+
+    if is_plot:
+        from ibats_common.analysis.plot import show_order, show_cash_and_margin
+        show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ai_stg')
+        show_cash_and_margin(stg_run_id)
+
+    return stg_run_id
 
 
 if __name__ == '__main__':
     # logging.basicConfig(level=logging.DEBUG, format=config.LOG_FORMAT)
-    _test_use()
+    is_plot = True
+    _test_use(is_plot)

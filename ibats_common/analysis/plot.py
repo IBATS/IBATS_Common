@@ -8,10 +8,11 @@
 @desc    : 
 """
 from collections import defaultdict
-from ibats_utils.db import with_db_session, get_db_session
+from sqlalchemy.sql import func
+from ibats_utils.db import with_db_session, get_db_session, execute_scalar, get_db_session
 from ibats_common.backend import engines
 import pandas as pd
-from ibats_common.backend.orm import StgRunStatusDetail, OrderDetail, TradeDetail
+from ibats_common.backend.orm import StgRunStatusDetail, OrderDetail, TradeDetail, StgRunInfo
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import logging
@@ -29,8 +30,11 @@ def show_cash_and_margin(stg_run_id):
     """
     # stg_run_id=154
     engine_ibats = engines.engine_ibats
-    # session = get_db_session(engine_ibats)
     with with_db_session(engine_ibats) as session:
+        if stg_run_id is None:
+            logger.warning('没有设置 stg_run_id 参数，将输出最新的 stg_run_id 对应记录')
+            stg_run_id = session.query(func.max(StgRunInfo.stg_run_id)).scalar()
+
         sql_str = str(
             session.query(
                 StgRunStatusDetail.trade_dt.label('trade_dt'),
@@ -45,17 +49,24 @@ def show_cash_and_margin(stg_run_id):
     plt.show()
 
 
-def show_order(stg_run_id) -> defaultdict(lambda: defaultdict(list)):
+def show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg') -> defaultdict(
+    lambda: defaultdict(list)):
     """
     plot candle and buy and sell point
     :param stg_run_id:
+    :param module_name_replacement_if_main:
     :return:
     """
-    # stg_run_id=1
-    stg_handler = stategy_handler_loader(stg_run_id,
-                                         module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
     # 加载数据库 engine
     engine_ibats = engines.engine_ibats
+    # stg_run_id=1
+    if stg_run_id is None:
+        logger.warning('没有设置 stg_run_id 参数，将输出最新的 stg_run_id 对应记录')
+        with with_db_session(engine_ibats) as session:
+            stg_run_id = session.query(func.max(StgRunInfo.stg_run_id)).scalar()
+
+    stg_handler = stategy_handler_loader(stg_run_id,
+                                         module_name_replacement_if_main=module_name_replacement_if_main)
     # 获取全部订单
     # session = get_db_session(engine_ibats)
     with with_db_session(engine_ibats) as session:
@@ -260,6 +271,6 @@ def show_plot_data(data_dict: dict, title=None):
 
 
 if __name__ == '__main__':
-    stg_run_id = 1
-    # show_cash_and_margin(stg_run_id)
-    data_dict = show_order(stg_run_id)
+    stg_run_id = None
+    show_cash_and_margin(stg_run_id)
+    # data_dict = show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ai_stg')
