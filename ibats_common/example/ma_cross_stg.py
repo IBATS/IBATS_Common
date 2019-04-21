@@ -62,7 +62,7 @@ class MACrossStg(StgBase):
                 self.open_short(instrument_id, close, self.unit)
 
 
-def _test_use():
+def _test_use(is_plot):
     from ibats_common import local_model_folder_path
     import os
     # 参数设置
@@ -106,10 +106,18 @@ def _test_use():
     time.sleep(10)
     stghandler.keep_running = False
     stghandler.join()
-    logging.info("执行结束 stg_run_id = %d", stghandler.stg_run_id)
-    return stghandler.stg_run_id
+    stg_run_id = stghandler.stg_run_id
+    logging.info("执行结束 stg_run_id = %d", stg_run_id)
+
+    if is_plot:
+        from ibats_common.analysis.plot import show_order, show_cash_and_margin
+        show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
+        show_cash_and_margin(stg_run_id)
+
+    return stg_run_id
 
 
 if __name__ == '__main__':
     # logging.basicConfig(level=logging.DEBUG, format=config.LOG_FORMAT)
-    _test_use()
+    is_plot = True
+    _test_use(is_plot)
