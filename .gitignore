@@ -174,3 +174,9 @@ crashlytics.properties
 crashlytics-build.properties
 fabric.properties
 *.bat
+
+# TensorFlow Example Files
+*-ubyte.gz
+events.out.tfevents.*
+*.ckpt.*
+checkpoint
