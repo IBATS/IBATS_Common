@@ -39,6 +39,7 @@ def show_cash_and_margin(stg_run_id):
             session.query(
                 StgRunStatusDetail.trade_dt.label('trade_dt'),
                 StgRunStatusDetail.cash_and_margin.label('cash_and_margin'),
+                (StgRunStatusDetail.cash_and_margin.label('cash_and_margin') + StgRunStatusDetail.commission_tot.label('commission_tot')).label('whitout commission'),
             ).filter(
                 StgRunStatusDetail.stg_run_id == stg_run_id
             )
