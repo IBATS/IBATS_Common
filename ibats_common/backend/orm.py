@@ -655,7 +655,7 @@ class PosStatusDetail(BaseModel):
         # 没有交易，不产生手续费
         commission = 0
         position_cur, avg_price, direction = detail.position, detail.avg_price, detail.direction
-        position_value = position_cur * trade_price
+        position_value = position_cur * trade_price * multiple
         floating_pl = (trade_price - avg_price) * position_cur * multiple * int(detail.direction)
         detail.position_value = position_value
         # 计算 floating_pl
@@ -677,12 +677,12 @@ class PosStatusDetail(BaseModel):
 
             # 计算 position_value、margin、margin_chg
             # cur_price = pos_status_detail.cur_price
-            detail.margin = position_cur * trade_price
+            detail.margin = position_cur * trade_price * multiple * margin_ratio
             margin_last = self.margin
             detail.margin_chg = margin_chg = detail.margin - margin_last
             # 计算 cashflow_daily, cashflow_cum, commission, commission_tot, rr, position_date_type
-            # 本次现金流
-            detail.cashflow = cashflow = - margin_chg - commission
+            # 本次现金流 保证金模式下的现金流变化为：持仓市值增量 - 保证金增量 - 手续费
+            detail.cashflow = cashflow = (position_value - self.position_value) - margin_chg - commission
             # 每日现金流
             if self.trade_date != trade_date:
                 detail.cashflow_daily = cashflow
