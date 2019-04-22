@@ -500,7 +500,7 @@ def strategy_handler_factory_multi_exchange(
     return stg_handler
 
 
-def stategy_handler_loader(stg_run_id, module_name_replacement_if_main=None, is_4_shown=True) -> StgHandlerBase:
+def strategy_handler_loader(stg_run_id, module_name_replacement_if_main=None, is_4_shown=True) -> StgHandlerBase:
     """
     根据 stg_run_id 从数据库中加载相应参数，动态加载策略类，实例化 stg_handler 类
     :param stg_run_id:
@@ -518,6 +518,7 @@ def stategy_handler_loader(stg_run_id, module_name_replacement_if_main=None, is_
         stg_run_info.stg_module = module_name_replacement_if_main
 
     stg_class = load_class(stg_run_info.stg_module, stg_run_info.stg_name)
+
     strategy_params = json.loads(stg_run_info.stg_params)
     md_agent_params_list = json.loads(stg_run_info.md_agent_params_list)
     run_mode = RunMode(stg_run_info.run_mode)
