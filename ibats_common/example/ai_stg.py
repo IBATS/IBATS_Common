@@ -403,7 +403,8 @@ class AIStg(StgBase):
 
     def on_min1(self, md_df, context):
         is_buy, is_sell = self.predict_latest(md_df)
-        logger.info('is_buy=%s, is_sell=%s', str(is_buy), str(is_sell))
+        trade_date = md_df['trade_date'].iloc[-1]
+        logger.info('%s is_buy=%s, is_sell=%s', trade_date, str(is_buy), str(is_sell))
         close = md_df['close'].iloc[-1]
         instrument_id = context[ContextKey.instrument_id_list][0]
         if is_buy:
@@ -438,7 +439,7 @@ def _test_use(is_plot):
     import os
     # 参数设置
     run_mode = RunMode.Backtest
-    strategy_params = {'unit': 1}
+    strategy_params = {'unit': 100}
     md_agent_params_list = [{
         'md_period': PeriodType.Min1,
         'instrument_id_list': ['RU'],
