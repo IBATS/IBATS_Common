@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import logging
 from ibats_common.common import Action, Direction
-from ibats_common.strategy_handler import stategy_handler_loader
+from ibats_common.strategy_handler import strategy_handler_loader
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,8 @@ def show_cash_and_margin(stg_run_id):
             session.query(
                 StgRunStatusDetail.trade_dt.label('trade_dt'),
                 StgRunStatusDetail.cash_and_margin.label('cash_and_margin'),
-                (StgRunStatusDetail.cash_and_margin.label('cash_and_margin') + StgRunStatusDetail.commission_tot.label('commission_tot')).label('whitout commission'),
+                (StgRunStatusDetail.cash_and_margin.label('cash_and_margin') + StgRunStatusDetail.commission_tot.label(
+                    'commission_tot')).label('whitout commission'),
             ).filter(
                 StgRunStatusDetail.stg_run_id == stg_run_id
             )
@@ -50,8 +51,57 @@ def show_cash_and_margin(stg_run_id):
     plt.show()
 
 
-def show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg') -> defaultdict(
-    lambda: defaultdict(list)):
+def show_rr_with_md(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg'):
+    engine_ibats = engines.engine_ibats
+    # 获取 收益曲线
+    with with_db_session(engine_ibats) as session:
+        if stg_run_id is None:
+            logger.warning('没有设置 stg_run_id 参数，将输出最新的 stg_run_id 对应记录')
+            stg_run_id = session.query(func.max(StgRunInfo.stg_run_id)).scalar()
+
+        sql_str = str(
+            session.query(
+                StgRunStatusDetail.trade_dt.label('trade_dt'),
+                StgRunStatusDetail.cash_and_margin.label('cash and margin'),
+                (StgRunStatusDetail.cash_and_margin.label('cash_and_margin') +
+                 StgRunStatusDetail.commission_tot.label('commission_tot')).label('without commission'),
+            ).filter(
+                StgRunStatusDetail.stg_run_id == stg_run_id
+            )
+        )
+
+    rr_df = pd.read_sql(sql_str, engine_ibats, params=[stg_run_id]).set_index('trade_dt')
+    rr_df['rr'] = rr_df['cash and margin'] / rr_df['cash and margin'].iloc[0]
+    rr_df['rr without commission'] = rr_df['without commission'] / rr_df['without commission'].iloc[0]
+
+    # 获取行情数据
+    stg_handler = strategy_handler_loader(
+        stg_run_id, module_name_replacement_if_main=module_name_replacement_if_main, is_4_shown=True)
+
+    # 获取历史行情数据
+    md_agent_key_cor_func_dic = stg_handler.get_periods_history_iterator()
+    # 根据 md_agent 对每一组行情 以及 对应的 order_detail_list 进行 plot
+    # fig = plt.figure(1, figsize=(20, 4.8 * agent_count))
+    for num, ((md_agent_key, period), (cor_func, meta_dic)) in enumerate(md_agent_key_cor_func_dic.items(), start=1):
+        df = pd.DataFrame([md_s for num, datetime_tag, md_s in cor_func])
+        if df.shape[0] == 0:
+            continue
+        # ax = fig.add_subplot(num, 1, 1)
+        # 行情
+        symbol_key = meta_dic['symbol_key']
+        close_key = meta_dic['close_key']
+        timestamp_key = meta_dic['timestamp_key']
+        for symbol, df_by_symbol in df.groupby(symbol_key):
+            # df_by_symbol.set_index(timestamp_key)[close_key].plot(ax=ax, colormap='jet')
+            md_df = df_by_symbol.set_index(timestamp_key)[[close_key]]
+            md_df['md_rr'] = md_df[close_key] / md_df[close_key].iloc[0]
+            df = md_df.join(rr_df)[['md_rr', 'rr', 'rr without commission']]
+            df.plot()
+            plt.show()
+
+
+def show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg'
+               ) -> defaultdict(lambda: defaultdict(list)):
     """
     plot candle and buy and sell point
     :param stg_run_id:
@@ -66,7 +116,7 @@ def show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example
         with with_db_session(engine_ibats) as session:
             stg_run_id = session.query(func.max(StgRunInfo.stg_run_id)).scalar()
 
-    stg_handler = stategy_handler_loader(
+    stg_handler = strategy_handler_loader(
         stg_run_id, module_name_replacement_if_main=module_name_replacement_if_main, is_4_shown=True)
     # 获取全部订单
     # session = get_db_session(engine_ibats)
@@ -151,15 +201,17 @@ def show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example
     return data_dict
 
 
-def show_trade(stg_run_id) -> defaultdict(lambda: defaultdict(list)):
+def show_trade(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg'
+               ) -> defaultdict(lambda: defaultdict(list)):
     """
     plot candle and buy and sell point
     :param stg_run_id:
+    :param module_name_replacement_if_main:
     :return:
     """
     # stg_run_id=1
-    stg_handler = stategy_handler_loader(stg_run_id,
-                                         module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
+    stg_handler = strategy_handler_loader(
+        stg_run_id, module_name_replacement_if_main=module_name_replacement_if_main, is_4_shown=True)
     # 加载数据库 engine
     engine_ibats = engines.engine_ibats
     # 获取全部订单
@@ -273,5 +325,6 @@ def show_plot_data(data_dict: dict, title=None):
 
 if __name__ == '__main__':
     stg_run_id = None
-    show_cash_and_margin(stg_run_id)
+    # show_cash_and_margin(stg_run_id)
+    show_rr_with_md(stg_run_id)
     # data_dict = show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ai_stg')
