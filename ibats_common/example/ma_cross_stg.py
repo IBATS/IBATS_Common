@@ -9,7 +9,7 @@
 """
 import time
 import logging
-from ibats_common.common import PeriodType, RunMode, BacktestTradeMode, ExchangeName, ContextKey, Direction
+from ibats_common.common import PeriodType, RunMode, BacktestTradeMode, ExchangeName, ContextKey, Direction, CalcMode
 from ibats_common.strategy import StgBase
 from ibats_common.strategy_handler import strategy_handler_factory
 from ibats_local_trader.agent.td_agent import *
@@ -87,6 +87,7 @@ def _test_use(is_plot):
         trade_agent_params = {
             'trade_mode': BacktestTradeMode.Order_2_Deal,
             'init_cash': 1000000,
+            "calc_mode": CalcMode.Margin,
         }
         strategy_handler_param = {
             'date_from': '2010-1-1',  # 策略回测历史数据，回测指定时间段的历史行情
