@@ -147,7 +147,7 @@ class StgBase:
     def on_period_md_handler(self, period, md, md_agent_key):
         """响应 period 数据"""
         # 本机测试，延时0.155秒，从分钟K线合成到交易策略端收到数据
-        logger_stg_base.debug("%s %s -> %s", PeriodType(period), md_agent_key, md)
+        # logger_stg_base.debug("%s %s -> %s", PeriodType(period), md_agent_key, md)
         # self._on_period_md_event(period, md_df_his)
         period_event_relation = self._on_period_event_dic[period]
         event_handler = period_event_relation.md_event
