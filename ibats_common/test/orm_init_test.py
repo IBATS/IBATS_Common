@@ -67,7 +67,7 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
         order = OrderDetail(stg_run_id, trade_agent_key=ExchangeName.DataIntegration,
                             order_dt=datetime.now(), order_date=date.today(), order_time=datetime.now().time(),
                             order_millisec=99, direction=int(Direction.Long), action=int(Action.Open), symbol='RB1801',
-                            order_price=1000.0, order_vol=20
+                            order_price=1000.0, order_vol=20, calc_mode=CalcMode.Margin,
                             )
         with with_db_session(engine_ibats, expire_on_commit=False) as session:
             session.add(order)

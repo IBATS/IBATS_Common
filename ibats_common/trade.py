@@ -102,10 +102,11 @@ class BacktestTraderAgentBase(TraderAgentBase):
     供调用模拟交易接口使用
     """
 
-    def __init__(self, stg_run_id, **agent_params):
+    def __init__(self, stg_run_id, calc_mode, **agent_params):
         super().__init__(stg_run_id, **agent_params)
         # 标示 order 成交模式
         self.trade_mode = agent_params.setdefault('trade_mode', BacktestTradeMode.Order_2_Deal)
+        self.calc_mode = calc_mode
         # 账户初始资金
         self.init_cash = agent_params['init_cash']
         # 用来标示当前md，一般执行买卖交易是，对时间，价格等信息进行记录
@@ -198,7 +199,8 @@ class BacktestTraderAgentBase(TraderAgentBase):
                                    action=int(action),
                                    symbol=symbol,
                                    order_price=float(price),
-                                   order_vol=int(vol)
+                                   order_vol=int(vol),
+                                   calc_mode=self.calc_mode,
                                    )
         if config.BACKTEST_UPDATE_OR_INSERT_PER_ACTION:
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
@@ -269,7 +271,8 @@ class BacktestTraderAgentBase(TraderAgentBase):
             timestamp_curr = self.curr_timestamp
             # 首次创建 TradeAgentStatusDetail 需要创建当期交易日 - 1 的 TradeAgentStatusDetail 记录
             trade_agent_status_detail = TradeAgentStatusDetail.create_t_1(
-                stg_run_id, trade_agent_key=self.agent_name, init_cash=init_cash, timestamp_curr=timestamp_curr)
+                stg_run_id, trade_agent_key=self.agent_name, init_cash=init_cash, timestamp_curr=timestamp_curr,
+                calc_mode=self.calc_mode)
             self.trade_agent_status_detail_latest = trade_agent_status_detail
             self.trade_agent_detail_list.append(self.trade_agent_status_detail_latest)
             # 根据上一交易日 TradeAgentStatusDetail 记录更新当期交易日记录
@@ -488,7 +491,8 @@ class FixPositionBacktestTraderAgentBase(TraderAgentBase):
                                    action=int(action),
                                    symbol=symbol,
                                    order_price=float(price),
-                                   order_vol=int(vol)
+                                   order_vol=int(vol),
+                                   calc_mode=self.calc_mode,
                                    )
         if config.BACKTEST_UPDATE_OR_INSERT_PER_ACTION:
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
