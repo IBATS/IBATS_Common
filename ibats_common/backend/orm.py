@@ -461,11 +461,14 @@ class PosStatusDetail(BaseModel):
             pos_status_detail.margin = position_cur * trade_price
             # 如果前一状态仓位为 0,  且不是多空切换的情况，则保留上一状态的浮动收益
             if self.position == 0 and self.trade_dt != trade_detail.trade_dt:
-                margin_last = pos_status_detail.margin  # 新建仓情况下，margin_last 为当前 margin
+                # 新建仓情况下，margin_last 为当前 margin
+                # 该变量用于后续计算 rr 使用
+                margin_last = pos_status_detail.margin
                 pos_status_detail.margin_chg = margin_chg = pos_status_detail.margin
             else:
                 margin_last = self.margin
-                pos_status_detail.margin_chg = margin_chg = pos_status_detail.margin - margin_last
+                margin_last_pos_cur_price = self.position * trade_price
+                pos_status_detail.margin_chg = margin_chg = pos_status_detail.margin - margin_last_pos_cur_price
 
             # 计算 cashflow_daily, cashflow_cum, commission, commission_tot, rr, position_date_type
             # 本次现金流
@@ -662,6 +665,9 @@ class PosStatusDetail(BaseModel):
 
         if self.calc_mode == CalcMode.Normal.value:
             # 普通模式：非保证金交易模式
+            detail.margin = position_cur * trade_price
+            margin_last = self.margin
+            detail.margin_chg = margin_chg = detail.margin - margin_last
             # 非保证金模式下，行情变化，不会对现金流产生影响，只会引起浮动收益变化
             detail.cashflow = cashflow = 0
         elif self.calc_mode == CalcMode.Margin.value:
@@ -680,6 +686,9 @@ class PosStatusDetail(BaseModel):
                 detail.cashflow_daily = cashflow
             else:
                 detail.cashflow_daily += cashflow
+
+        else:
+            ValueError('calc_mode 不是有效的值 %s', self.calc_mode)
 
         # 累计现金流
         detail.cashflow_cum += cashflow
