@@ -67,12 +67,12 @@ class StgBase:
     def on_timer(self):
         pass
 
-    def load_md_period_df(self, period, md_df, context):
+    def load_md_period_df(self, period, md_df: pd.DataFrame, context):
         """初始化加载 md 数据"""
         md_agent_key = context[ContextKey.md_agent_key]
         self._md_agent_key_period_df_dic[md_agent_key][period] = md_df
-        self._md_agent_key_period_df_col_name_list_dic[md_agent_key][period] = list(md_df.columns) \
-            if isinstance(md_df, pd.DataFrame) else None
+        self._md_agent_key_period_df_col_name_list_dic[md_agent_key][period] = list(md_df.columns) if isinstance(
+            md_df, pd.DataFrame) else None
         self._md_agent_key_period_context_dic[md_agent_key][period] = context
         # prepare_event_handler = self._on_period_prepare_event_dic[period]
         prepare_event_handler = self._on_period_event_dic[period].prepare_event
@@ -213,53 +213,61 @@ class StgBase:
     def open_long(self, instrument_id, price, vol, trade_agent_key=None, md_agent_key=None):
         if md_agent_key is None and trade_agent_key is None:
             trade_agent = self.trade_agent
-            self.logger.info("%s %s  open  long  %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            # self.logger.info("  %s %s  open  long  %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            self.logger.info("  %s %s ↗ %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
             return trade_agent.open_long(instrument_id, price, vol)
         else:
             if trade_agent_key is None:
                 trade_agent_key = self.get_td_agent_key(md_agent_key)
 
             trade_agent = self.trade_agent_dic[trade_agent_key]
-            self.logger.info("%s %s  open  long  %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            # self.logger.info("  %s %s  open  long  %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            self.logger.info("  %s %s ↗ %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
             return trade_agent.open_long(instrument_id, price, vol)
 
     def close_long(self, instrument_id, price, vol, trade_agent_key=None, md_agent_key=None):
         if md_agent_key is None and trade_agent_key is None:
             trade_agent = self.trade_agent
-            self.logger.info("%s %s close  long  %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            # self.logger.info(" %s %s close  long  %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            self.logger.info(" %s %s ↘ %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
             return trade_agent.close_long(instrument_id, price, vol)
         else:
             if trade_agent_key is None:
                 trade_agent_key = self.get_td_agent_key(md_agent_key)
 
             trade_agent = self.trade_agent_dic[trade_agent_key]
-            self.logger.info("%s %s close  long  %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            # self.logger.info(" %s %s close  long  %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            self.logger.info(" %s %s ↘ %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
             return trade_agent.close_long(instrument_id, price, vol)
 
     def open_short(self, instrument_id, price, vol, trade_agent_key=None, md_agent_key=None):
         if md_agent_key is None and trade_agent_key is None:
             trade_agent = self.trade_agent
-            self.logger.info("%s %s  open short %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            # self.logger.info(" %s %s  open short  %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            self.logger.info(" %s %s ↙ %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
             return trade_agent.open_short(instrument_id, price, vol)
         else:
             if trade_agent_key is None:
                 trade_agent_key = self.get_td_agent_key(md_agent_key)
 
             trade_agent = self.trade_agent_dic[trade_agent_key]
-            self.logger.info("%s %s  open short %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            # self.logger.info(" %s %s  open short  %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            self.logger.info(" %s %s ↙ %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
             return trade_agent.open_short(instrument_id, price, vol)
 
     def close_short(self, instrument_id, price, vol, trade_agent_key=None, md_agent_key=None):
         if md_agent_key is None and trade_agent_key is None:
             trade_agent = self.trade_agent
-            self.logger.info("%s %s close short %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            # self.logger.info("%s %s close short  %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            self.logger.info("%s %s ↖ %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
             return trade_agent.close_short(instrument_id, price, vol)
         else:
             if trade_agent_key is None:
                 trade_agent_key = self.get_td_agent_key(md_agent_key)
 
             trade_agent = self.trade_agent_dic[trade_agent_key]
-            self.logger.info("%s %s close short %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            # self.logger.info("%s %s close short  %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
+            self.logger.info("%s %s ↖ %.2f * %f", trade_agent.curr_timestamp, instrument_id, price, vol)
             return trade_agent.close_short(instrument_id, price, vol)
 
     def get_position(self, instrument_id, trade_agent_key=None, md_agent_key=None, **kwargs) -> dict:
