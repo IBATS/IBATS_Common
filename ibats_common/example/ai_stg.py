@@ -136,7 +136,7 @@ class AIStg(StgBase):
         self.output_size = 2
         self.n_hidden_units = 10
         self.lr = 0.006
-        self.normalization_model = False
+        self.normalization_model = True
         self.model = self.build_model()
         self.model_file_path = None
         # tf.Session()
@@ -148,7 +148,10 @@ class AIStg(StgBase):
             self._session = tf.Session()
         return self._session
 
-    def get_factors(self, md_df):
+    def get_factors(self, md_df: pd.DataFrame, tail_n=None):
+        if tail_n is not None:
+            md_df = md_df.tail(tail_n)
+
         df = md_df[~md_df['close'].isnull()][['close', 'TermStructure', 'Volume', 'OI']]
 
         factors = df.fillna(0).to_numpy()
@@ -161,7 +164,7 @@ class AIStg(StgBase):
 
         return factors
 
-    def get_factors_with_lables(self, md_df):
+    def get_factors_with_labels(self, md_df):
         factors = self.get_factors(md_df)
         price_arr = factors[:, 0]
         self.input_size = factors.shape[1]
@@ -258,7 +261,7 @@ class AIStg(StgBase):
         return model
 
     def train(self, md_df):
-        factors, labels = self.get_factors_with_lables(md_df)
+        factors, labels = self.get_factors_with_labels(md_df)
         training_iters = 100000
 
         sess = self.session
@@ -342,7 +345,7 @@ class AIStg(StgBase):
         sess = self.session
         # saver = tf.train.Saver()
         # saver.restore(sess, f"my_net/save_net_{self.model.normalization_model}.ckpt")
-        factors, labels = self.get_factors_with_lables(md_df)
+        factors, labels = self.get_factors_with_labels(md_df)
         logger.info("批量预测")
         batch_xs, batch_ys, _ = self.get_batch_by_random(factors, labels)
         feed_dict = {
@@ -374,7 +377,7 @@ class AIStg(StgBase):
         logger.info("accuracy: %.2f%%" % (sum(pred_all == np.argmax(batch_ys, axis=1)) / len(pred_all) * 100))
 
     def predict_latest(self, md_df):
-        factors = self.get_factors(md_df)
+        factors = self.get_factors(md_df, tail_n=self.n_step)
         batch_xs = self.get_batch_xs(factors)
         feed_dict = {
             self.model.xs: batch_xs,
@@ -404,7 +407,7 @@ class AIStg(StgBase):
     def on_min1(self, md_df, context):
         is_buy, is_sell = self.predict_latest(md_df)
         trade_date = md_df['trade_date'].iloc[-1]
-        logger.info('%s is_buy=%s, is_sell=%s', trade_date, str(is_buy), str(is_sell))
+        # logger.info('%s is_buy=%s, is_sell=%s', trade_date, str(is_buy), str(is_sell))
         close = md_df['close'].iloc[-1]
         instrument_id = context[ContextKey.instrument_id_list][0]
         if is_buy:
