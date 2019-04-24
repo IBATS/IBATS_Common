@@ -137,7 +137,7 @@ class AIStg(StgBase):
         self.n_hidden_units = 10
         self.lr = 0.006
         self.normalization_model = True
-        self.model = self.build_model()
+        self._model = None
         self.model_file_path = None
         # tf.Session()
         self._session = None
@@ -145,14 +145,22 @@ class AIStg(StgBase):
     @property
     def session(self):
         if self._session is None:
+            if self.model is None:
+                raise ValueError('model 需要先于 session 被创建')
             self._session = tf.Session()
         return self._session
+
+    @property
+    def model(self):
+        if self._model is None:
+            self._model = self.build_model()
+        return self._model
 
     def get_factors(self, md_df: pd.DataFrame, tail_n=None):
         if tail_n is not None:
             md_df = md_df.tail(tail_n)
-
-        df = md_df[~md_df['close'].isnull()][['close', 'TermStructure', 'Volume', 'OI']]
+        df = md_df[~md_df['close'].isnull()][[
+            'open', 'high', 'low', 'close', 'volume', 'oi', 'warehousewarrant', 'termstructure']]
 
         factors = df.fillna(0).to_numpy()
         if self.input_size is None or self.input_size != factors.shape[1]:
@@ -262,7 +270,7 @@ class AIStg(StgBase):
 
     def train(self, md_df):
         factors, labels = self.get_factors_with_labels(md_df)
-        training_iters = 100000
+        training_iters = 1000
 
         sess = self.session
         merged = tf.summary.merge_all()
@@ -272,7 +280,7 @@ class AIStg(StgBase):
 
         sess.run(tf.global_variables_initializer())
         step = 0
-        while step * self.model.batch_size < training_iters:
+        while step < training_iters:  # * self.model.batch_size
             # batch_xs, batch_ys = mnist.train.next_batch(model.batch_size)
             # batch_xs.shape, batch_ys.shape
             batch_xs, batch_ys, available_batch_size = self.get_batch_by_random(factors, labels)
@@ -304,7 +312,7 @@ class AIStg(StgBase):
                     # TODO: model.is_training should be False
                 }
                 test_accuracy = sess.run(self.model.accuracy_op, feed_dict=feed_dict)
-                logger.info('train: %s test: %s', train_accuracy, test_accuracy)
+                logger.info('%d/%d) train: %s test: %s', step, training_iters, train_accuracy, test_accuracy)
                 result = sess.run(merged, feed_dict)
                 writer.add_summary(result, step)
 
@@ -406,11 +414,11 @@ class AIStg(StgBase):
 
     def on_min1(self, md_df, context):
         is_buy, is_sell = self.predict_latest(md_df)
-        trade_date = md_df['trade_date'].iloc[-1]
+        # trade_date = md_df['trade_date'].iloc[-1]
         # logger.info('%s is_buy=%s, is_sell=%s', trade_date, str(is_buy), str(is_sell))
         close = md_df['close'].iloc[-1]
         instrument_id = context[ContextKey.instrument_id_list][0]
-        if is_buy:
+        if is_sell:  # is_buy
             position_date_pos_info_dic = self.get_position(instrument_id)
             no_target_position = True
             if position_date_pos_info_dic is not None:
@@ -423,7 +431,7 @@ class AIStg(StgBase):
             if no_target_position:
                 self.open_long(instrument_id, close, self.unit)
 
-        if is_sell:
+        if is_buy:  # is_sell
             position_date_pos_info_dic = self.get_position(instrument_id)
             no_holding_target_position = True
             if position_date_pos_info_dic is not None:
@@ -445,13 +453,13 @@ def _test_use(is_plot):
     strategy_params = {'unit': 100}
     md_agent_params_list = [{
         'md_period': PeriodType.Min1,
-        'instrument_id_list': ['RU'],
+        'instrument_id_list': ['RB'],
         'datetime_key': 'trade_date',
         'init_md_date_from': '1995-1-1',  # 行情初始化加载历史数据，供策略分析预加载使用
         'init_md_date_to': '2010-1-1',
         # 'C:\GitHub\IBATS_Common\ibats_common\example\ru_price2.csv'
-        'file_path': os.path.abspath(os.path.join(local_model_folder_path, 'example', 'ru_price2.csv')),
-        'symbol_key': 'instrument_id',
+        'file_path': os.path.abspath(os.path.join(local_model_folder_path, 'example', 'data', 'RB.csv')),
+        'symbol_key': 'instrument_type',
     }]
     if run_mode == RunMode.Realtime:
         trade_agent_params = {
