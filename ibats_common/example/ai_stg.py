@@ -141,6 +141,7 @@ class AIStg(StgBase):
         self.model_file_path = None
         # tf.Session()
         self._session = None
+        self.train_validation_rate = 0.8
 
     @property
     def session(self):
@@ -270,7 +271,9 @@ class AIStg(StgBase):
 
     def train(self, md_df):
         factors, labels = self.get_factors_with_labels(md_df)
-        training_iters = 1000
+        factors_train, factors_validation, labels_train, labels_validation = self.separate_train_validation(
+            factors, labels)
+        training_iters = 500
 
         sess = self.session
         merged = tf.summary.merge_all()
@@ -283,7 +286,7 @@ class AIStg(StgBase):
         while step < training_iters:  # * self.model.batch_size
             # batch_xs, batch_ys = mnist.train.next_batch(model.batch_size)
             # batch_xs.shape, batch_ys.shape
-            batch_xs, batch_ys, available_batch_size = self.get_batch_by_random(factors, labels)
+            batch_xs, batch_ys, available_batch_size = self.get_batch_by_random(factors_train, labels_train)
             # print("available_batch_size", available_batch_size)
             if available_batch_size < self.model.batch_size:
                 break
@@ -304,11 +307,11 @@ class AIStg(StgBase):
 
             if step % 20 == 0:
                 train_accuracy = np.mean(np.argmax(pred, 1) == np.argmax(batch_ys, 1))
-                batch_xs, batch_ys, _ = self.get_batch_by_random(factors, labels)
+                batch_xs, batch_ys, _ = self.get_batch_by_random(factors_validation, labels_validation)
                 feed_dict = {
                     self.model.xs: batch_xs,
                     self.model.ys: batch_ys,
-                    self.model.is_training: True,
+                    self.model.is_training: False,
                     # TODO: model.is_training should be False
                 }
                 test_accuracy = sess.run(self.model.accuracy_op, feed_dict=feed_dict)
@@ -355,7 +358,7 @@ class AIStg(StgBase):
         # saver.restore(sess, f"my_net/save_net_{self.model.normalization_model}.ckpt")
         factors, labels = self.get_factors_with_labels(md_df)
         logger.info("批量预测")
-        batch_xs, batch_ys, _ = self.get_batch_by_random(factors, labels)
+        batch_xs, batch_ys, available_batch_size = self.get_batch_by_random(factors, labels)
         feed_dict = {
             self.model.xs: batch_xs,
             self.model.ys: batch_ys,
@@ -368,7 +371,7 @@ class AIStg(StgBase):
         logger.info("accuracy: %.2f%%" % (sum(pred == np.argmax(batch_ys, axis=1)) / len(pred) * 100))
 
         logger.info("独立样本预测")
-        batch_xs, batch_ys, available_batch_size = self.get_batch_by_random(factors, labels)
+        # batch_xs, batch_ys, available_batch_size = self.get_batch_by_random(factors, labels)
         pred_all = []
         for n in range(available_batch_size):
             feed_dict = {
@@ -392,9 +395,10 @@ class AIStg(StgBase):
             self.model.is_training: True,
             # TODO: model.is_training should be False
         }
-        pred_mark = self.session.run(tf.argmax(self.model.pred, 1), feed_dict)
-        is_buy, is_sell = pred_mark == 1, pred_mark == 0
-        return is_buy, is_sell
+        pred_mark = self.session.run(tf.argmax(self.model.pred, 1), feed_dict)[0]
+        # is_buy, is_sell = pred_mark == 1, pred_mark == 0
+        # return is_buy, is_sell
+        return pred_mark
 
     def on_prepare_min1(self, md_df, context):
         if md_df is None:
@@ -413,12 +417,13 @@ class AIStg(StgBase):
             self.save_model()
 
     def on_min1(self, md_df, context):
-        is_buy, is_sell = self.predict_latest(md_df)
+        pred_mark = self.predict_latest(md_df)
+        is_buy, is_sell = pred_mark == 1, pred_mark == 0
         # trade_date = md_df['trade_date'].iloc[-1]
         # logger.info('%s is_buy=%s, is_sell=%s', trade_date, str(is_buy), str(is_sell))
         close = md_df['close'].iloc[-1]
         instrument_id = context[ContextKey.instrument_id_list][0]
-        if is_sell:  # is_buy
+        if is_buy:  # is_buy
             position_date_pos_info_dic = self.get_position(instrument_id)
             no_target_position = True
             if position_date_pos_info_dic is not None:
@@ -430,8 +435,10 @@ class AIStg(StgBase):
                         no_target_position = False
             if no_target_position:
                 self.open_long(instrument_id, close, self.unit)
+            else:
+                logger.debug("%s %s     %.2f holding", self.trade_agent.curr_timestamp, instrument_id, close)
 
-        if is_buy:  # is_sell
+        if is_sell:  # is_sell
             position_date_pos_info_dic = self.get_position(instrument_id)
             no_holding_target_position = True
             if position_date_pos_info_dic is not None:
@@ -443,6 +450,25 @@ class AIStg(StgBase):
                         no_holding_target_position = False
             if no_holding_target_position:
                 self.open_short(instrument_id, close, self.unit)
+            else:
+                logger.debug("%s %s     %.2f holding", self.trade_agent.curr_timestamp, instrument_id, close)
+
+    def separate_train_validation(self, factors, labels):
+        """
+        将 结果按照比例拆分成训练集、验证集
+        :param factors:
+        :param labels:
+        :return:
+        """
+        data_len = factors.shape[0]
+        train_len = int(self.train_validation_rate * data_len)
+        # 至少留给 validation 样本集一个 batch_size 的数量
+        if train_len > (data_len - self.batch_size - self.n_step):
+            train_len = data_len - self.batch_size - self.n_step
+
+        factors_train, factors_validation = factors[:train_len, :], factors[train_len:, :]
+        labels_train, labels_validation = labels[:train_len, :], labels[train_len:, :]
+        return factors_train, factors_validation, labels_train, labels_validation
 
 
 def _test_use(is_plot):
@@ -456,7 +482,7 @@ def _test_use(is_plot):
         'instrument_id_list': ['RB'],
         'datetime_key': 'trade_date',
         'init_md_date_from': '1995-1-1',  # 行情初始化加载历史数据，供策略分析预加载使用
-        'init_md_date_to': '2010-1-1',
+        'init_md_date_to': '2013-1-1',
         # 'C:\GitHub\IBATS_Common\ibats_common\example\ru_price2.csv'
         'file_path': os.path.abspath(os.path.join(local_model_folder_path, 'example', 'data', 'RB.csv')),
         'symbol_key': 'instrument_type',
@@ -473,7 +499,7 @@ def _test_use(is_plot):
             "calc_mode": CalcMode.Margin,
         }
         strategy_handler_param = {
-            'date_from': '2010-1-1',  # 策略回测历史数据，回测指定时间段的历史行情
+            'date_from': '2013-1-1',  # 策略回测历史数据，回测指定时间段的历史行情
             'date_to': '2018-10-18',
         }
     # 初始化策略处理器
