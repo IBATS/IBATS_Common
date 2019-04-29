@@ -129,7 +129,6 @@ class AIStg(StgBase):
     def __init__(self, unit=1, train=True):
         super().__init__()
         self.unit = unit
-        self.is_load_model_if_exist = True
         self.input_size = 4
         self.batch_size = 50
         self.n_step = 20
@@ -138,10 +137,13 @@ class AIStg(StgBase):
         self.lr = 0.006
         self.normalization_model = True
         self._model = None
-        self.model_file_path = None
         # tf.Session()
         self._session = None
         self.train_validation_rate = 0.8
+        self.is_load_model_if_exist = False
+        folder_path = get_folder_path('my_net', create_if_not_found=False)
+        file_path = os.path.join(folder_path, f"save_net_{self.normalization_model}.ckpt")
+        self.model_file_path = file_path
 
     @property
     def session(self):
@@ -149,6 +151,7 @@ class AIStg(StgBase):
             if self.model is None:
                 raise ValueError('model 需要先于 session 被创建')
             self._session = tf.Session()
+            self._session.run(tf.global_variables_initializer())
         return self._session
 
     @property
@@ -168,8 +171,8 @@ class AIStg(StgBase):
             self.input_size = factors.shape[1]
             logger.info("set input_size: %d", self.input_size)
 
-        if self.normalization_model:
-            factors = (factors - np.mean(factors, 0)) / np.std(factors, 0)
+        # if self.normalization_model:
+        #     factors = (factors - np.mean(factors, 0)) / np.std(factors, 0)
 
         return factors
 
@@ -181,8 +184,8 @@ class AIStg(StgBase):
         idx_last_available_label = get_last_idx(labels, lambda x: x.sum() == 0)
         factors = factors[:idx_last_available_label + 1, :]
         labels = labels[:idx_last_available_label + 1, :]
-        if self.normalization_model:
-            factors = (factors - np.mean(factors, 0)) / np.std(factors, 0)
+        # if self.normalization_model:
+        #     factors = (factors - np.mean(factors, 0)) / np.std(factors, 0)
 
         return factors, labels
 
@@ -215,18 +218,18 @@ class AIStg(StgBase):
                     break
         return target_arr
 
-    def get_batch_xs(self, factors: np.ndarray, num=None):
+    def get_batch_xs(self, factors: np.ndarray, index=None):
         """
         取 batch_xs
         :param factors:
-        :param num: 样本起始坐标，如果为None，则默认取尾部一组样本
+        :param index: 样本起始坐标，如果为None，则默认取尾部一组样本
         :return:
         """
-        if num is None:
-            num = factors.shape[0] - self.n_step
+        if index is None:
+            index = factors.shape[0] - 1
 
         batch_xs = np.zeros((1, self.n_step, self.input_size))
-        batch_xs[0, :, :] = factors[num:num + self.n_step, :]
+        batch_xs[0, :, :] = factors[(index - self.n_step + 1):(index + 1), :]
 
         return batch_xs
 
@@ -240,20 +243,22 @@ class AIStg(StgBase):
         """
         xs = np.zeros((self.batch_size, self.n_step, self.input_size))
         ys = np.zeros((self.batch_size, self.output_size))
-        available_batch_size, num = 0, 0
-        samples = random.sample(range(factors.shape[0] - self.n_step), self.batch_size)
-        for available_batch_size, num in enumerate(samples):
-            tmp = factors[num:num + self.n_step, :]
+        # available_batch_size, num = 0, 0
+        samples_index = random.sample(range(self.n_step - 1, factors.shape[0] - 1), self.batch_size)
+        examples_index_list = []
+        for available_batch_size, index in enumerate(samples_index):
+            tmp = factors[(index - self.n_step + 1):(index + 1), :]
             if tmp.shape[0] < self.n_step:
                 break
             xs[available_batch_size, :, :] = tmp
-            ys[available_batch_size, :] = labels[num + self.n_step - 1, :]
+            ys[available_batch_size, :] = labels[index, :]
+            examples_index_list.append(index)
             if available_batch_size + 1 >= self.batch_size:
                 available_batch_size += 1
                 break
 
         # returned xs, ys_value and shape (batch, step, input)
-        return xs, ys, available_batch_size
+        return xs, ys, examples_index_list
 
     def build_model(self):
         # hyperparameters
@@ -281,14 +286,13 @@ class AIStg(StgBase):
         # relocate to the local dir and run this line to view it on Chrome(http://0.0.0.0:6006/):
         # $ tensorboard --logdir='logs'
 
-        sess.run(tf.global_variables_initializer())
         step = 0
         while step < training_iters:  # * self.model.batch_size
             # batch_xs, batch_ys = mnist.train.next_batch(model.batch_size)
             # batch_xs.shape, batch_ys.shape
-            batch_xs, batch_ys, available_batch_size = self.get_batch_by_random(factors_train, labels_train)
+            batch_xs, batch_ys, examples_index_list = self.get_batch_by_random(factors_train, labels_train)
             # print("available_batch_size", available_batch_size)
-            if available_batch_size < self.model.batch_size:
+            if len(examples_index_list) < self.model.batch_size:
                 break
             # batch_xs = batch_xs.reshape([model.batch_size, model.n_step, model.n_inputs])
             # feed_dict = {model.xs: batch_xs, model.ys: batch_ys}
@@ -328,14 +332,9 @@ class AIStg(StgBase):
         将模型导出到文件
         :return:
         """
-        saver = tf.train.Saver()
-        folder_path = get_folder_path('my_net', create_if_not_found=False)
-        if folder_path is None:
-            raise ValueError('folder_path: "my_net" not exist')
-        file_path = os.path.join(folder_path, f"save_net_{self.normalization_model}.ckpt")
-        save_path = saver.save(self.session, file_path)
-        logger.info("Save to path: %s", save_path)
-        self.model_file_path = save_path
+        saver = tf.train.Saver(tf.trainable_variables(), max_to_keep=5)
+        save_path = saver.save(self.session, self.model_file_path)
+        logger.info("模型保存到: %s", save_path)
         return save_path
 
     def load_model_if_exist(self):
@@ -343,13 +342,18 @@ class AIStg(StgBase):
         将模型导出到文件
         :return:
         """
-        if self.model_file_path is not None and os.path.exists(self.model_file_path):
-            saver = tf.train.Saver()
-            save_path = saver.restore(self.session, self.model_file_path)
-            logger.info("load from path: %s", save_path)
-            return True
-        else:
-            return False
+        if self.model_file_path is not None:
+            # 检查文件是否存在
+            # os.path.exists(self.model_file_path)
+            if self.model_file_exists():
+                model = self.model      # 这句话是必须的，需要实现建立模型才可以加载
+                sess = self.session
+                saver = tf.train.Saver()
+                save_path = saver.restore(sess, self.model_file_path)
+                logger.info("load from path: %s", save_path)
+                return True
+
+        return False
 
     def predict_test(self, md_df):
         logger.info('开始预测')
@@ -358,41 +362,54 @@ class AIStg(StgBase):
         # saver.restore(sess, f"my_net/save_net_{self.model.normalization_model}.ckpt")
         factors, labels = self.get_factors_with_labels(md_df)
         logger.info("批量预测")
-        batch_xs, batch_ys, available_batch_size = self.get_batch_by_random(factors, labels)
+        batch_xs, batch_ys, examples_index_list = self.get_batch_by_random(factors, labels)
         feed_dict = {
             self.model.xs: batch_xs,
             self.model.ys: batch_ys,
-            self.model.is_training: True,
+            self.model.is_training: False,
             # TODO: model.is_training should be False
         }
         pred = sess.run(tf.argmax(self.model.pred, 1), feed_dict)
-        logger.info("pred: \n%s", pred)
-        logger.info("batch_ys \n%s", np.argmax(batch_ys, axis=1))
         logger.info("accuracy: %.2f%%" % (sum(pred == np.argmax(batch_ys, axis=1)) / len(pred) * 100))
+        logger.info("pred: \n%s\n%s", pred, np.argmax(batch_ys, axis=1))
 
         logger.info("独立样本预测")
         # batch_xs, batch_ys, available_batch_size = self.get_batch_by_random(factors, labels)
         pred_all = []
-        for n in range(available_batch_size):
+        for n in range(len(examples_index_list)):
             feed_dict = {
                 self.model.xs: batch_xs[n:n + 1, :, :],
                 self.model.ys: batch_ys[n:n + 1, :],
-                self.model.is_training: True,
+                self.model.is_training: False,
                 # TODO: model.is_training should be False
             }
             pred = sess.run(tf.argmax(self.model.pred, 1), feed_dict)
             pred_all.extend(pred)
 
-        logger.info("pred: \n%s", np.array(pred_all))
-        logger.info("batch_ys: \n%s", np.argmax(batch_ys, axis=1))
         logger.info("accuracy: %.2f%%" % (sum(pred_all == np.argmax(batch_ys, axis=1)) / len(pred_all) * 100))
+        logger.info("pred: \n%s\n%s", np.array(pred_all), np.argmax(batch_ys, axis=1))
+
+        logger.info("独立样本预测(predict_latest)")
+        # batch_xs, batch_ys, available_batch_size = self.get_batch_by_random(factors, labels)
+        pred_all, label_all, label_target = [], [], np.argmax(labels, axis=1)
+        for num, index in enumerate(examples_index_list):
+            pred_mark = self.predict_latest(md_df.iloc[:(index + 1), :])
+            pred_all.append(pred_mark)
+            label_all.append(label_target[index])
+            if pred_mark != pred_all[num] or label_target[index] != np.argmax(batch_ys, axis=1)[num]:
+                logger.debug("(%d %d) (%d %d)",
+                             pred_mark, label_target[index], pred_all[num], np.argmax(batch_ys, axis=1)[num])
+
+        pred_all, label_all = np.array(pred_all), np.array(label_all)
+        logger.info("accuracy: %.2f%%" % (sum(pred_all == label_all) / len(pred_all) * 100))
+        logger.info("pred: \n%s\n%s", pred_all, label_all)
 
     def predict_latest(self, md_df):
         factors = self.get_factors(md_df, tail_n=self.n_step)
         batch_xs = self.get_batch_xs(factors)
         feed_dict = {
             self.model.xs: batch_xs,
-            self.model.is_training: True,
+            self.model.is_training: False,
             # TODO: model.is_training should be False
         }
         pred_mark = self.session.run(tf.argmax(self.model.pred, 1), feed_dict)[0]
@@ -470,13 +487,23 @@ class AIStg(StgBase):
         labels_train, labels_validation = labels[:train_len, :], labels[train_len:, :]
         return factors_train, factors_validation, labels_train, labels_validation
 
+    def model_file_exists(self):
+        folder_path, file_name = os.path.split(self.model_file_path)
+        if not os.path.exists(folder_path):
+            return False
+        for f_name in os.listdir(folder_path):
+            if f_name.find(file_name) == 0:
+                return True
+
+        return False
+
 
 def _test_use(is_plot):
     from ibats_common import local_model_folder_path
     import os
     # 参数设置
     run_mode = RunMode.Backtest
-    strategy_params = {'unit': 100}
+    strategy_params = {'unit': 1}
     md_agent_params_list = [{
         'md_period': PeriodType.Min1,
         'instrument_id_list': ['RB'],
@@ -495,7 +522,7 @@ def _test_use(is_plot):
     else:
         trade_agent_params = {
             'trade_mode': BacktestTradeMode.Order_2_Deal,
-            'init_cash': 1000000,
+            'init_cash': 10000,
             "calc_mode": CalcMode.Margin,
         }
         strategy_handler_param = {
