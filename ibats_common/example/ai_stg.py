@@ -129,10 +129,10 @@ class AIStg(StgBase):
     def __init__(self, unit=1, train=True):
         super().__init__()
         self.unit = unit
-        self.input_size = 4
+        self.input_size = 13
         self.batch_size = 50
         self.n_step = 20
-        self.output_size = 2
+        self.output_size = 26
         self.n_hidden_units = 10
         self.lr = 0.006
         self.normalization_model = True
@@ -140,10 +140,11 @@ class AIStg(StgBase):
         # tf.Session()
         self._session = None
         self.train_validation_rate = 0.8
-        self.is_load_model_if_exist = False
+        self.is_load_model_if_exist = True
         folder_path = get_folder_path('my_net', create_if_not_found=False)
         file_path = os.path.join(folder_path, f"save_net_{self.normalization_model}.ckpt")
         self.model_file_path = file_path
+        self.training_iters = 600
 
     @property
     def session(self):
@@ -165,11 +166,18 @@ class AIStg(StgBase):
             md_df = md_df.tail(tail_n)
         df = md_df[~md_df['close'].isnull()][[
             'open', 'high', 'low', 'close', 'volume', 'oi', 'warehousewarrant', 'termstructure']]
+        df['ma5'] = df['close'].rolling(window=5).mean()
+        df['ma10'] = df['close'].rolling(window=10).mean()
+        df['ma20'] = df['close'].rolling(window=20).mean()
+        df['pct_change_vol'] = df['volume'].pct_change()
+        df['pct_change'] = df['close'].pct_change()
 
         factors = df.fillna(0).to_numpy()
         if self.input_size is None or self.input_size != factors.shape[1]:
             self.input_size = factors.shape[1]
+            self.n_hidden_units = self.input_size * 2
             logger.info("set input_size: %d", self.input_size)
+            logger.info("set n_hidden_units: %d", self.n_hidden_units)
 
         # if self.normalization_model:
         #     factors = (factors - np.mean(factors, 0)) / np.std(factors, 0)
@@ -278,7 +286,6 @@ class AIStg(StgBase):
         factors, labels = self.get_factors_with_labels(md_df)
         factors_train, factors_validation, labels_train, labels_validation = self.separate_train_validation(
             factors, labels)
-        training_iters = 500
 
         sess = self.session
         merged = tf.summary.merge_all()
@@ -287,7 +294,7 @@ class AIStg(StgBase):
         # $ tensorboard --logdir='logs'
 
         step = 0
-        while step < training_iters:  # * self.model.batch_size
+        while step < self.training_iters:  # * self.model.batch_size
             # batch_xs, batch_ys = mnist.train.next_batch(model.batch_size)
             # batch_xs.shape, batch_ys.shape
             batch_xs, batch_ys, examples_index_list = self.get_batch_by_random(factors_train, labels_train)
@@ -319,7 +326,7 @@ class AIStg(StgBase):
                     # TODO: model.is_training should be False
                 }
                 test_accuracy = sess.run(self.model.accuracy_op, feed_dict=feed_dict)
-                logger.info('%d/%d) train: %s test: %s', step, training_iters, train_accuracy, test_accuracy)
+                logger.info('%d/%d) train: %s test: %s', step, self.training_iters, train_accuracy, test_accuracy)
                 result = sess.run(merged, feed_dict)
                 writer.add_summary(result, step)
 
@@ -342,16 +349,14 @@ class AIStg(StgBase):
         将模型导出到文件
         :return:
         """
-        if self.model_file_path is not None:
+        if self.is_load_model_if_exist and self.model_file_exists():
             # 检查文件是否存在
-            # os.path.exists(self.model_file_path)
-            if self.model_file_exists():
-                model = self.model      # 这句话是必须的，需要实现建立模型才可以加载
-                sess = self.session
-                saver = tf.train.Saver()
-                save_path = saver.restore(sess, self.model_file_path)
-                logger.info("load from path: %s", save_path)
-                return True
+            model = self.model      # 这句话是必须的，需要实现建立模型才可以加载
+            sess = self.session
+            saver = tf.train.Saver(tf.trainable_variables())
+            save_path = saver.restore(sess, self.model_file_path)
+            logger.info("load from path: %s", save_path)
+            return True
 
         return False
 
@@ -421,11 +426,8 @@ class AIStg(StgBase):
         if md_df is None:
             return
 
-        if self.is_load_model_if_exist:
-            # 加载模型
-            is_load = self.load_model_if_exist()
-        else:
-            is_load = False
+        # 加载模型
+        is_load = self.load_model_if_exist()
 
         if not is_load:
             # 训练模型
