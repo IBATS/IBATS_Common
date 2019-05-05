@@ -6,12 +6,13 @@
 @File    : ai_stg.py
 @contact : mmmaaaggg@163.com
 @desc    : 简单的 RNN LSTM 构建策略模型，运行该模型需要首先安装 TensorFlow 包
-pip3 install tensorflow
+pip3 install tensorflow sklearn tflearn
 """
 import os
 from ibats_utils.mess import get_last_idx, get_folder_path
 import tensorflow as tf
 import tflearn
+from sklearn.model_selection import train_test_split
 import numpy as np
 import random
 from ibats_common.analysis.plot import show_rr_with_md
@@ -24,44 +25,6 @@ from ibats_local_trader.agent.md_agent import *
 logger = logging.getLogger(__name__)
 
 
-class LSTMRNN:
-    def __init__(self, n_step, n_inputs, n_hidden_units, n_classes, lr, batch_size, normalization_model):
-        """
-
-        :param n_step: time steps
-        :param n_inputs: MNIST data input (img shape 28*28)
-        :param n_hidden_units: neurons in hidden layer
-        :param n_classes: MNIST classes (0-9 digits)
-        :param lr:
-        :param training_iters:
-        :param batch_size:
-        :param normalization_model:
-        """
-        self.n_step = n_step
-        self.n_inputs = n_inputs
-        self.n_hidden_units = n_hidden_units
-        self.n_classes = n_classes
-        # hyperparameters
-        self.lr = lr
-        self.batch_size = batch_size
-        self.normalization_model = normalization_model
-        # attributes defined in other functions
-        self.cost = None
-        self.l_in_y = None
-        self.cell_outputs = None
-        self.cell_init_state = None
-        self.cell_final_state = None
-
-        # Network building
-        net = tflearn.input_data([None, self.n_inputs])
-        net = tflearn.lstm(net, self.n_hidden_units, dropout=0.8)
-        net = tflearn.fully_connected(net, self.n_classes, activation='softmax')
-        net = tflearn.regression(net, optimizer='adam', learning_rate=0.001, loss='categorical_crossentropy')
-
-        # Training
-        self.model = tflearn.DNN(net, tensorboard_verbose=0)
-
-
 class AIStg(StgBase):
 
     def __init__(self, unit=1, train=True):
@@ -70,7 +33,7 @@ class AIStg(StgBase):
         self.input_size = 13
         self.batch_size = 50
         self.n_step = 20
-        self.output_size = 26
+        self.output_size = 2
         self.n_hidden_units = 10
         self.lr = 0.006
         self.normalization_model = True
@@ -78,11 +41,12 @@ class AIStg(StgBase):
         # tf.Session()
         self._session = None
         self.train_validation_rate = 0.8
-        self.is_load_model_if_exist = True
+        self.is_load_model_if_exist = False
         folder_path = get_folder_path('my_net', create_if_not_found=False)
-        file_path = os.path.join(folder_path, f"save_net_{self.normalization_model}.ckpt")
+        file_path = os.path.join(folder_path, f"net_{self.normalization_model}.tfl")
         self.model_file_path = file_path
         self.training_iters = 600
+        self.xs_train, self.xs_validation, self.ys_train, self.ys_validation = None, None, None, None
 
     @property
     def session(self):
@@ -96,7 +60,7 @@ class AIStg(StgBase):
     @property
     def model(self) -> tflearn.models.DNN:
         if self._model is None:
-            self._model = self.build_model()
+            self._model = self._build_model()
         return self._model
 
     def get_factors(self, md_df: pd.DataFrame, tail_n=None):
@@ -122,20 +86,24 @@ class AIStg(StgBase):
 
         return factors
 
-    def get_factors_with_labels(self, md_df):
+    def get_x_y(self, md_df):
         factors = self.get_factors(md_df)
         price_arr = factors[:, 0]
         self.input_size = factors.shape[1]
-        labels = self.calc_label_with_future_value(price_arr, -0.01, 0.01)
-        idx_last_available_label = get_last_idx(labels, lambda x: x.sum() == 0)
+        ys_all = self.calc_y_against_future_data(price_arr, -0.01, 0.01)
+        idx_last_available_label = get_last_idx(ys_all, lambda x: x.sum() == 0)
         factors = factors[:idx_last_available_label + 1, :]
-        labels = labels[:idx_last_available_label + 1, :]
-        # if self.normalization_model:
-        #     factors = (factors - np.mean(factors, 0)) / np.std(factors, 0)
+        range_from = self.n_step - 1
+        range_to = idx_last_available_label + 1
+        xs = np.zeros((range_to - range_from, self.n_step, self.input_size))
+        for num, index in enumerate(range(range_from, range_to)):
+            xs[num, :, :] = factors[(index - self.n_step + 1):(index + 1), :]
 
-        return factors, labels
+        ys = ys_all[range_from:range_to, :]
 
-    def calc_label_with_future_value(self, value_arr: np.ndarray, min_pct: float, max_pct: float, max_future=None):
+        return xs, ys
+
+    def calc_y_against_future_data(self, value_arr: np.ndarray, min_pct: float, max_pct: float, max_future=None):
         """
         根据时间序列数据 pct_arr 计算每一个时点目标标示 -1 0 1
         计算方式：
@@ -206,7 +174,7 @@ class AIStg(StgBase):
         # returned xs, ys_value and shape (batch, step, input)
         return xs, ys, examples_index_list
 
-    def build_model(self) -> tflearn.models.DNN:
+    def _build_model(self) -> tflearn.models.DNN:
         # hyperparameters
         # lr = LR
         # batch_size = BATCH_SIZE
@@ -215,19 +183,29 @@ class AIStg(StgBase):
         # n_step = TIME_STEPS  # time steps
         # n_hidden_units = CELL_SIZE  # neurons in hidden layer
         # n_classes = OUTPUT_SIZE  # MNIST classes (0-9 digits)
-        model = LSTMRNN(
-            self.n_step, self.input_size, self.n_hidden_units, self.output_size, self.lr, self.batch_size,
-            self.normalization_model).model
-        return model
+        # Network building
+        net = tflearn.input_data([None, self.n_step, self.input_size])
+        net = tflearn.layers.normalization.batch_normalization(net)
+        net = tflearn.lstm(net, self.n_hidden_units, dropout=0.8)
+        net = tflearn.fully_connected(net, self.output_size, activation='softmax')
+        net = tflearn.regression(net, optimizer='adam', learning_rate=0.001, loss='categorical_crossentropy')
+
+        # Training
+        _model = tflearn.DNN(net, tensorboard_verbose=0, checkpoint_path='model.tfl.ckpt')
+        return _model
 
     def train(self, md_df):
-        factors, labels = self.get_factors_with_labels(md_df)
-        factors_train, factors_validation, labels_train, labels_validation = self.separate_train_validation(
-            factors, labels)
-
+        xs, ys = self.get_x_y(md_df)
+        # xs_train, xs_validation, ys_train, ys_validation = self.separate_train_validation(xs, ys)
+        xs_train, xs_validation, ys_train, ys_validation = train_test_split(xs, ys, test_size=0.2, random_state=1)
+        self.xs_train, self.xs_validation, self.ys_train, self.ys_validation = xs_train, xs_validation, ys_train, ys_validation
         # model.fit(trainX, trainY, validation_set=(testX, testY), show_metric=True, batch_size=32)
-        self.model.fit()
-
+        sess = self.session
+        with sess.as_default():
+            tflearn.is_training(True)
+            self.model.fit(xs_train, ys_train, validation_set=(xs_validation, ys_validation),
+                           show_metric=True, batch_size=32, n_epoch=4)
+            tflearn.is_training(False)
         return self.model
 
     def save_model(self):
@@ -235,10 +213,11 @@ class AIStg(StgBase):
         将模型导出到文件
         :return:
         """
-        saver = tf.train.Saver(tf.trainable_variables(), max_to_keep=5)
-        save_path = saver.save(self.session, self.model_file_path)
-        logger.info("模型保存到: %s", save_path)
-        return save_path
+        # saver = tf.train.Saver(tf.trainable_variables(), max_to_keep=5)
+        # save_path = saver.save(self.session, self.model_file_path)
+        self.model.save(self.model_file_path)
+        logger.info("模型保存到: %s", self.model_file_path)
+        return self.model_file_path
 
     def load_model_if_exist(self):
         """
@@ -248,75 +227,60 @@ class AIStg(StgBase):
         if self.is_load_model_if_exist and self.model_file_exists():
             # 检查文件是否存在
             model = self.model      # 这句话是必须的，需要实现建立模型才可以加载
-            sess = self.session
-            saver = tf.train.Saver(tf.trainable_variables())
-            save_path = saver.restore(sess, self.model_file_path)
-            logger.info("load from path: %s", save_path)
+            # sess = self.session
+            # saver = tf.train.Saver(tf.trainable_variables())
+            # save_path = saver.restore(sess, self.model_file_path)
+            model.load(self.model_file_path)
+            logger.info("load from path: %s", self.model_file_path)
             return True
 
         return False
 
     def predict_test(self, md_df):
         logger.info('开始预测')
-        sess = self.session
-        # saver = tf.train.Saver()
-        # saver.restore(sess, f"my_net/save_net_{self.model.normalization_model}.ckpt")
-        factors, labels = self.get_factors_with_labels(md_df)
+        # sess = self.session
+        if self.xs_train is None:
+            xs, ys = self.get_x_y(md_df)
+            xs_train, xs_validation, ys_train, ys_validation = train_test_split(xs, ys, test_size=0.2, random_state=1)
+            self.xs_train, self.xs_validation, self.ys_train, self.ys_validation = xs_train, xs_validation, ys_train, ys_validation
+
         logger.info("批量预测")
-        batch_xs, batch_ys, examples_index_list = self.get_batch_by_random(factors, labels)
-        feed_dict = {
-            self.model.xs: batch_xs,
-            self.model.ys: batch_ys,
-            self.model.is_training: False,
-            # TODO: model.is_training should be False
-        }
-        pred = sess.run(tf.argmax(self.model.pred, 1), feed_dict)
-        logger.info("accuracy: %.2f%%" % (sum(pred == np.argmax(batch_ys, axis=1)) / len(pred) * 100))
-        logger.info("pred: \n%s\n%s", pred, np.argmax(batch_ys, axis=1))
+        result = self.model.evaluate(self.xs_validation, self.ys_validation, batch_size=self.batch_size)
+        logger.info("accuracy: %.2f%%" % (result[0] * 100))
 
-        logger.info("独立样本预测")
-        # batch_xs, batch_ys, available_batch_size = self.get_batch_by_random(factors, labels)
-        pred_all = []
-        for n in range(len(examples_index_list)):
-            feed_dict = {
-                self.model.xs: batch_xs[n:n + 1, :, :],
-                self.model.ys: batch_ys[n:n + 1, :],
-                self.model.is_training: False,
-                # TODO: model.is_training should be False
-            }
-            pred = sess.run(tf.argmax(self.model.pred, 1), feed_dict)
-            pred_all.extend(pred)
-
-        logger.info("accuracy: %.2f%%" % (sum(pred_all == np.argmax(batch_ys, axis=1)) / len(pred_all) * 100))
-        logger.info("pred: \n%s\n%s", np.array(pred_all), np.argmax(batch_ys, axis=1))
+        logger.info("批量预测2")
+        real_ys = np.argmax(self.ys_validation, axis=1)
+        # pred_ys = np.argmax(self.model.predict_label(self.xs_validation), axis=1) 与 evaluate 结果刚好相反
+        # 因此不使用 predict_label 函数
+        pred_ys = np.argmax(self.model.predict(self.xs_validation), axis=1)
+        logger.info("accuracy: %.2f%%" % (sum(pred_ys == real_ys) / len(pred_ys) * 100))
+        logger.info("pred/real: \n%s\n%s", pred_ys, real_ys)
 
         logger.info("独立样本预测(predict_latest)")
-        # batch_xs, batch_ys, available_batch_size = self.get_batch_by_random(factors, labels)
-        pred_all, label_all, label_target = [], [], np.argmax(labels, axis=1)
-        for num, index in enumerate(examples_index_list):
-            pred_mark = self.predict_latest(md_df.iloc[:(index + 1), :])
-            pred_all.append(pred_mark)
-            label_all.append(label_target[index])
-            if pred_mark != pred_all[num] or label_target[index] != np.argmax(batch_ys, axis=1)[num]:
-                logger.debug("(%d %d) (%d %d)",
-                             pred_mark, label_target[index], pred_all[num], np.argmax(batch_ys, axis=1)[num])
+        pred_ys = []
+        for idx, y in enumerate(self.ys_validation):
+            x = self.xs_validation[idx:idx+1, :, :]
+            pred_y = self.model.predict(x)
+            pred_ys.extend(np.argmax(pred_y, axis=1))
 
-        pred_all, label_all = np.array(pred_all), np.array(label_all)
-        logger.info("accuracy: %.2f%%" % (sum(pred_all == label_all) / len(pred_all) * 100))
-        logger.info("pred: \n%s\n%s", pred_all, label_all)
+        pred_ys = np.array(pred_ys)
+        logger.info("accuracy: %.2f%%" % (sum(pred_ys == real_ys) / len(pred_ys) * 100))
+        logger.info("pred: \n%s\n%s", pred_ys, real_ys)
 
     def predict_latest(self, md_df):
+        """
+        计算最新一个 X，返回分类结果
+        二分类，返回 0 / 1
+        三分类，返回 0 / 1 / 2
+        :param md_df:
+        :return:
+        """
         factors = self.get_factors(md_df, tail_n=self.n_step)
-        batch_xs = self.get_batch_xs(factors)
-        feed_dict = {
-            self.model.xs: batch_xs,
-            self.model.is_training: False,
-            # TODO: model.is_training should be False
-        }
-        pred_mark = self.session.run(tf.argmax(self.model.pred, 1), feed_dict)[0]
+        x = self.get_batch_xs(factors)
+        pred_y = np.argmax(self.model.predict(x), axis=1)[-1]
         # is_buy, is_sell = pred_mark == 1, pred_mark == 0
         # return is_buy, is_sell
-        return pred_mark
+        return pred_y
 
     def on_prepare_min1(self, md_df, context):
         if md_df is None:

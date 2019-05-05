@@ -132,7 +132,7 @@ class AIStg(StgBase):
         self.input_size = 13
         self.batch_size = 50
         self.n_step = 20
-        self.output_size = 26
+        self.output_size = 2
         self.n_hidden_units = 10
         self.lr = 0.006
         self.normalization_model = True
