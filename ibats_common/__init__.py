@@ -9,7 +9,9 @@
 """
 from ibats_utils.mess import get_folder_path
 import os
+import re
 
-local_model_folder_path = get_folder_path('ibats_common', create_if_not_found=False)
+
+local_model_folder_path = get_folder_path(re.compile('^ibats[\w]+'), create_if_not_found=False)  # 'ibats_common'
 local_root_path = os.path.abspath(
     os.path.join(local_model_folder_path, os.path.pardir))
