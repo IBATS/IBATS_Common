@@ -15,6 +15,8 @@ import tflearn
 from sklearn.model_selection import train_test_split
 import numpy as np
 import random
+
+from ibats_common import local_model_folder_path
 from ibats_common.analysis.plot import show_rr_with_md
 from ibats_common.common import PeriodType, RunMode, BacktestTradeMode, ExchangeName, ContextKey, Direction, CalcMode
 from ibats_common.strategy import StgBase
@@ -191,7 +193,9 @@ class AIStg(StgBase):
         net = tflearn.regression(net, optimizer='adam', learning_rate=0.001, loss='categorical_crossentropy')
 
         # Training
-        _model = tflearn.DNN(net, tensorboard_verbose=0, checkpoint_path='model.tfl.ckpt')
+        tensorboard_dir = os.path.join(local_model_folder_path, 'tflearn_logs')
+        _model = tflearn.DNN(net, tensorboard_verbose=3, checkpoint_path='model.tfl.ckpt',
+                             tensorboard_dir=tensorboard_dir)
         return _model
 
     def train(self, md_df):
@@ -331,23 +335,6 @@ class AIStg(StgBase):
                 self.open_short(instrument_id, close, self.unit)
             else:
                 logger.debug("%s %s     %.2f holding", self.trade_agent.curr_timestamp, instrument_id, close)
-
-    def separate_train_validation(self, factors, labels):
-        """
-        将 结果按照比例拆分成训练集、验证集
-        :param factors:
-        :param labels:
-        :return:
-        """
-        data_len = factors.shape[0]
-        train_len = int(self.train_validation_rate * data_len)
-        # 至少留给 validation 样本集一个 batch_size 的数量
-        if train_len > (data_len - self.batch_size - self.n_step):
-            train_len = data_len - self.batch_size - self.n_step
-
-        factors_train, factors_validation = factors[:train_len, :], factors[train_len:, :]
-        labels_train, labels_validation = labels[:train_len, :], labels[train_len:, :]
-        return factors_train, factors_validation, labels_train, labels_validation
 
     def model_file_exists(self):
         folder_path, file_name = os.path.split(self.model_file_path)
