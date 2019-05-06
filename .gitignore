@@ -181,3 +181,4 @@ fabric.properties
 events.out.tfevents.*
 *.ckpt.*
 checkpoint
+*.tfl.*
