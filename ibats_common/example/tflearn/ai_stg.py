@@ -44,11 +44,13 @@ class AIStg(StgBase):
         self._session = None
         self.train_validation_rate = 0.8
         self.is_load_model_if_exist = False
-        folder_path = get_folder_path('my_net', create_if_not_found=False)
-        file_path = os.path.join(folder_path, f"net_{self.normalization_model}.tfl")
-        self.model_file_path = file_path
         self.training_iters = 600
         self.xs_train, self.xs_validation, self.ys_train, self.ys_validation = None, None, None, None
+        self.classify_wave_rate = 0.0033
+        self.predict_test_random_state = 1
+        folder_path = get_folder_path('my_net', create_if_not_found=False)
+        file_path = os.path.join(folder_path, f"net_wr_{int(self.classify_wave_rate*10000)}.tfl")
+        self.model_file_path = file_path
 
     @property
     def session(self):
@@ -92,7 +94,8 @@ class AIStg(StgBase):
         factors = self.get_factors(md_df)
         price_arr = factors[:, 0]
         self.input_size = factors.shape[1]
-        ys_all = self.calc_y_against_future_data(price_arr, -0.01, 0.01)
+        # ys_all = self.calc_y_against_future_data(price_arr, -0.01, 0.01)
+        ys_all = self.calc_y_against_future_data(price_arr, -self.classify_wave_rate, self.classify_wave_rate)
         idx_last_available_label = get_last_idx(ys_all, lambda x: x.sum() == 0)
         factors = factors[:idx_last_available_label + 1, :]
         range_from = self.n_step - 1
@@ -201,7 +204,8 @@ class AIStg(StgBase):
     def train(self, md_df):
         xs, ys = self.get_x_y(md_df)
         # xs_train, xs_validation, ys_train, ys_validation = self.separate_train_validation(xs, ys)
-        xs_train, xs_validation, ys_train, ys_validation = train_test_split(xs, ys, test_size=0.2, random_state=1)
+        xs_train, xs_validation, ys_train, ys_validation = train_test_split(
+            xs, ys, test_size=0.2, random_state=self.predict_test_random_state)
         self.xs_train, self.xs_validation, self.ys_train, self.ys_validation = xs_train, xs_validation, ys_train, ys_validation
         # model.fit(trainX, trainY, validation_set=(testX, testY), show_metric=True, batch_size=32)
         sess = self.session
@@ -296,8 +300,9 @@ class AIStg(StgBase):
         if not is_load:
             # 训练模型
             self.train(md_df)
-            self.predict_test(md_df)
             self.save_model()
+
+        self.predict_test(md_df)
 
     def on_min1(self, md_df, context):
         pred_mark = self.predict_latest(md_df)
