@@ -8,3 +8,4 @@ xlrd>=1.1.0
 pytest>=4.3.0
 IBATS-Utils>=1.1.6
 matplotlib>=3.0.1
+seaborn>=0.9
