@@ -18,8 +18,42 @@ from matplotlib import cm
 import logging
 from ibats_common.common import Action, Direction
 from ibats_common.strategy_handler import strategy_handler_loader
+import matplotlib.mlab as mlab
+import seaborn as sns
+from scipy import stats
 
 logger = logging.getLogger(__name__)
+
+
+def hist_norm(data, num_bins=10):
+    """hist 分布图及正太分布曲线"""
+    mu = data.mean()  # mean of distribution
+    sigma = data.std()  # standard deviation of distribution
+    # ax = pct_change_s.hist(bins=50, density=1)
+    fig, ax = plt.subplots()
+    # the histogram of the data
+    n, bins, patches = ax.hist(data, num_bins, density=1)
+    # def norm_func(x, mu, sigma):
+    #     pdf = np.exp(-((x - mu)**2)/(2*sigma**2)) / (sigma * np.sqrt(2*np.pi))
+    #     return pdf
+    # y = norm_func(bins, mu, sigma)  # 与 mlab.normpdf(bins, mu, sigma) 相同
+    y = mlab.normpdf(bins, mu, sigma)
+    ax.plot(bins, y, '--')
+    ax.set_xlabel('pct change')
+    ax.set_ylabel('change rate')
+    ax.set_title(r'pct change hist bar')
+    plt.show()
+
+
+def hist_norm(data, num_bins=10):
+    """hist 分布图及正太分布曲线"""
+    sns.set_palette("hls")
+    sns.distplot(
+        data, bins=num_bins,
+        fit=stats.norm,
+        kde_kws={"color": "darkorange", "lw": 1, "label": "KDE", "linestyle": "--"},
+        hist_kws={"color": "b"})
+    plt.show()
 
 
 def show_cash_and_margin(stg_run_id):
