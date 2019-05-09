@@ -7,4 +7,10 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
+import pandas as pd
+
+pd.set_option('display.width', 240)
+pd.set_option('display.max_columns', 20)
+pd.set_option('display.float_format', '{:,.4f}'.format)
+
 
