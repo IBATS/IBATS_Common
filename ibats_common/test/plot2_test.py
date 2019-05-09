@@ -8,7 +8,7 @@
 @desc    : 
 """
 import unittest
-from ibats_common.analysis.plot import show_order, show_trade
+from ibats_common.analysis.plot_db import show_order, show_trade
 
 
 class SomeTest(unittest.TestCase):  # 继承unittest.TestCase
