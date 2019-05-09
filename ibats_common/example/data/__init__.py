@@ -12,7 +12,7 @@ import pandas as pd
 from ibats_common import local_model_folder_path
 
 
-def load_data(file_name, encoding=None):
+def load_data(file_name, encoding=None)-> pd.DataFrame:
     file_path = os.path.join(local_model_folder_path, 'example', 'data', file_name)
     df = pd.read_csv(file_path, encoding=encoding)
     return df
