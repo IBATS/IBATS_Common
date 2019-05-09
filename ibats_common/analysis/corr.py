@@ -29,26 +29,28 @@ io.parquet.[engine]
 mode.[chained_assignment, sim_interactive, use_inf_as_na, use_inf_as_null]
 plotting.matplotlib.[register_converters]
 """
-pd.set_option('display.width', 240)
-pd.set_option('display.max_columns', 20)
-pd.set_option('display.float_format', '{:,.4f}'.format)
 
 
-def corr():
-    df = load_data('RB.csv')
-    df['open_t1'] = df['open'].shift(-1)
-    df['high_t1'] = df['high'].shift(-1)
-    df['low_t1'] = df['low'].shift(-1)
-    df['close_t1'] = df['close'].shift(-1)
-    df['ma5'] = df['close'].rolling(window=5).mean()
-    df['ma10'] = df['close'].rolling(window=10).mean()
-    df['ma20'] = df['close'].rolling(window=20).mean()
-    df['pct_change_vol'] = df['volume'].pct_change()
-    df['pct_change'] = df['close'].pct_change()
-    df['pct_change_T1'] = df['pct_change'].shift(-1)
-    df.dropna().corr()
-    df.describe()
+def corr(df: pd.DataFrame, add_additional_cols=True):
+    if add_additional_cols:
+        data_df = df.copy()
+        data_df['open_t1'] = data_df['open'].shift(-1)
+        data_df['high_t1'] = data_df['high'].shift(-1)
+        data_df['low_t1'] = data_df['low'].shift(-1)
+        data_df['close_t1'] = data_df['close'].shift(-1)
+        data_df['ma5'] = data_df['close'].rolling(window=5).mean()
+        data_df['ma10'] = data_df['close'].rolling(window=10).mean()
+        data_df['ma20'] = data_df['close'].rolling(window=20).mean()
+        data_df['pct_change_vol'] = data_df['volume'].pct_change()
+        data_df['pct_change'] = data_df['close'].pct_change()
+        data_df['pct_change_T1'] = data_df['pct_change'].shift(-1)
+    else:
+        data_df = df
+
+    corr_df = data_df.dropna().corr()
+    return corr_df
 
 
 if __name__ == "__main__":
-    pass
+    df = load_data('RB.csv')
+    corr(df)
