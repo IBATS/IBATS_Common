@@ -86,32 +86,75 @@ def plot_rr_df(df: pd.DataFrame, col_name_list=None, enable_show_plot=True, enab
     else:
         data_df = df
 
-    if enable_show_plot:
+    def func():
+        """绘图函数"""
         ax = data_df.plot()
         ax.set_title(
             f"Return Rate " if name is None else f"Return Rate [{name}] "  
             f"{date_2_str(min(data_df.index))} - {date_2_str(max(data_df.index))} ({data_df.shape[0]} days)")
+
+    if enable_show_plot:
+        func()
         plt.show()
 
     if enable_save_plot:
-        ax = data_df.plot()
-        ax.set_title(
-            f"Return Rate " if name is None else f"Return Rate [{name}] "  
+        func()
+        file_name = get_file_name(f'rr', name=name)
+        file_path = os.path.join(get_cache_folder_path(), file_name)
+        plt.savefig(file_path, dpi=75)
+    else:
+        file_path = None
+
+    return file_path
+
+
+def plot_scatter_matrix(df: pd.DataFrame, diagonal='hist', col_name_list=None, enable_show_plot=True, enable_save_plot=False, name=None):
+    """
+    plot scatter_matrix
+    https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.plotting.scatter_matrix.html
+    :param df:
+    :param diagonal: diagonal，必须且只能在{'hist', 'kde'}中选择1个，
+    'hist'表示直方图(Histogram plot),'kde'表示核密度估计(Kernel Density Estimation)
+    该参数是scatter_matrix函数的关键参数
+    :param col_name_list:
+    :param enable_show_plot:
+    :param enable_save_plot:
+    :param name:
+    :return:
+    """
+    if col_name_list is not None:
+        data_df = df[col_name_list]
+    else:
+        data_df = df
+
+    def func():
+        """绘图函数"""
+        pd.plotting.scatter_matrix(data_df)
+        plt.suptitle(
+            f"Scatter Matrix " if name is None else f"Scatter Matrix [{name}] "  
             f"{date_2_str(min(data_df.index))} - {date_2_str(max(data_df.index))} ({data_df.shape[0]} days)")
 
-        file_name = get_file_name(f'rr', name=name)
-        rr_plot_file_path = os.path.join(get_cache_folder_path(), file_name)
-        plt.savefig(rr_plot_file_path, dpi=75)
-    else:
-        rr_plot_file_path = None
+    if enable_show_plot:
+        func()
+        plt.show()
 
-    return rr_plot_file_path
+    if enable_save_plot:
+        func()
+        file_name = get_file_name('scatter_matrix', name=name)
+        file_path = os.path.join(get_cache_folder_path(), file_name)
+        plt.savefig(file_path, dpi=75)
+    else:
+        file_path = None
+
+    return file_path
 
 
 def hist_norm(data, bins=10, enable_show_plot=True, enable_save_plot=False, name=None):
     """hist 分布图及正太分布曲线"""
     n, bins_v, file_name = None, None, None
-    if enable_show_plot:
+
+    def func():
+        """绘图函数"""
         # ax = pct_change_s.hist(bins=50, density=1)
         fig, ax = plt.subplots()
         # the histogram of the data
@@ -120,18 +163,13 @@ def hist_norm(data, bins=10, enable_show_plot=True, enable_save_plot=False, name
         # ax.set_xlabel('pct change')
         # ax.set_ylabel('change rate')
         ax.set_title(f"{'Data' if name is None else name} Histogram (mean={mean:.4f} std={std:.4f})")
+
+    if enable_show_plot:
+        func()
         plt.show()
 
     if enable_save_plot:
-        # ax = pct_change_s.hist(bins=50, density=1)
-        fig, ax = plt.subplots()
-        # the histogram of the data
-        _, _, patches = ax.hist(data, bins, density=True)
-        n, bins_v, mean, std = plot_norm(data, bins=bins, ax=ax)
-        # ax.set_xlabel('pct change')
-        # ax.set_ylabel('change rate')
-        ax.set_title(f"{'Data' if name is None else name} Histogram (mean={mean:.4f} std={std:.4f})")
-
+        func()
         file_name = get_file_name(f'hist', name=name)
         rr_plot_file_path = os.path.join(get_cache_folder_path(), file_name)
         plt.savefig(rr_plot_file_path, dpi=75)
