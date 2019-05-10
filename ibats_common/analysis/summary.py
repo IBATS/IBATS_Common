@@ -7,19 +7,19 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
-from scipy.stats import anderson, normaltest
-from collections import defaultdict
-from ibats_common.analysis import get_report_folder_path, get_cache_folder_path
-from ibats_common.analysis.corr import corr
-from ibats_common.analysis.plot import drawdown_plot, plot_rr_df
-from ibats_common.analysis.plot_db import get_rr_with_md
-from ibats_common.analysis.wave import wave_hist
-import pandas as pd
-import numpy as np
-import ffn
-import docx
 import logging
 import os
+from collections import defaultdict
+
+import docx
+import numpy as np
+import pandas as pd
+from scipy.stats import anderson, normaltest
+
+from ibats_common.analysis import get_report_folder_path
+from ibats_common.analysis.corr import corr
+from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist
+from ibats_common.analysis.plot_db import get_rr_with_md
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
                drawdown_col_name_list=None,
                enable_show_plot=True,
                enable_save_plot=False,
-name=None
+               name=None
                ):
     """
     汇总展示数据分析结果，同时以 dict 形式返回各项指标分析结果
@@ -110,16 +110,21 @@ name=None
     # 获取统计数据
     stats = df.calc_stats()
     stats.set_riskfree_rate(risk_free)
-    enable_kwargs_dic = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot}
+    enable_kwargs_dic = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot, "name": name}
     file_path = plot_rr_df(df, **enable_kwargs_dic)
     if enable_save_plot:
         file_path_dic['rr'] = file_path
 
     # histgram 分布图
-    n_bins_dic = wave_hist(df, perf_stats=stats, figure_4_each_col=figure_4_each_col, col_transfer_dic=col_transfer_dic)
-    ret_dic['wave_hist'] = n_bins_dic
+    n_bins_dic, file_path = wave_hist(df, figure_4_each_col=figure_4_each_col, col_transfer_dic=col_transfer_dic,
+                           **enable_kwargs_dic)
+    ret_dic['hist'] = n_bins_dic
+    if enable_save_plot:
+        file_path_dic['hist'] = file_path
+
     # 回撤曲线
-    drawdown_df, file_path = drawdown_plot(df, perf_stats=stats, col_name_list=drawdown_col_name_list, **enable_kwargs_dic)
+    drawdown_df, file_path = drawdown_plot(df, perf_stats=stats, col_name_list=drawdown_col_name_list,
+                                           **enable_kwargs_dic)
     if enable_save_plot:
         file_path_dic['drawdown'] = file_path
 
@@ -178,23 +183,27 @@ def _test_summary_stg():
     summary_stg(stg_run_id)
 
 
-def summary_stg_2_docx(stg_run_id=None):
-    from ibats_common.backend.mess import get_latest_stg_run_id
-    from ibats_common.analysis.plot_db import show_order, show_cash_and_margin, show_rr_with_md
-    if stg_run_id is None:
-        stg_run_id = get_latest_stg_run_id()
-
-    heading_title = f'策略分析报告[{stg_run_id}]'
+def summary_stg_2_docx(stg_run_id=None, module_name_replacement_if_main='ibats_common.example.ma_cross_stg'):
+    """
+    生成策略分析报告
+    :param stg_run_id:
+    :param module_name_replacement_if_main:
+    :return:
+    """
     # rr_plot_file_path = os.path.join(cache_folder_path, 'rr_plot.png')
-    sum_df, symbol_rr_dic = get_rr_with_md(
+    stg_run_id, sum_df, symbol_rr_dic = get_rr_with_md(
         stg_run_id,
-        module_name_replacement_if_main='ibats_common.example.ma_cross_stg'
+        module_name_replacement_if_main=module_name_replacement_if_main
     )
     ret_dic, each_col_dic, file_path_dic = summary_rr(sum_df, enable_save_plot=True)
 
     # show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
     # df = show_cash_and_margin(stg_run_id)
 
+    # 生成 docx 万恶将所需变量
+    heading_title = f'策略分析报告[{stg_run_id}]'
+
+    # 生成 docx 文件
     document = docx.Document()
     # 设置默认字体
     document.styles['Normal'].font.name = '微软雅黑'
@@ -216,9 +225,9 @@ def summary_stg_2_docx(stg_run_id=None):
     document.add_heading(heading_title, 0)
     document.add_heading(u'策略回测收益曲线', 1)
     # 增加图片（此处使用相对位置）
-    document.add_picture(rr_plot_file_path)  # , width=docx.shared.Inches(1.25)
+    document.add_picture(file_path_dic['rr'])  # , width=docx.shared.Inches(1.25)
     document.add_heading(u'策略回撤曲线', 2)
-    document.add_picture(rr_plot_file_path)  # , width=docx.shared.Inches(1.25)
+    document.add_picture(file_path_dic['drawdown'])  # , width=docx.shared.Inches(1.25)
 
     # 添加文本
     paragraph = document.add_paragraph(u'添加了文本')
