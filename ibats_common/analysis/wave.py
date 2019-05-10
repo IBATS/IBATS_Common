@@ -21,11 +21,12 @@ import ffn
 logger = logging.getLogger(__name__)
 
 
-def wave_hist(df: pd.DataFrame, columns=None, bins=50, figure_4_each_col=True,
+def wave_hist(df: pd.DataFrame, perf_stats=None, columns=None, bins=50, figure_4_each_col=True,
               col_transfer_dic: (dict, None) = None):
     """
     波动率分布图
     :param df:
+    :param perf_stats: df.calc_stats()
     :param columns: 显示哪些列
     :param bins: bar 数量
     :param figure_4_each_col: 每一个col单独一张图
@@ -64,6 +65,8 @@ def wave_hist(df: pd.DataFrame, columns=None, bins=50, figure_4_each_col=True,
                 else:
                     data_df.rename(columns=rename_dic, inplace=True)
 
+        data_df.dropna(inplace=True)
+
     columns = list(data_df.columns)
     n_bins_dic = {}
     if figure_4_each_col:
@@ -75,9 +78,8 @@ def wave_hist(df: pd.DataFrame, columns=None, bins=50, figure_4_each_col=True,
                 logger.exception('column %s 数据类型无效，无法进行 np.isinf 计算', col_name)
                 raise exp from exp
 
-            title = col_name
-            n, bins = hist_norm(data, bins=bins, title=title)
-            n_bins_dic[col_name] = (n, bins)
+            n, bins_v = hist_norm(data, bins=bins, name=col_name)
+            n_bins_dic[col_name] = (n, bins_v)
 
     else:
         ax = data_df.hist(bins=bins)
@@ -98,11 +100,14 @@ def wave_hist(df: pd.DataFrame, columns=None, bins=50, figure_4_each_col=True,
                 logger.exception('column %s 数据类型无效，无法进行 np.isinf 计算', col_name)
                 raise exp from exp
 
-            n, bins_v = plot_norm(data, bins=bins, ax=ax_sub)
+            n, bins_v, mean, std = plot_norm(data, bins=bins, ax=ax_sub)
+            # 字太多无法显示
+            # ax_sub.set_title(f"{col_name}\n(mean={mean:.4f} std={std:.4f})")
             n_bins_dic[col_name] = (n, bins_v)
 
         plt.show()
-        return n_bins_dic
+
+    return n_bins_dic
 
 
 if __name__ == "__main__":
@@ -111,4 +116,4 @@ if __name__ == "__main__":
     col_transfer_dic = {
         'return': ['open', 'high', 'low', 'close', 'volume']
     }
-    wave_hist(df, figure_4_each_col=False, col_transfer_dic=col_transfer_dic)
+    n_bins_dic = wave_hist(df, figure_4_each_col=False, col_transfer_dic=col_transfer_dic)
