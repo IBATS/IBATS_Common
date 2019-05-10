@@ -22,6 +22,11 @@ from ibats_common.analysis import get_cache_folder_path
 logger = logging.getLogger(__name__)
 
 
+def get_file_name(header, name=None):
+    file_name = f'{header} {np.random.randint(10000)}.png' if name is None else f'{header} {name}.png'
+    return file_name
+
+
 def drawdown_plot(df: pd.DataFrame, perf_stats=None, col_name_list=None,
                   enable_show_plot=True, enable_save_plot=False, name=None):
     """
@@ -57,7 +62,7 @@ def drawdown_plot(df: pd.DataFrame, perf_stats=None, col_name_list=None,
     if enable_save_plot:
         ax = data_df.plot()
         ax.set_title(f"Drawdown {['{:.2f}%'.format(col_mdd_dic[_] * 100) for _ in df.columns]}")
-        file_name = f'drawdown {np.random.randint(10000)}.png' if name is None else f'drawdown {name}.png'
+        file_name = get_file_name(f'drawdown', name=name)
         file_path = os.path.join(get_cache_folder_path(), file_name)
         plt.savefig(file_path, dpi=75)
     else:
@@ -94,7 +99,7 @@ def plot_rr_df(df: pd.DataFrame, col_name_list=None, enable_show_plot=True, enab
             f"Return Rate " if name is None else f"Return Rate [{name}] "  
             f"{date_2_str(min(data_df.index))} - {date_2_str(max(data_df.index))} ({data_df.shape[0]} days)")
 
-        file_name = f'rr_plot {np.random.randint(10000)}.png' if name is None else f'rr_plot {name}.png'
+        file_name = get_file_name(f'rr', name=name)
         rr_plot_file_path = os.path.join(get_cache_folder_path(), file_name)
         plt.savefig(rr_plot_file_path, dpi=75)
     else:
@@ -103,20 +108,35 @@ def plot_rr_df(df: pd.DataFrame, col_name_list=None, enable_show_plot=True, enab
     return rr_plot_file_path
 
 
-def hist_norm(data, bins=10, name=None):
+def hist_norm(data, bins=10, enable_show_plot=True, enable_save_plot=False, name=None):
     """hist 分布图及正太分布曲线"""
-    # if title is None:
-    #     title = r'hist bar'
-    # ax = pct_change_s.hist(bins=50, density=1)
-    fig, ax = plt.subplots()
-    # the histogram of the data
-    _, _, patches = ax.hist(data, bins, density=True)
-    n, bins_v, mean, std = plot_norm(data, bins=bins, ax=ax)
-    # ax.set_xlabel('pct change')
-    # ax.set_ylabel('change rate')
-    ax.set_title(f"{'Data' if name is None else name} Histogram (mean={mean:.4f} std={std:.4f})")
-    plt.show()
-    return n, bins_v
+    n, bins_v, file_name = None, None, None
+    if enable_show_plot:
+        # ax = pct_change_s.hist(bins=50, density=1)
+        fig, ax = plt.subplots()
+        # the histogram of the data
+        _, _, patches = ax.hist(data, bins, density=True)
+        n, bins_v, mean, std = plot_norm(data, bins=bins, ax=ax)
+        # ax.set_xlabel('pct change')
+        # ax.set_ylabel('change rate')
+        ax.set_title(f"{'Data' if name is None else name} Histogram (mean={mean:.4f} std={std:.4f})")
+        plt.show()
+
+    if enable_save_plot:
+        # ax = pct_change_s.hist(bins=50, density=1)
+        fig, ax = plt.subplots()
+        # the histogram of the data
+        _, _, patches = ax.hist(data, bins, density=True)
+        n, bins_v, mean, std = plot_norm(data, bins=bins, ax=ax)
+        # ax.set_xlabel('pct change')
+        # ax.set_ylabel('change rate')
+        ax.set_title(f"{'Data' if name is None else name} Histogram (mean={mean:.4f} std={std:.4f})")
+
+        file_name = get_file_name(f'hist', name=name)
+        rr_plot_file_path = os.path.join(get_cache_folder_path(), file_name)
+        plt.savefig(rr_plot_file_path, dpi=75)
+
+    return n, bins_v, file_name
 
 
 def plot_norm(data: pd.Series, bins=10, ax=None, is_show_plot=None):
@@ -164,8 +184,8 @@ def hist_norm_sns(data, bins=10):
     plt.show()
 
 
-def wave_hist(df: pd.DataFrame, perf_stats=None, columns=None, bins=50, figure_4_each_col=True,
-              col_transfer_dic: (dict, None) = None):
+def wave_hist(df: pd.DataFrame, columns=None, bins=50, figure_4_each_col=True,
+              col_transfer_dic: (dict, None) = None, enable_show_plot=True, enable_save_plot=False, name=None):
     """
     波动率分布图
     :param df:
@@ -174,9 +194,11 @@ def wave_hist(df: pd.DataFrame, perf_stats=None, columns=None, bins=50, figure_4
     :param bins: bar 数量
     :param figure_4_each_col: 每一个col单独一张图
     :param col_transfer_dic: 列值转换
+    :param enable_show_plot:
+    :param enable_save_plot:
+    :param name:
     :return:
     """
-
     if columns is not None:
         data_df = df[columns].copy()
     else:
@@ -211,7 +233,7 @@ def wave_hist(df: pd.DataFrame, perf_stats=None, columns=None, bins=50, figure_4
         data_df.dropna(inplace=True)
 
     columns = list(data_df.columns)
-    n_bins_dic = {}
+    n_bins_dic, file_path = {}, None
     if figure_4_each_col:
         for col_name in columns:
             data = data_df[col_name]
@@ -221,36 +243,47 @@ def wave_hist(df: pd.DataFrame, perf_stats=None, columns=None, bins=50, figure_4
                 logger.exception('column %s 数据类型无效，无法进行 np.isinf 计算', col_name)
                 raise exp from exp
 
-            n, bins_v = hist_norm(data, bins=bins, name=col_name)
+            n, bins_v, file_path_sub = hist_norm(
+                data, bins=bins, enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, name=col_name)
             n_bins_dic[col_name] = (n, bins_v)
+            if file_path is None:
+                file_path = [file_path_sub]
+            else:
+                file_path.append(file_path_sub)
 
     else:
-        ax = data_df.hist(bins=bins)
-        if isinstance(ax, np.ndarray):
-            # ax 总是一个 偶数 出现，因此，需要进行一次长度对齐
-            ax_list = list(itertools.chain(*ax))[:len(columns)]
-        else:
-            ax_list = [ax]
 
-        for col_name, ax_sub in zip(columns, ax_list):
-            # pct_change_s = df['close'].pct_change().dropna()
-            # logger.info('pct_change description:\n%s', pct_change_s.describe())
-            # logger.info('pct_change quantile:\n%s', pct_change_s.quantile([_ / 20 for _ in range(20)]))
-            data = data_df[col_name]
-            try:
-                data = data[~np.isinf(data)].dropna()
-            except TypeError as exp:
-                logger.exception('column %s 数据类型无效，无法进行 np.isinf 计算', col_name)
-                raise exp from exp
+        def func():
+            ax = data_df.hist(bins=bins)
+            if isinstance(ax, np.ndarray):
+                # ax 总是一个 偶数 出现，因此，需要进行一次长度对齐
+                ax_list = list(itertools.chain(*ax))[:len(columns)]
+            else:
+                ax_list = [ax]
 
-            n, bins_v, mean, std = plot_norm(data, bins=bins, ax=ax_sub)
-            # 字太多无法显示
-            # ax_sub.set_title(f"{col_name}\n(mean={mean:.4f} std={std:.4f})")
-            n_bins_dic[col_name] = (n, bins_v)
+            for col_name, ax_sub in zip(columns, ax_list):
+                data = data_df[col_name]
+                try:
+                    data = data[~np.isinf(data)].dropna()
+                except TypeError as exp:
+                    logger.exception('column %s 数据类型无效，无法进行 np.isinf 计算', col_name)
+                    raise exp from exp
 
-        plt.show()
+                n, bins_v, mean, std = plot_norm(data, bins=bins, ax=ax_sub)
+                # 字太多无法显示
+                # ax_sub.set_title(f"{col_name}\n(mean={mean:.4f} std={std:.4f})")
+                n_bins_dic[col_name] = (n, bins_v)
 
-    return n_bins_dic
+        if enable_show_plot:
+            func()
+            plt.show()
+
+        if enable_save_plot:
+            file_name = get_file_name(f'hist', name=name)
+            file_path = os.path.join(get_cache_folder_path(), file_name)
+            plt.savefig(file_path, dpi=75)
+
+    return n_bins_dic, file_path
 
 
 def _test_wave_hist():
