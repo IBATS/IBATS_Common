@@ -95,6 +95,7 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     汇总展示数据分析结果，同时以 dict 形式返回各项指标分析结果
     第一个返回值，df的各项分析结果
     第二个返回值，各个列的各项分析结果
+    第三个返回值，相关文件输出路径或路径列表（当 enable_save_plot=True）
     :param df:
     :param risk_free:无风险收益率
     :param figure_4_each_col:hist图使用，每一列显示单独一张图片
@@ -109,10 +110,13 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     columns = list(df.columns)
     logger.info('data columns: %s', columns)
     ret_dic, each_col_dic, file_path_dic = {}, defaultdict(dict), {}
+
     # 获取统计数据
     stats = df.calc_stats()
     stats.set_riskfree_rate(risk_free)
     enable_kwargs_dic = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot, "name": name}
+
+    # return rate plot 图
     file_path = plot_rr_df(df, **enable_kwargs_dic)
     if enable_save_plot:
         file_path_dic['rr'] = file_path
@@ -124,13 +128,14 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     if enable_save_plot:
         file_path_dic['hist'] = file_path
 
-    # 回撤曲线
+    # 回撤图
     drawdown_df, file_path = drawdown_plot(df, perf_stats=stats, col_name_list=drawdown_col_name_list,
                                            **enable_kwargs_dic)
     if enable_save_plot:
         file_path_dic['drawdown'] = file_path
 
     ret_dic['drawdown'] = drawdown_df
+
     # 单列分析
     stat_df = (df if stat_col_name_list is None else df[stat_col_name_list])
     for col_name, data in stat_df.items():
@@ -164,16 +169,16 @@ def _test_summary_md():
                col_transfer_dic=col_transfer_dic)
 
 
-def summary_stg(stg_run_id=None):
+def summary_stg(stg_run_id=None, module_name_replacement_if_main='ibats_common.example.ma_cross_stg'):
     from ibats_common.backend.mess import get_latest_stg_run_id
     from ibats_common.analysis.plot_db import show_order, show_cash_and_margin, show_rr_with_md
     if stg_run_id is None:
         stg_run_id = get_latest_stg_run_id()
 
-    show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
+    show_order(stg_run_id, module_name_replacement_if_main=module_name_replacement_if_main)
     df = show_cash_and_margin(stg_run_id)
     sum_df, symbol_rr_dic = show_rr_with_md(stg_run_id,
-                                            module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
+                                            module_name_replacement_if_main=module_name_replacement_if_main)
     summary_rr(sum_df, figure_4_each_col=True, col_transfer_dic={'return': sum_df.columns})
     # for symbol, rr_df in symbol_rr_dic.items():
     #     col_transfer_dic = {'return': rr_df.columns}
@@ -245,12 +250,30 @@ def summary_stg_2_docx(stg_run_id=None, module_name_replacement_if_main='ibats_c
 
 
 def _test_summary_stg_2_docx(auto_open_file=True):
-    import subprocess
+
     stg_run_id = None
-    file_path = summary_stg_2_docx(stg_run_id)
+    file_path = summary_stg_2_docx(stg_run_id,
+                                   # module_name_replacement_if_main='ibats_common.example.ma_cross_stg',
+                                   module_name_replacement_if_main='ibats_common.example.tflearn_stg.ai_stg',
+                                   )
     if auto_open_file:
-        # subprocess.Popen(file_path)
-        subprocess.call(["xdg-open", file_path])
+        open_file_with_system_app(file_path)
+
+
+def open_file_with_system_app(file_path):
+    import platform
+    try:
+        if platform.system() == 'Windows':
+            os.startfile(file_path)
+        elif platform.system() == 'Linux':
+            import subprocess
+            subprocess.call(["xdg-open", file_path])
+        else:
+            import subprocess
+            subprocess.call(["open", file_path])
+    except:
+        import webbrowser
+        webbrowser.open(f'file:///{file_path}')
 
 
 if __name__ == "__main__":
