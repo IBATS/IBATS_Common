@@ -18,7 +18,7 @@ from scipy.stats import anderson, normaltest
 
 from ibats_common.analysis import get_report_folder_path
 from ibats_common.analysis.corr import corr
-from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist
+from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix
 from ibats_common.analysis.plot_db import get_rr_with_md
 
 logger = logging.getLogger(__name__)
@@ -116,6 +116,14 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     stats.set_riskfree_rate(risk_free)
     enable_kwargs_dic = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot, "name": name}
 
+    # scatter_matrix
+    # diagonal，必须且只能在{'hist', 'kde'}中选择1个，
+    # 'hist'表示直方图(Histogram plot),'kde'表示核密度估计(Kernel Density Estimation)
+    # 该参数是scatter_matrix函数的关键参数
+    file_path = plot_scatter_matrix(df, diagonal='kde', **enable_kwargs_dic)
+    if enable_save_plot:
+        file_path_dic['scatter_matrix'] = file_path
+
     # return rate plot 图
     file_path = plot_rr_df(df, **enable_kwargs_dic)
     if enable_save_plot:
@@ -123,7 +131,7 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
 
     # histgram 分布图
     n_bins_dic, file_path = wave_hist(df, figure_4_each_col=figure_4_each_col, col_transfer_dic=col_transfer_dic,
-                           **enable_kwargs_dic)
+                                      **enable_kwargs_dic)
     ret_dic['hist'] = n_bins_dic
     if enable_save_plot:
         file_path_dic['hist'] = file_path
@@ -228,19 +236,17 @@ def summary_stg_2_docx(stg_run_id=None, module_name_replacement_if_main='ibats_c
     UserStyle1.font.name = '微软雅黑'
     UserStyle1._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
 
-    # 加入不同等级的标题
+    # 文件内容
     document.add_heading(heading_title, 0)
     document.add_heading(u'策略回测收益曲线', 1)
     # 增加图片（此处使用相对位置）
     document.add_picture(file_path_dic['rr'])  # , width=docx.shared.Inches(1.25)
-    document.add_heading(u'策略回撤曲线', 2)
-    document.add_picture(file_path_dic['drawdown'])  # , width=docx.shared.Inches(1.25)
 
-    # 添加文本
-    paragraph = document.add_paragraph(u'添加了文本')
-    # 设置字号
-    run = paragraph.add_run(u'设置字号')
-    run.font.size = docx.shared.Pt(24)
+    document.add_heading(u'策略回撤曲线', 1)
+    document.add_picture(file_path_dic['drawdown'])
+
+    document.add_heading(u'散点图矩阵图（Scatter Matrix）', 1)
+    document.add_picture(file_path_dic['scatter_matrix'])
 
     # 保存文件
     file_name = f"{stg_run_id} {np.random.randint(10000)}.docx"
@@ -250,7 +256,6 @@ def summary_stg_2_docx(stg_run_id=None, module_name_replacement_if_main='ibats_c
 
 
 def _test_summary_stg_2_docx(auto_open_file=True):
-
     stg_run_id = None
     file_path = summary_stg_2_docx(stg_run_id,
                                    # module_name_replacement_if_main='ibats_common.example.ma_cross_stg',
