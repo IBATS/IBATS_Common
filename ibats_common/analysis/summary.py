@@ -24,7 +24,8 @@ from ibats_common.analysis.plot_db import get_rr_with_md
 logger = logging.getLogger(__name__)
 
 
-def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8], risk_free=0.03,
+def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
+               risk_free=0.03,
                figure_4_each_col=False,
                col_transfer_dic: (dict, None) = None,
                stat_col_name_list=None,
@@ -40,6 +41,7 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8], risk
     :param figure_4_each_col:hist图使用，每一列显示单独一张图片
     :param col_transfer_dic:列转换方法
     :param stat_col_name_list:对哪些列的数据执行统计
+    :param drawdown_col_name_list:对哪些列进行回撤统计
     :return:
     """
     columns = list(df.columns)

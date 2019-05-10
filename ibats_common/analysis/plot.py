@@ -293,7 +293,7 @@ def _test_wave_hist():
     col_transfer_dic = {
         'return': ['open', 'high', 'low', 'close', 'volume']
     }
-    n_bins_dic = wave_hist(df, figure_4_each_col=False, col_transfer_dic=col_transfer_dic)
+    n_bins_dic, file_path = wave_hist(df, figure_4_each_col=False, col_transfer_dic=col_transfer_dic)
 
 
 if __name__ == "__main__":
