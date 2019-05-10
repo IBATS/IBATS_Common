@@ -8,6 +8,10 @@
 @desc    : 
 """
 import pandas as pd
+from sqlalchemy.sql import func
+from ibats_utils.db import with_db_session, get_db_session, execute_scalar
+from ibats_common.backend.orm import StgRunStatusDetail, OrderDetail, TradeDetail, StgRunInfo
+from ibats_common.backend import engines
 
 
 def csv_formatter(file_path_from, file_path_to):
@@ -26,6 +30,19 @@ def csv_formatter(file_path_from, file_path_to):
                      "OI", "WarehouseWarrant", "TermStructure"]
     ret_df = df[col_name_list].rename(columns={_: _.lower() for _ in col_name_list})
     ret_df.to_csv(file_path_to, index=False)
+
+
+def get_latest_stg_run_id() -> int:
+    """
+    查询数据库获取最新的 stg_run_id
+    :return:
+    """
+    engine_ibats = engines.engine_ibats
+    # 获取 收益曲线
+    with with_db_session(engine_ibats) as session:
+        stg_run_id = session.query(func.max(StgRunInfo.stg_run_id)).scalar()
+
+    return stg_run_id
 
 
 if __name__ == "__main__":
