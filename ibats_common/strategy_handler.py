@@ -10,6 +10,7 @@
 import json
 import logging
 from collections import defaultdict
+from functools import lru_cache
 from threading import Thread
 import warnings
 from queue import Empty
@@ -500,6 +501,7 @@ def strategy_handler_factory_multi_exchange(
     return stg_handler
 
 
+@lru_cache()
 def strategy_handler_loader(stg_run_id, module_name_replacement_if_main=None, is_4_shown=True) -> StgHandlerBase:
     """
     根据 stg_run_id 从数据库中加载相应参数，动态加载策略类，实例化 stg_handler 类
