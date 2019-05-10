@@ -16,7 +16,7 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 import random
 
-from ibats_common import local_model_folder_path
+from ibats_common import module_root_path
 from ibats_common.analysis.plot_db import show_rr_with_md
 from ibats_common.common import PeriodType, RunMode, BacktestTradeMode, ExchangeName, ContextKey, Direction, CalcMode
 from ibats_common.strategy import StgBase
@@ -196,7 +196,7 @@ class AIStg(StgBase):
         net = tflearn.regression(net, optimizer='adam', learning_rate=0.001, loss='categorical_crossentropy')
 
         # Training
-        tensorboard_dir = os.path.join(local_model_folder_path, 'tflearn_logs')
+        tensorboard_dir = os.path.join(module_root_path, 'tflearn_logs')
         _model = tflearn.DNN(net, tensorboard_verbose=3, checkpoint_path='model.tfl.ckpt',
                              tensorboard_dir=tensorboard_dir)
         return _model
@@ -353,7 +353,7 @@ class AIStg(StgBase):
 
 
 def _test_use(is_plot):
-    from ibats_common import local_model_folder_path
+    from ibats_common import module_root_path
     import os
     # 参数设置
     run_mode = RunMode.Backtest
@@ -365,7 +365,7 @@ def _test_use(is_plot):
         'init_md_date_from': '1995-1-1',  # 行情初始化加载历史数据，供策略分析预加载使用
         'init_md_date_to': '2013-1-1',
         # 'C:\GitHub\IBATS_Common\ibats_common\example\ru_price2.csv'
-        'file_path': os.path.abspath(os.path.join(local_model_folder_path, 'example', 'data', 'RB.csv')),
+        'file_path': os.path.abspath(os.path.join(module_root_path, 'example', 'data', 'RB.csv')),
         'symbol_key': 'instrument_type',
     }]
     if run_mode == RunMode.Realtime:
