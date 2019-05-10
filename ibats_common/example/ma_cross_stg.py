@@ -63,7 +63,7 @@ class MACrossStg(StgBase):
 
 
 def _test_use(is_plot):
-    from ibats_common import local_model_folder_path
+    from ibats_common import module_root_path
     import os
     # 参数设置
     run_mode = RunMode.Backtest
@@ -75,7 +75,7 @@ def _test_use(is_plot):
         'init_md_date_from': '1995-1-1',  # 行情初始化加载历史数据，供策略分析预加载使用
         'init_md_date_to': '2010-1-1',
         # 'C:\GitHub\IBATS_Common\ibats_common\example\ru_price2.csv'
-        'file_path': os.path.abspath(os.path.join(local_model_folder_path, 'example', 'data', 'RB.csv')),
+        'file_path': os.path.abspath(os.path.join(module_root_path, 'example', 'data', 'RB.csv')),
         'symbol_key': 'instrument_type',
     }]
     if run_mode == RunMode.Realtime:
@@ -112,9 +112,13 @@ def _test_use(is_plot):
 
     if is_plot:
         from ibats_common.analysis.plot_db import show_order, show_cash_and_margin, show_rr_with_md
+        from ibats_common.analysis.summary import summary_rr
         show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
-        show_cash_and_margin(stg_run_id)
-        show_rr_with_md(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
+        df = show_cash_and_margin(stg_run_id)
+        symbol_rr_dic = show_rr_with_md(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
+        for symbol, rr_df in symbol_rr_dic.items():
+            col_transfer_dic={'return': rr_df.columns}
+            summary_rr(rr_df, figure_4_each_col=True, col_transfer_dic=col_transfer_dic)
 
     return stg_run_id
 
