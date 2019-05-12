@@ -182,3 +182,7 @@ events.out.tfevents.*
 *.ckpt.*
 checkpoint
 *.tfl.*
+
+# tmp files
+ibats_common/analysis/report/*.png
+ibats_common/analysis/report/*.doc*
