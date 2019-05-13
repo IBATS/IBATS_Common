@@ -14,12 +14,12 @@ from collections import defaultdict
 import docx
 import numpy as np
 import pandas as pd
-from ibats_utils.mess import open_file_with_system_app
+from ibats_utils.mess import open_file_with_system_app, date_2_str
 from scipy.stats import anderson, normaltest
 
 from ibats_common.analysis import get_report_folder_path
 from ibats_common.analysis.corr import corr
-from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix
+from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix, plot_corr, clean_cache
 from ibats_common.analysis.plot_db import get_rr_with_md
 
 logger = logging.getLogger(__name__)
@@ -115,6 +115,7 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     # 获取统计数据
     stats = df.calc_stats()
     stats.set_riskfree_rate(risk_free)
+    ret_dic['stats'] = stats
     enable_kwargs_dic = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot, "name": name}
 
     # scatter_matrix
@@ -124,6 +125,11 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     file_path = plot_scatter_matrix(df, diagonal='kde', **enable_kwargs_dic)
     if enable_save_plot:
         file_path_dic['scatter_matrix'] = file_path
+
+    # stats.plot_correlation()
+    file_path = plot_corr(df, **enable_kwargs_dic)
+    if enable_save_plot:
+        file_path_dic['correlation'] = file_path
 
     # return rate plot 图
     file_path = plot_rr_df(df, **enable_kwargs_dic)
@@ -166,6 +172,61 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     return ret_dic, each_col_dic, file_path_dic
 
 
+def df_2_table(doc, df, format_by_index=None):
+    row_num, col_num = df.shape
+    t = doc.add_table(row_num + 1, col_num + 1)
+
+    # Highlight all cells limegreen (RGB 32CD32) if cell contains text "0.5"
+    from docx.oxml.ns import nsdecls
+    from docx.oxml import parse_xml
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    # write head
+    for j in range(col_num):
+        # t.cell(0, j).text = df.columns[j]
+        # paragraph = t.cell(0, j).add_paragraph()
+        paragraph = t.cell(0, j + 1).paragraphs[0]
+        paragraph.add_run(df.columns[j]).bold = True
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # write head bg color
+    for j in range(col_num + 1):
+        # t.cell(0, j).text = df.columns[j]
+        t.cell(0, j)._tc.get_or_add_tcPr().append(
+            parse_xml(r'<w:shd {} w:fill="00A2E8"/>'.format(nsdecls('w'))))
+
+    # format table style to be a grid
+    t.style = 'TableGrid'
+
+    # populate the table with the dataframe
+    for i in range(row_num):
+        index = df.index[i]
+        paragraph = t.cell(i + 1, 0).paragraphs[0]
+        paragraph.add_run(date_2_str(index)).bold = True
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        formater = None if format_by_index is None or index not in format_by_index else format_by_index[index]
+        for j in range(col_num):
+            content = df.values[i, j]
+            if formater is None:
+                text = str(content)
+            elif isinstance(formater, str):
+                text = str.format(formater, content)
+            elif callable(formater):
+                text = formater(content)
+            else:
+                raise ValueError('%s: %s 无效', index, formater)
+
+            paragraph = t.cell(i + 1, j + 1).paragraphs[0]
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            paragraph.add_run(text)
+
+    for i in range(1, row_num + 1):
+        for j in range(col_num + 1):
+            if i % 2 == 0:
+                t.cell(i, j)._tc.get_or_add_tcPr().append(
+                    parse_xml(r'<w:shd {} w:fill="A3D9EA"/>'.format(nsdecls('w'))))
+
+
 def _test_summary_md():
     from ibats_common.example.data import load_data
 
@@ -199,11 +260,15 @@ def _test_summary_stg():
     summary_stg(stg_run_id)
 
 
-def summary_stg_2_docx(stg_run_id=None, module_name_replacement_if_main='ibats_common.example.ma_cross_stg'):
+def summary_stg_2_docx(stg_run_id=None, module_name_replacement_if_main=None,
+                       enable_save_plot=True, enable_show_plot=False, enable_clean_cache=True):
     """
     生成策略分析报告
     :param stg_run_id:
     :param module_name_replacement_if_main:
+    :param enable_save_plot:
+    :param enable_show_plot:
+    :param enable_clean_cache:
     :return:
     """
     # rr_plot_file_path = os.path.join(cache_folder_path, 'rr_plot.png')
@@ -211,7 +276,8 @@ def summary_stg_2_docx(stg_run_id=None, module_name_replacement_if_main='ibats_c
         stg_run_id,
         module_name_replacement_if_main=module_name_replacement_if_main
     )
-    ret_dic, each_col_dic, file_path_dic = summary_rr(sum_df, enable_save_plot=True)
+    ret_dic, each_col_dic, file_path_dic = summary_rr(
+        sum_df, enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot)
 
     # show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
     # df = show_cash_and_margin(stg_run_id)
@@ -239,29 +305,86 @@ def summary_stg_2_docx(stg_run_id=None, module_name_replacement_if_main='ibats_c
 
     # 文件内容
     document.add_heading(heading_title, 0)
-    document.add_heading(u'策略回测收益曲线', 1)
+    document.add_heading('策略回测收益曲线', 1)
     # 增加图片（此处使用相对位置）
     document.add_picture(file_path_dic['rr'])  # , width=docx.shared.Inches(1.25)
 
-    document.add_heading(u'策略回撤曲线', 1)
+    document.add_heading('策略回撤曲线', 1)
     document.add_picture(file_path_dic['drawdown'])
 
-    document.add_heading(u'散点图矩阵图（Scatter Matrix）', 1)
+    document.add_heading('散点图矩阵图（Scatter Matrix）', 1)
     document.add_picture(file_path_dic['scatter_matrix'])
 
-    # 保存文件
+    document.add_heading('相关性矩阵图（Correlation）', 1)
+    document.add_picture(file_path_dic['correlation'])
+
+    document.add_heading('绩效统计数据（Porformance stat）', 1)
+    stats_df = ret_dic['stats'].stats
+    format_2_percent = lambda x: f"{x * 100: .2f}%"
+    format_2_float2 = r"{0:.2f}"
+    format_by_index = {
+        "total_return": format_2_percent,
+        "cagr": format_2_percent,
+        "mtd": format_2_percent,
+        "three_month": format_2_percent,
+        "six_month": format_2_percent,
+        "ytd": format_2_percent,
+        "one_year": format_2_percent,
+        "three_year": format_2_percent,
+        "five_year": format_2_percent,
+        "ten_year": format_2_percent,
+        "best_day": format_2_percent,
+        "worst_day": format_2_percent,
+        "best_month": format_2_percent,
+        "worst_month": format_2_percent,
+        "best_year": format_2_percent,
+        "worst_year": format_2_percent,
+        "avg_drawdown": format_2_percent,
+        "avg_up_month": format_2_percent,
+        "win_year_perc": format_2_percent,
+        "twelve_month_win_perc": format_2_percent,
+        "incep": format_2_percent,
+        "rf": format_2_float2,
+        "max_drawdown": format_2_float2,
+        "calmar": format_2_float2,
+        "daily_sharpe": format_2_float2,
+        "daily_sortino": format_2_float2,
+        "daily_mean": format_2_float2,
+        "daily_vol": format_2_float2,
+        "daily_skew": format_2_float2,
+        "daily_kurt": format_2_float2,
+        "monthly_sharpe": format_2_float2,
+        "monthly_sortino": format_2_float2,
+        "monthly_mean": format_2_float2,
+        "monthly_vol": format_2_float2,
+        "monthly_skew": format_2_float2,
+        "monthly_kurt": format_2_float2,
+        "yearly_sharpe": format_2_float2,
+        "yearly_sortino": format_2_float2,
+        "yearly_mean": format_2_float2,
+        "yearly_vol": format_2_float2,
+        "yearly_skew": format_2_float2,
+        "yearly_kurt": format_2_float2,
+        "avg_drawdown_days": format_2_float2,
+        "avg_down_month": format_2_float2,
+        "start": date_2_str,
+        "end": date_2_str,
+    }
+    df_2_table(document, stats_df, format_by_index=format_by_index)
+
+    # 保存文件stats_df
     file_name = f"{stg_run_id} {np.random.randint(10000)}.docx"
     file_path = os.path.join(get_report_folder_path(), file_name)
     document.save(file_path)
+    if enable_clean_cache:
+        clean_cache()
+
     return file_path
 
 
 def _test_summary_stg_2_docx(auto_open_file=True):
     stg_run_id = None
-    file_path = summary_stg_2_docx(stg_run_id,
-                                   # module_name_replacement_if_main='ibats_common.example.ma_cross_stg',
-                                   module_name_replacement_if_main='ibats_common.example.tflearn_stg.ai_stg',
-                                   )
+    file_path = summary_stg_2_docx(stg_run_id, enable_clean_cache=True)
     if auto_open_file:
         open_file_with_system_app(file_path)
 
