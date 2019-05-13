@@ -26,7 +26,7 @@ from ibats_common.common import ExchangeName, RunMode, ContextKey
 from ibats_common.md import md_agent_factory
 from ibats_common.strategy import StgBase
 from ibats_utils.db import with_db_session
-from ibats_utils.mess import try_2_date, load_class
+from ibats_utils.mess import try_2_date, load_class, get_module_path
 from ibats_common.trade import trader_agent_factory
 from ibats_common.config import config
 
@@ -391,8 +391,9 @@ def strategy_handler_factory_multi_exchange(
     :param is_4_shown: 仅供回溯展示需要，不加载 strategy_class 实例及其相关方法
     :return: 策略执行对象实力
     """
+    stg_module = get_module_path(stg_class)
     stg_run_info = StgRunInfo(stg_name=stg_class.__name__,  # 例如："MACrossStg"
-                              stg_module=stg_class.__module__,  # 例如："ibats_common.example.ma_cross_stg"
+                              stg_module=stg_module,  # 例如："ibats_common.example.ma_cross_stg"
                               dt_from=datetime.now(),
                               # dt_to=None,
                               stg_params=json.dumps(strategy_params),
