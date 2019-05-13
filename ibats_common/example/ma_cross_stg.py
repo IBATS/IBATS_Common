@@ -7,13 +7,11 @@
 @contact : mmmaaaggg@163.com
 @desc    : 简单的 MA5、MA10金叉、死叉多空策略，仅供测试及演示使用
 """
-import time
-import logging
-from ibats_common.common import PeriodType, RunMode, BacktestTradeMode, ExchangeName, ContextKey, Direction, CalcMode
+from ibats_common.common import BacktestTradeMode, ContextKey, Direction, CalcMode
 from ibats_common.strategy import StgBase
 from ibats_common.strategy_handler import strategy_handler_factory
-from ibats_local_trader.agent.td_agent import *
 from ibats_local_trader.agent.md_agent import *
+from ibats_local_trader.agent.td_agent import *
 
 logger = logging.getLogger(__name__)
 
@@ -115,9 +113,10 @@ def _test_use(is_plot):
         from ibats_common.analysis.summary import summary_rr
         show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
         df = show_cash_and_margin(stg_run_id)
-        symbol_rr_dic = show_rr_with_md(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
+        sum_df, symbol_rr_dic, save_file_path_dic = show_rr_with_md(
+            stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
         for symbol, rr_df in symbol_rr_dic.items():
-            col_transfer_dic={'return': rr_df.columns}
+            col_transfer_dic = {'return': rr_df.columns}
             summary_rr(rr_df, figure_4_each_col=True, col_transfer_dic=col_transfer_dic)
 
     return stg_run_id
