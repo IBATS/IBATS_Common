@@ -27,6 +27,20 @@ def get_file_name(header, name=None):
     return file_name
 
 
+def clean_cache():
+    """
+    清空cache目录
+    :return:
+    """
+    folder_path = get_cache_folder_path()
+    for root, dirs, files in os.walk(folder_path, topdown=False):
+        print(root, dirs, files)
+        for name in files:
+            os.remove(os.path.join(root, name))
+        for name in dirs:
+            os.rmdir(os.path.join(root, name))
+
+
 def drawdown_plot(df: pd.DataFrame, perf_stats=None, col_name_list=None,
                   enable_show_plot=True, enable_save_plot=False, name=None):
     """
@@ -69,6 +83,40 @@ def drawdown_plot(df: pd.DataFrame, perf_stats=None, col_name_list=None,
         file_path = None
 
     return data_df, file_path
+
+
+def plot_corr(df: pd.DataFrame, perf_stats=None,
+                  enable_show_plot=True, enable_save_plot=False, name=None):
+    """
+    相关性矩阵图
+    :param df:
+    :param perf_stats:
+    :param col_name_list:
+    :param enable_show_plot:
+    :param enable_save_plot:
+    :param name:
+    :return:
+    """
+    if perf_stats is None:
+        perf_stats = df.calc_stats()
+
+    def func():
+        ax = perf_stats.plot_correlation()
+        plt.suptitle("Correlation")
+
+    if enable_show_plot:
+        func()
+        plt.show()
+
+    if enable_save_plot:
+        func()
+        file_name = get_file_name(f'correlation', name=name)
+        file_path = os.path.join(get_cache_folder_path(), file_name)
+        plt.savefig(file_path, dpi=75)
+    else:
+        file_path = None
+
+    return file_path
 
 
 def plot_rr_df(df: pd.DataFrame, col_name_list=None, enable_show_plot=True, enable_save_plot=False, name=None):
