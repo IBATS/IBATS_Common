@@ -41,7 +41,7 @@ setup(name='IBATS_Common',
           'redis>=2.10.6',
           'SQLAlchemy>=1.2.8',
           'xlrd>=1.1.0',
-          'ibats_utils>=1.0.1',
+          'ibats_utils>=1.1.13',
           'ffn>=0.3.4',
           'python-docx>=0.8.10',
       ])

@@ -14,6 +14,7 @@ from collections import defaultdict
 import docx
 import numpy as np
 import pandas as pd
+from ibats_utils.mess import open_file_with_system_app
 from scipy.stats import anderson, normaltest
 
 from ibats_common.analysis import get_report_folder_path
@@ -263,22 +264,6 @@ def _test_summary_stg_2_docx(auto_open_file=True):
                                    )
     if auto_open_file:
         open_file_with_system_app(file_path)
-
-
-def open_file_with_system_app(file_path):
-    import platform
-    try:
-        if platform.system() == 'Windows':
-            os.startfile(file_path)
-        elif platform.system() == 'Linux':
-            import subprocess
-            subprocess.call(["xdg-open", file_path])
-        else:
-            import subprocess
-            subprocess.call(["open", file_path])
-    except:
-        import webbrowser
-        webbrowser.open(f'file:///{file_path}')
 
 
 if __name__ == "__main__":
