@@ -134,10 +134,7 @@ class MdAgentBase(Thread, ABC):
             self.instrument_id_list = list(set(self.instrument_id_list) - set(instrument_id_list))
 
 
-md_agent_class_dic = {
-    RunMode.Backtest: {ExchangeName.Default: MdAgentBase},
-    RunMode.Realtime: {ExchangeName.Default: MdAgentBase}
-}
+md_agent_class_dic = {_: {ExchangeName.Default: MdAgentBase} for _ in RunMode}
 
 
 def md_agent_factory(run_mode: RunMode, instrument_id_list: list, md_period: PeriodType, agent_name=None,

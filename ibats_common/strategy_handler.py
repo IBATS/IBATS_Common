@@ -491,7 +491,7 @@ def strategy_handler_factory_multi_exchange(
         stg_handler = StgHandlerRealtime(
             stg_run_id=stg_run_id, stg_base=stg_base, md_key_period_agent_dic=md_key_period_agent_dic,
             **strategy_handler_param)
-    elif run_mode == RunMode.Backtest:
+    elif run_mode in (RunMode.Backtest, RunMode.Backtest_FixPercent):
         stg_handler = StgHandlerBacktest(
             stg_run_id=stg_run_id, stg_base=stg_base, md_key_period_agent_dic=md_key_period_agent_dic,
             **strategy_handler_param)

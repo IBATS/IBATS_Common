@@ -56,6 +56,7 @@ class RunMode(IntEnum):
     """
     Realtime = 0
     Backtest = 1
+    Backtest_FixPercent = 2
 
 
 @unique
