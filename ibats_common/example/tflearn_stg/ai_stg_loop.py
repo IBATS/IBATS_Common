@@ -9,7 +9,7 @@
 pip3 install tensorflow sklearn tflearn
 """
 import os
-from ibats_utils.mess import get_last_idx, get_folder_path, open_file_with_system_app
+from ibats_utils.mess import get_last_idx, get_folder_path
 import tensorflow as tf
 import tflearn
 from sklearn.model_selection import train_test_split
@@ -17,7 +17,6 @@ import numpy as np
 import random
 
 from ibats_common import module_root_path
-from ibats_common.analysis.plot_db import show_rr_with_md
 from ibats_common.common import PeriodType, RunMode, BacktestTradeMode, ExchangeName, ContextKey, Direction, CalcMode
 from ibats_common.strategy import StgBase
 from ibats_common.strategy_handler import strategy_handler_factory
@@ -458,11 +457,8 @@ def _test_use(is_plot):
     logging.info("执行结束 stg_run_id = %d", stg_run_id)
 
     if is_plot:
-        from ibats_common.analysis.plot_db import show_order, show_cash_and_margin
-        show_order(stg_run_id)
-        show_cash_and_margin(stg_run_id)
-        show_rr_with_md(stg_run_id)
         from ibats_common.analysis.summary import summary_stg_2_docx
+        from ibats_utils.mess import open_file_with_system_app
         file_path = summary_stg_2_docx(stg_run_id)
         open_file_with_system_app(file_path)
 

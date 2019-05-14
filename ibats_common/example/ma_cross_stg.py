@@ -109,14 +109,18 @@ def _test_use(is_plot):
     logging.info("执行结束 stg_run_id = %d", stg_run_id)
 
     if is_plot:
-        from ibats_common.analysis.plot_db import show_order, show_cash_and_margin, show_rr_with_md
-        from ibats_common.analysis.summary import summary_rr
-        show_order(stg_run_id)
-        df = show_cash_and_margin(stg_run_id)
-        sum_df, symbol_rr_dic, save_file_path_dic = show_rr_with_md(stg_run_id)
-        for symbol, rr_df in symbol_rr_dic.items():
-            col_transfer_dic = {'return': rr_df.columns}
-            summary_rr(rr_df, figure_4_each_col=True, col_transfer_dic=col_transfer_dic)
+        # from ibats_common.analysis.plot_db import show_order, show_cash_and_margin, show_rr_with_md
+        # from ibats_common.analysis.summary import summary_rr
+        # show_order(stg_run_id)
+        # df = show_cash_and_margin(stg_run_id)
+        # sum_df, symbol_rr_dic, save_file_path_dic = show_rr_with_md(stg_run_id)
+        # for symbol, rr_df in symbol_rr_dic.items():
+        #     col_transfer_dic = {'return': rr_df.columns}
+        #     summary_rr(rr_df, figure_4_each_col=True, col_transfer_dic=col_transfer_dic)
+        from ibats_common.analysis.summary import summary_stg_2_docx
+        from ibats_utils.mess import open_file_with_system_app
+        file_path = summary_stg_2_docx(stg_run_id)
+        open_file_with_system_app(file_path)
 
     return stg_run_id
 
