@@ -138,3 +138,31 @@ class MdAgentBacktest(MdAgentPub):
                 time.sleep(self.timeout)
             else:
                 self.logger.info('%s job finished', self.name)
+
+
+@md_agent(RunMode.Backtest_FixPercent, ExchangeName.LocalFile, is_default=False)
+class MdAgentBacktestFixPercent(MdAgentPub):
+
+    def __init__(self, **kwargs):
+        MdAgentPub.__init__(self, **kwargs)
+        self.timeout = 1
+        self.timestamp_key = kwargs['timestamp_key'] if 'timestamp_key' in kwargs else self.datetime_key
+        self.symbol_key = kwargs['symbol_key']
+        self.close_key = kwargs['close_key'] if 'close_key' in kwargs else 'close'
+
+    def connect(self):
+        """链接redis、初始化历史数据"""
+        pass
+
+    def release(self):
+        """释放channel资源"""
+        pass
+
+    def run(self):
+        """启动多线程获取MD"""
+        if not self.keep_running:
+            self.keep_running = True
+            while self.keep_running:
+                time.sleep(self.timeout)
+            else:
+                self.logger.info('%s job finished', self.name)
