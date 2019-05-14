@@ -61,10 +61,11 @@ def drawdown_plot(df: pd.DataFrame, perf_stats=None, col_name_list=None,
     if perf_stats is None:
         perf_stats = df.calc_stats()
 
-    col_mdd_len_dic = {col_name: s.drawdown_details.Length.max() for col_name, s in perf_stats.items()}
+    col_mdd_len_dic = {col_name: s.drawdown_details.Length.max()
+                       for col_name, s in perf_stats.items() if s.drawdown_details is not None}
     col_mdd_dic = {col_name: mdd for col_name, mdd in data_df.min().items()}
     data_df.rename(
-        columns={col_name: f"{col_name}[{mdd*100:.2f}% {col_mdd_len_dic[col_name]}]"
+        columns={col_name: f"{col_name}[{mdd*100:.2f}% {col_mdd_len_dic.setdefault(col_name, '')}]"
                  for col_name, mdd in col_mdd_dic.items()},
         inplace=True)
 
