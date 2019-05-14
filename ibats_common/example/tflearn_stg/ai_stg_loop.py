@@ -9,7 +9,7 @@
 pip3 install tensorflow sklearn tflearn
 """
 import os
-from ibats_utils.mess import get_last_idx, get_folder_path
+from ibats_utils.mess import get_last_idx, get_folder_path, open_file_with_system_app
 import tensorflow as tf
 import tflearn
 from sklearn.model_selection import train_test_split
@@ -414,7 +414,7 @@ def _test_use(is_plot):
     import os
     # 参数设置
     run_mode = RunMode.Backtest
-    strategy_params = {'unit': 1}
+    strategy_params = {'unit': 10}
     md_agent_params_list = [{
         'md_period': PeriodType.Min1,
         'instrument_id_list': ['RB'],
@@ -459,9 +459,12 @@ def _test_use(is_plot):
 
     if is_plot:
         from ibats_common.analysis.plot_db import show_order, show_cash_and_margin
-        show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.tflearn_stg.ai_stg_loop')
+        show_order(stg_run_id)
         show_cash_and_margin(stg_run_id)
-        show_rr_with_md(stg_run_id, module_name_replacement_if_main='ibats_common.example.tflearn_stg.ai_stg_loop')
+        show_rr_with_md(stg_run_id)
+        from ibats_common.analysis.summary import summary_stg_2_docx
+        file_path = summary_stg_2_docx(stg_run_id)
+        open_file_with_system_app(file_path)
 
     return stg_run_id
 

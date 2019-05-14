@@ -503,12 +503,10 @@ def strategy_handler_factory_multi_exchange(
 
 
 @lru_cache()
-def strategy_handler_loader(stg_run_id, module_name_replacement_if_main=None, is_4_shown=True) -> StgHandlerBase:
+def strategy_handler_loader(stg_run_id, is_4_shown=True) -> StgHandlerBase:
     """
     根据 stg_run_id 从数据库中加载相应参数，动态加载策略类，实例化 stg_handler 类
     :param stg_run_id:
-    :param module_name_replacement_if_main: 当 stg_module == '__main__' 时，用来替代的 module_name，
-        例如："ibats_common.example.ma_cross_stg"
     :param is_4_shown: 仅供回溯展示需要，不加载 strategy_class 实例及其相关方法
     :return:
     """
@@ -516,9 +514,11 @@ def strategy_handler_loader(stg_run_id, module_name_replacement_if_main=None, is
         stg_run_info = session.query(StgRunInfo).filter(StgRunInfo.stg_run_id == stg_run_id).first()
     if stg_run_info is None:
         raise KeyError(f'stg_run_id={stg_run_id} 无效，数据库中没有相关数据')
-    if module_name_replacement_if_main is not None and stg_run_info.stg_module == '__main__':
-        # stg_run_info.stg_module = "ibats_common.example.ma_cross_stg"
-        stg_run_info.stg_module = module_name_replacement_if_main
+    # 2019-05-14 废弃参数 module_name_replacement_if_main
+    # 因版本升级该问题以及被解决，因此该参数已经无用
+    # if module_name_replacement_if_main is not None and stg_run_info.stg_module == '__main__':
+    #     # stg_run_info.stg_module = "ibats_common.example.ma_cross_stg"
+    #     stg_run_info.stg_module = module_name_replacement_if_main
 
     stg_class = load_class(stg_run_info.stg_module, stg_run_info.stg_name)
 

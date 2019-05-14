@@ -111,10 +111,9 @@ def _test_use(is_plot):
     if is_plot:
         from ibats_common.analysis.plot_db import show_order, show_cash_and_margin, show_rr_with_md
         from ibats_common.analysis.summary import summary_rr
-        show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
+        show_order(stg_run_id)
         df = show_cash_and_margin(stg_run_id)
-        sum_df, symbol_rr_dic, save_file_path_dic = show_rr_with_md(
-            stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
+        sum_df, symbol_rr_dic, save_file_path_dic = show_rr_with_md(stg_run_id)
         for symbol, rr_df in symbol_rr_dic.items():
             col_transfer_dic = {'return': rr_df.columns}
             summary_rr(rr_df, figure_4_each_col=True, col_transfer_dic=col_transfer_dic)

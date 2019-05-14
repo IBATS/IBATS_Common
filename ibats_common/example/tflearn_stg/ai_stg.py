@@ -402,9 +402,9 @@ def _test_use(is_plot):
 
     if is_plot:
         from ibats_common.analysis.plot_db import show_order, show_cash_and_margin
-        show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ai_stg')
+        show_order(stg_run_id)
         show_cash_and_margin(stg_run_id)
-        show_rr_with_md(stg_run_id, module_name_replacement_if_main='ibats_common.example.ai_stg')
+        show_rr_with_md(stg_run_id)
 
     return stg_run_id
 
