@@ -20,7 +20,7 @@ from scipy.stats import anderson, normaltest
 from ibats_common.analysis import get_report_folder_path
 from ibats_common.analysis.corr import corr
 from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix, plot_corr, clean_cache
-from ibats_common.analysis.plot_db import get_rr_with_md, show_trade
+from ibats_common.analysis.plot_db import get_rr_with_md, show_trade, show_cash_and_margin
 from ibats_common.backend.mess import get_latest_stg_run_id
 
 logger = logging.getLogger(__name__)
@@ -276,9 +276,10 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
 
     _, file_path = show_trade(stg_run_id, **kwargs)
     file_path_dic['trade'] = file_path
-    # df = show_cash_and_margin(stg_run_id)
+    df, file_path = show_cash_and_margin(stg_run_id, **kwargs)
+    file_path_dic['cash_and_margin'] = file_path
 
-    # 生成 docx 万恶将所需变量
+    # 生成 docx 文档将所需变量
     heading_title = f'策略分析报告[{stg_run_id}]'
 
     # 生成 docx 文件
@@ -286,7 +287,6 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
     # 设置默认字体
     document.styles['Normal'].font.name = '微软雅黑'
     document.styles['Normal']._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
-
     # 创建自定义段落样式(第一个参数为样式名, 第二个参数为样式类型, 1为段落样式, 2为字符样式, 3为表格样式)
     UserStyle1 = document.styles.add_style('UserStyle1', 1)
     # 设置字体尺寸
@@ -300,21 +300,32 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
     UserStyle1._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
 
     # 文件内容
-    document.add_heading(heading_title, 0)
-    document.add_heading('策略回测收益曲线', 1)
+    document.add_heading(heading_title, 0).alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+    document.add_paragraph('')
+    document.add_paragraph('')
+    document.add_heading('一、策略回测收益曲线', 1)
     # 增加图片（此处使用相对位置）
     document.add_picture(file_path_dic['rr'])  # , width=docx.shared.Inches(1.25)
+    # 添加分页符
+    document.add_page_break()
 
-    document.add_heading('策略回撤曲线', 1)
+    document.add_heading('二、策略回撤曲线', 1)
     document.add_picture(file_path_dic['drawdown'])
+    document.add_page_break()
 
-    document.add_heading('散点图矩阵图（Scatter Matrix）', 1)
+    document.add_heading('三、现金与仓位堆叠图', 1)
+    document.add_picture(file_path_dic['cash_and_margin'])
+    document.add_page_break()
+
+    document.add_heading('四、散点图矩阵图（Scatter Matrix）', 1)
     document.add_picture(file_path_dic['scatter_matrix'])
+    document.add_page_break()
 
-    document.add_heading('相关性矩阵图（Correlation）', 1)
+    document.add_heading('五、相关性矩阵图（Correlation）', 1)
     document.add_picture(file_path_dic['correlation'])
+    document.add_page_break()
 
-    document.add_heading('绩效统计数据（Porformance stat）', 1)
+    document.add_heading('六、绩效统计数据（Porformance stat）', 1)
     stats_df = ret_dic['stats'].stats
     format_2_percent = lambda x: f"{x * 100: .2f}%"
     format_2_float2 = r"{0:.2f}"
@@ -367,10 +378,12 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
         "end": date_2_str,
     }
     df_2_table(document, stats_df, format_by_index=format_by_index)
+    document.add_page_break()
 
     # 交易记录
-    document.add_heading('买卖点记录', 1)
+    document.add_heading('七、买卖点记录', 1)
     document.add_picture(file_path_dic['trade'])
+    document.add_page_break()
 
     # 保存文件
     file_name = f"{stg_run_id} {np.random.randint(10000)}.docx"

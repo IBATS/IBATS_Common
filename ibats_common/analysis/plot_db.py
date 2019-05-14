@@ -26,10 +26,11 @@ from ibats_common.strategy_handler import strategy_handler_loader
 logger = logging.getLogger(__name__)
 
 
-def show_cash_and_margin(stg_run_id):
+def show_cash_and_margin(stg_run_id, enable_show_plot=True, enable_save_plot=False):
     """
     plot cash_and_margin
     :param stg_run_id:
+    :param kwargs:
     :return:
     """
     # stg_run_id=154
@@ -42,6 +43,8 @@ def show_cash_and_margin(stg_run_id):
         sql_str = str(
             session.query(
                 StgRunStatusDetail.trade_dt.label('trade_dt'),
+                StgRunStatusDetail.cash_available.label('cash'),
+                StgRunStatusDetail.curr_margin.label('margin'),
                 StgRunStatusDetail.cash_and_margin.label('cash_and_margin'),
                 (StgRunStatusDetail.cash_and_margin.label('cash_and_margin') + StgRunStatusDetail.commission_tot.label(
                     'commission_tot')).label('without commission'),
@@ -51,12 +54,27 @@ def show_cash_and_margin(stg_run_id):
         )
 
     df = pd.read_sql(sql_str, engine_ibats, params=[stg_run_id], index_col=['trade_dt'])
-    ax = df.plot()
-    ax.set_title(
-        f"Cash + Margin [{stg_run_id}] "
-        f"{date_2_str(min(df.index))} - {date_2_str(max(df.index))} ({df.shape[0]} days)")
-    plt.show()
-    return df
+
+    def plot_func():
+        ax = df[['cash', 'margin']].plot.area()
+        df[['cash_and_margin', 'without commission']].plot(ax=ax)
+        ax.set_title(
+            f"Cash + Margin [{stg_run_id}] "
+            f"{date_2_str(min(df.index))} - {date_2_str(max(df.index))} ({df.shape[0]} days)")
+
+    if enable_show_plot:
+        plot_func()
+        plt.show()
+
+    if enable_save_plot:
+        plot_func()
+        file_name = get_file_name(f'cash_and_margin', name=stg_run_id)
+        file_path = os.path.join(get_cache_folder_path(), file_name)
+        plt.savefig(file_path, dpi=75)
+    else:
+        file_path = None
+
+    return df, file_path
 
 
 def get_stg_run_id_latest():
@@ -392,7 +410,7 @@ def show_plot_data_dic(data_dict: dict, title=None, enable_show_plot=True, enabl
     return file_path
 
 
-def _test_use():
+def _test_show_rr_with_md():
     stg_run_id = None
     # data_dict = show_order(
     #     stg_run_id,
@@ -403,5 +421,11 @@ def _test_use():
     show_rr_with_md(stg_run_id, show_each_md_plot=True, show_sum_plot=True, enable_save_plot=True)
 
 
+def _test_show_cash_and_margin():
+    stg_run_id = None
+    show_cash_and_margin(stg_run_id, enable_show_plot=True, enable_save_plot=True)
+
+
 if __name__ == '__main__':
-    _test_use()
+    # _test_show_rr_with_md()
+    _test_show_cash_and_margin()
