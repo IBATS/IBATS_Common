@@ -20,7 +20,8 @@ from scipy.stats import anderson, normaltest
 from ibats_common.analysis import get_report_folder_path
 from ibats_common.analysis.corr import corr
 from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix, plot_corr, clean_cache
-from ibats_common.analysis.plot_db import get_rr_with_md
+from ibats_common.analysis.plot_db import get_rr_with_md, show_trade
+from ibats_common.backend.mess import get_latest_stg_run_id
 
 logger = logging.getLogger(__name__)
 
@@ -146,10 +147,9 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     # 回撤图
     drawdown_df, file_path = drawdown_plot(df, perf_stats=stats, col_name_list=drawdown_col_name_list,
                                            **enable_kwargs_dic)
+    ret_dic['drawdown'] = drawdown_df
     if enable_save_plot:
         file_path_dic['drawdown'] = file_path
-
-    ret_dic['drawdown'] = drawdown_df
 
     # 单列分析
     stat_df = (df if stat_col_name_list is None else df[stat_col_name_list])
@@ -239,16 +239,14 @@ def _test_summary_md():
                col_transfer_dic=col_transfer_dic)
 
 
-def summary_stg(stg_run_id=None, module_name_replacement_if_main='ibats_common.example.ma_cross_stg'):
-    from ibats_common.backend.mess import get_latest_stg_run_id
+def summary_stg(stg_run_id=None):
     from ibats_common.analysis.plot_db import show_order, show_cash_and_margin, show_rr_with_md
     if stg_run_id is None:
         stg_run_id = get_latest_stg_run_id()
 
-    show_order(stg_run_id, module_name_replacement_if_main=module_name_replacement_if_main)
+    data_dict, file_path = show_order(stg_run_id)
     df = show_cash_and_margin(stg_run_id)
-    sum_df, symbol_rr_dic = show_rr_with_md(stg_run_id,
-                                            module_name_replacement_if_main=module_name_replacement_if_main)
+    sum_df, symbol_rr_dic, save_file_path_dic = show_rr_with_md(stg_run_id)
     summary_rr(sum_df, figure_4_each_col=True, col_transfer_dic={'return': sum_df.columns})
     # for symbol, rr_df in symbol_rr_dic.items():
     #     col_transfer_dic = {'return': rr_df.columns}
@@ -260,26 +258,24 @@ def _test_summary_stg():
     summary_stg(stg_run_id)
 
 
-def summary_stg_2_docx(stg_run_id=None, module_name_replacement_if_main=None,
-                       enable_save_plot=True, enable_show_plot=False, enable_clean_cache=True):
+def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=False, enable_clean_cache=True):
     """
     生成策略分析报告
     :param stg_run_id:
-    :param module_name_replacement_if_main:
     :param enable_save_plot:
     :param enable_show_plot:
     :param enable_clean_cache:
     :return:
     """
-    # rr_plot_file_path = os.path.join(cache_folder_path, 'rr_plot.png')
-    stg_run_id, sum_df, symbol_rr_dic = get_rr_with_md(
-        stg_run_id,
-        module_name_replacement_if_main=module_name_replacement_if_main
-    )
-    ret_dic, each_col_dic, file_path_dic = summary_rr(
-        sum_df, enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot)
+    if stg_run_id is None:
+        stg_run_id = get_latest_stg_run_id()
 
-    # show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg')
+    kwargs = {"enable_show_plot": enable_show_plot, "enable_save_plot": enable_save_plot}
+    sum_df, symbol_rr_dic = get_rr_with_md(stg_run_id)
+    ret_dic, each_col_dic, file_path_dic = summary_rr(sum_df, **kwargs)
+
+    _, file_path = show_trade(stg_run_id, **kwargs)
+    file_path_dic['trade'] = file_path
     # df = show_cash_and_margin(stg_run_id)
 
     # 生成 docx 万恶将所需变量
@@ -372,7 +368,11 @@ def summary_stg_2_docx(stg_run_id=None, module_name_replacement_if_main=None,
     }
     df_2_table(document, stats_df, format_by_index=format_by_index)
 
-    # 保存文件stats_df
+    # 交易记录
+    document.add_heading('买卖点记录', 1)
+    document.add_picture(file_path_dic['trade'])
+
+    # 保存文件
     file_name = f"{stg_run_id} {np.random.randint(10000)}.docx"
     file_path = os.path.join(get_report_folder_path(), file_name)
     document.save(file_path)
@@ -383,7 +383,7 @@ def summary_stg_2_docx(stg_run_id=None, module_name_replacement_if_main=None,
 
 
 def _test_summary_stg_2_docx(auto_open_file=True):
-    stg_run_id = None
+    stg_run_id = 3
     file_path = summary_stg_2_docx(stg_run_id, enable_clean_cache=True)
     if auto_open_file:
         open_file_with_system_app(file_path)

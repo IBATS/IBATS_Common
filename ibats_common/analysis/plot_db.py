@@ -17,6 +17,7 @@ from sqlalchemy.sql import func
 from ibats_utils.db import with_db_session, get_db_session, execute_scalar
 
 from ibats_common.analysis import get_cache_folder_path
+from ibats_common.analysis.plot import get_file_name
 from ibats_common.backend.orm import StgRunStatusDetail, OrderDetail, TradeDetail, StgRunInfo
 from ibats_common.backend import engines
 from ibats_common.common import Action, Direction
@@ -58,15 +59,61 @@ def show_cash_and_margin(stg_run_id):
     return df
 
 
-def get_rr_with_md(stg_run_id,
-                   module_name_replacement_if_main='ibats_common.example.ma_cross_stg'):
+def get_stg_run_id_latest():
+    """获取最新的 stg_run_id"""
+    engine_ibats = engines.engine_ibats
+    with with_db_session(engine_ibats) as session:
+        logger.warning('没有设置 stg_run_id 参数，将输出最新的 stg_run_id 对应记录')
+        stg_run_id = session.query(func.max(StgRunInfo.stg_run_id)).scalar()
+
+    return stg_run_id
+
+
+def get_md(stg_run_id, return_td_md_agent_key_map=False):
+    # 获取行情数据
+    stg_handler = strategy_handler_loader(stg_run_id, is_4_shown=True)
+
+    td_md_agent_key_map = stg_handler.stg_base._td_md_agent_key_map
+
+    # 获取历史行情数据
+    md_agent_key_cor_func_dic = stg_handler.get_periods_history_iterator()
+    # 根据 md_agent 对每一组行情 以及 对应的 order_detail_list 进行 plot
+    # fig = plt.figure(1, figsize=(20, 4.8 * agent_count))
+    symbol_rr_dic = {}
+    sum_rr_df, sum_col_name_list = None, []
+    for num, ((md_agent_key, period), (cor_func, meta_dic)) in enumerate(md_agent_key_cor_func_dic.items(), start=1):
+        df = pd.DataFrame([md_s for num, datetime_tag, md_s in cor_func])
+        if df.shape[0] == 0:
+            continue
+        # ax = fig.add_subplot(num, 1, 1)
+        # 行情
+        symbol_key = meta_dic['symbol_key']
+        close_key = meta_dic['close_key']
+        timestamp_key = meta_dic['timestamp_key']
+        df.set_index(timestamp_key, inplace=True)
+        for symbol, df_by_symbol in df.groupby(symbol_key):
+            symbol_rr_dic[(md_agent_key, period, symbol)] = (df_by_symbol, close_key)
+
+            # 汇总输出
+            col_name = f"{symbol}_rr"
+            sum_col_name_list.append(col_name)
+            md_df = df_by_symbol[[close_key]].copy()
+            md_df['md_rr'] = md_df[close_key] / md_df[close_key].iloc[0]
+            if sum_rr_df is None:
+                sum_rr_df = md_df.rename(columns={'md_rr': col_name})[sum_col_name_list]
+            else:
+                sum_rr_df = sum_rr_df.join(md_df.rename(columns={'md_rr': col_name}))[sum_col_name_list]
+
+    if return_td_md_agent_key_map:
+        return sum_rr_df, symbol_rr_dic, td_md_agent_key_map
+    else:
+        return sum_rr_df, symbol_rr_dic
+
+
+def get_rr_with_md(stg_run_id):
     engine_ibats = engines.engine_ibats
     # 获取 收益曲线
     with with_db_session(engine_ibats) as session:
-        if stg_run_id is None:
-            logger.warning('没有设置 stg_run_id 参数，将输出最新的 stg_run_id 对应记录')
-            stg_run_id = session.query(func.max(StgRunInfo.stg_run_id)).scalar()
-
         sql_str = str(
             session.query(
                 StgRunStatusDetail.trade_dt.label('trade_dt'),
@@ -83,45 +130,22 @@ def get_rr_with_md(stg_run_id,
     rr_df['rr without commission'] = rr_df['without commission'] / rr_df['without commission'].iloc[0]
 
     # 获取行情数据
-    stg_handler = strategy_handler_loader(
-        stg_run_id, module_name_replacement_if_main=module_name_replacement_if_main, is_4_shown=True)
+    sum_df, symbol_rr_dic = get_md(stg_run_id)
+    sum_df = sum_df.join(rr_df[['rr', 'rr without commission']])
+    for num, (key, (df, close_key)) in enumerate(symbol_rr_dic.items()):
+        md_df = df[[close_key]].copy()
+        md_df['md_rr'] = md_df[close_key] / md_df[close_key].iloc[0]
+        md_df = md_df.join(rr_df)[['md_rr', 'rr', 'rr without commission']]
+        symbol_rr_dic[key] = (md_df, close_key)
 
-    # 获取历史行情数据
-    md_agent_key_cor_func_dic = stg_handler.get_periods_history_iterator()
-    # 根据 md_agent 对每一组行情 以及 对应的 order_detail_list 进行 plot
-    # fig = plt.figure(1, figsize=(20, 4.8 * agent_count))
-    symbol_rr_dic = {}
-    sum_df, sum_col_name_list = rr_df.copy(), ['rr', 'rr without commission']
-    for num, ((md_agent_key, period), (cor_func, meta_dic)) in enumerate(md_agent_key_cor_func_dic.items(), start=1):
-        df = pd.DataFrame([md_s for num, datetime_tag, md_s in cor_func])
-        if df.shape[0] == 0:
-            continue
-        # ax = fig.add_subplot(num, 1, 1)
-        # 行情
-        symbol_key = meta_dic['symbol_key']
-        close_key = meta_dic['close_key']
-        timestamp_key = meta_dic['timestamp_key']
-        for symbol, df_by_symbol in df.groupby(symbol_key):
-            # df_by_symbol.set_index(timestamp_key)[close_key].plot(ax=ax, colormap='jet')
-            md_df = df_by_symbol.set_index(timestamp_key)[[close_key]]
-            md_df['md_rr'] = md_df[close_key] / md_df[close_key].iloc[0]
-            df = md_df.join(rr_df)[['md_rr', 'rr', 'rr without commission']]
-            symbol_rr_dic[symbol] = df
-
-            # 汇总输出
-            col_name = f"{symbol}_rr"
-            sum_col_name_list.append(col_name)
-            sum_df = sum_df.join(md_df.rename(columns={'md_rr': col_name}))[sum_col_name_list]
-
-    return stg_run_id, sum_df, symbol_rr_dic
+    return sum_df, symbol_rr_dic
 
 
-def show_rr_with_md(stg_run_id,
-                    module_name_replacement_if_main='ibats_common.example.ma_cross_stg',
-                    show_sum_plot=True, show_each_md_plot=False, enable_save_plot=False):
-    stg_run_id, sum_df, symbol_rr_dic = get_rr_with_md(
-        stg_run_id,
-        module_name_replacement_if_main=module_name_replacement_if_main)
+def show_rr_with_md(stg_run_id, show_sum_plot=True, show_each_md_plot=False, enable_save_plot=False):
+    if stg_run_id is None:
+        stg_run_id = get_stg_run_id_latest()
+
+    sum_df, symbol_rr_dic = get_rr_with_md(stg_run_id)
     save_file_path_dic = {}
 
     if show_each_md_plot:
@@ -149,30 +173,25 @@ def show_rr_with_md(stg_run_id,
         plt.savefig(rr_plot_file_path, dpi=75)
         save_file_path_dic['rr'] = rr_plot_file_path
 
-    if enable_save_plot:
-        return sum_df, symbol_rr_dic, save_file_path_dic
-    else:
-        return sum_df, symbol_rr_dic
+    return sum_df, symbol_rr_dic, save_file_path_dic
 
 
-def show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg'
-               ) -> defaultdict(lambda: defaultdict(list)):
+def show_order(stg_run_id, **kwargs) -> (defaultdict(lambda: defaultdict(list)), str):
     """
     plot candle and buy and sell point
     :param stg_run_id:
-    :param module_name_replacement_if_main:
+    :param kwargs:
     :return:
     """
     # 加载数据库 engine
     engine_ibats = engines.engine_ibats
     # stg_run_id = 1
     if stg_run_id is None:
-        logger.warning('没有设置 stg_run_id 参数，将输出最新的 stg_run_id 对应记录')
-        with with_db_session(engine_ibats) as session:
-            stg_run_id = session.query(func.max(StgRunInfo.stg_run_id)).scalar()
+        stg_run_id = get_stg_run_id_latest()
 
-    stg_handler = strategy_handler_loader(
-        stg_run_id, module_name_replacement_if_main=module_name_replacement_if_main, is_4_shown=True)
+    # 获取行情数据
+    sum_rr_df, symbol_rr_dic, td_md_agent_key_map = get_md(stg_run_id, return_td_md_agent_key_map=True)
+
     # 获取全部订单
     # session = get_db_session(engine_ibats)
     with with_db_session(engine_ibats) as session:
@@ -188,85 +207,75 @@ def show_order(stg_run_id, module_name_replacement_if_main='ibats_common.example
         ).filter(
             OrderDetail.stg_run_id == stg_run_id
         ).all()
+
     # 根据 md_agent 进行分组
     md_agent_key_order_detail_list_dic = defaultdict(list)
-    for num, order_detail in enumerate(order_detail_list_tot):
-        md_agent_key = stg_handler.stg_base._td_md_agent_key_map[order_detail.trade_agent_key]
-        md_agent_key_order_detail_list_dic[md_agent_key].append(order_detail)
+    for num, detail in enumerate(order_detail_list_tot):
+        md_agent_key = td_md_agent_key_map[detail.trade_agent_key]
+        md_agent_key_order_detail_list_dic[md_agent_key].append(detail)
 
     # 获取历史行情数据
-    md_agent_key_cor_func_dic = stg_handler.get_periods_history_iterator()
-    agent_count = len(md_agent_key_cor_func_dic)
     data_dict = defaultdict(lambda: defaultdict(list))
-    # 根据 md_agent 对每一组行情 以及 对应的 order_detail_list 进行 plot
-    # fig = plt.figure(1, figsize=(20, 4.8 * agent_count))
-    for num, ((md_agent_key, period), (cor_func, meta_dic)) in enumerate(md_agent_key_cor_func_dic.items(), start=1):
-        order_detail_list = md_agent_key_order_detail_list_dic[md_agent_key]
-        df = pd.DataFrame([md_s for num, datetime_tag, md_s in cor_func])
-        if df.shape[0] == 0:
-            continue
-        # ax = fig.add_subplot(num, 1, 1)
-        # 行情
-        symbol_key = meta_dic['symbol_key']
-        close_key = meta_dic['close_key']
-        timestamp_key = meta_dic['timestamp_key']
-        for symbol, df_by_symbol in df.groupby(symbol_key):
-            # df_by_symbol.set_index(timestamp_key)[close_key].plot(ax=ax, colormap='jet')
-            data_dict[(md_agent_key, period, symbol)]['md'].append(df_by_symbol.set_index(timestamp_key)[close_key])
-            # 开仓
-            order_detail_list_sub = [_ for _ in order_detail_list
-                                     if _.symbol == symbol
-                                     and ((_.direction == Direction.Long.value and _.action == Action.Open.value)
-                                          or (_.direction == Direction.Short.value and _.action != Action.Open.value)
-                                          )
-                                     ]
-            trade_date_list = [_.order_dt for _ in order_detail_list_sub]
-            price = [_.order_price for _ in order_detail_list_sub]
-            # ax.scatter(trade_date_list, price, c='r', marker='^')
-            data_dict[(md_agent_key, period, symbol)]['long_open_or_short_close'].append((trade_date_list, price))
-            # 关仓
-            order_detail_list_sub = [_ for _ in order_detail_list
-                                     if (_.direction == Direction.Long.value and _.action != Action.Open.value)
-                                     or (_.direction == Direction.Short.value and _.action == Action.Open.value)]
-            trade_date_list = [_.order_dt for _ in order_detail_list_sub]
-            price = [_.order_price for _ in order_detail_list_sub]
-            # ax.scatter(trade_date_list, price, c='g', marker='v')
-            data_dict[(md_agent_key, period, symbol)]['short_open_or_long_close'].append((trade_date_list, price))
-            # 建立连线
-            order_detail_list_symbol = [_ for _ in order_detail_list if _.symbol == symbol]
-            for point1, point2 in zip(order_detail_list_symbol[:-1], order_detail_list_symbol[1:]):
-                if point1.order_dt == point2.order_dt:
-                    # logger.debug("%s %f %s ignore", point2.order_dt, point2.order_price, point2.action)
-                    continue
-                # logger.debug("%s %f -> %s %f %d",
-                #              point1.order_dt, point1.order_price, point2.order_dt, point2.order_price, point2.action)
-                # ax.plot([point1.order_dt, point2.order_dt], [point1.order_price, point2.order_price],
-                #         c='r' if point2.direction != Direction.Long.value else 'g')
-                if point2.direction != Direction.Long:
-                    data_dict[(md_agent_key, period, symbol)]['buy_sell_point_pair'].append(
-                        ([point1.order_dt, point2.order_dt], [point1.order_price, point2.order_price])
-                    )
-                else:
-                    data_dict[(md_agent_key, period, symbol)]['sell_buy_point_pair'].append(
-                        ([point1.order_dt, point2.order_dt], [point1.order_price, point2.order_price])
-                    )
+    for num, ((md_agent_key, period, symbol), (df_by_symbol, close_key)) in enumerate(symbol_rr_dic.items(), start=1):
+        detail_list = md_agent_key_order_detail_list_dic[md_agent_key]
+        data_dict[(md_agent_key, period, symbol)]['md'].append(df_by_symbol[close_key])
+        # 开仓
+        order_detail_list_sub = [_ for _ in detail_list
+                                 if _.symbol == symbol
+                                 and ((_.direction == Direction.Long.value and _.action == Action.Open.value)
+                                      or (_.direction == Direction.Short.value and _.action != Action.Open.value)
+                                      )
+                                 ]
+        trade_date_list = [_.order_dt for _ in order_detail_list_sub]
+        price = [_.order_price for _ in order_detail_list_sub]
+        # ax.scatter(trade_date_list, price, c='r', marker='^')
+        data_dict[(md_agent_key, period, symbol)]['long_open_or_short_close'].append((trade_date_list, price))
+        # 关仓
+        order_detail_list_sub = [_ for _ in detail_list
+                                 if (_.direction == Direction.Long.value and _.action != Action.Open.value)
+                                 or (_.direction == Direction.Short.value and _.action == Action.Open.value)]
+        trade_date_list = [_.order_dt for _ in order_detail_list_sub]
+        price = [_.order_price for _ in order_detail_list_sub]
+        # ax.scatter(trade_date_list, price, c='g', marker='v')
+        data_dict[(md_agent_key, period, symbol)]['short_open_or_long_close'].append((trade_date_list, price))
+        # 建立连线
+        order_detail_list_symbol = [_ for _ in detail_list if _.symbol == symbol]
+        for point1, point2 in zip(order_detail_list_symbol[:-1], order_detail_list_symbol[1:]):
+            if point1.order_dt == point2.order_dt:
+                # logger.debug("%s %f %s ignore", point2.order_dt, point2.order_price, point2.action)
+                continue
+            # logger.debug("%s %f -> %s %f %d",
+            #              point1.order_dt, point1.order_price, point2.order_dt, point2.order_price, point2.action)
+            # ax.plot([point1.order_dt, point2.order_dt], [point1.order_price, point2.order_price],
+            #         c='r' if point2.direction != Direction.Long.value else 'g')
+            if point2.direction != Direction.Long:
+                data_dict[(md_agent_key, period, symbol)]['buy_sell_point_pair'].append(
+                    ([point1.order_dt, point2.order_dt], [point1.order_price, point2.order_price])
+                )
+            else:
+                data_dict[(md_agent_key, period, symbol)]['sell_buy_point_pair'].append(
+                    ([point1.order_dt, point2.order_dt], [point1.order_price, point2.order_price])
+                )
 
     # show
-    show_plot_data(data_dict, title=f"MD and Order figure [{stg_run_id}]")
-    return data_dict
+    file_path = show_plot_data_dic(data_dict, title=f"MD and Order figure [{stg_run_id}]", **kwargs)
+    return data_dict, file_path
 
 
-def show_trade(stg_run_id, module_name_replacement_if_main='ibats_common.example.ma_cross_stg'
-               ) -> defaultdict(lambda: defaultdict(list)):
+def show_trade(stg_run_id, **kwargs) -> (defaultdict(lambda: defaultdict(list)), str):
     """
     plot candle and buy and sell point
     :param stg_run_id:
-    :param module_name_replacement_if_main:
+    :param kwargs:
     :return:
     """
     # stg_run_id = 1
-    stg_handler = strategy_handler_loader(
-        stg_run_id, module_name_replacement_if_main=module_name_replacement_if_main, is_4_shown=True)
+    if stg_run_id is None:
+        stg_run_id = get_stg_run_id_latest()
+
+    # 获取行情数据
+    sum_rr_df, symbol_rr_dic, td_md_agent_key_map = get_md(stg_run_id, return_td_md_agent_key_map=True)
+
     # 加载数据库 engine
     engine_ibats = engines.engine_ibats
     # 获取全部订单
@@ -277,110 +286,110 @@ def show_trade(stg_run_id, module_name_replacement_if_main='ibats_common.example
         ).filter(
             TradeDetail.stg_run_id == stg_run_id
         ).all()
+
     # 根据 md_agent 进行分组
     md_agent_key_order_detail_list_dic = defaultdict(list)
     for num, detail in enumerate(data_list_tot):
-        md_agent_key = stg_handler.stg_base._td_md_agent_key_map[detail.trade_agent_key]
+        md_agent_key = td_md_agent_key_map[detail.trade_agent_key]
         md_agent_key_order_detail_list_dic[md_agent_key].append(detail)
 
     # 获取历史行情数据
-    md_agent_key_cor_func_dic = stg_handler.get_periods_history_iterator()
-    agent_count = len(md_agent_key_cor_func_dic)
     data_dict = defaultdict(lambda: defaultdict(list))
-    # 根据 md_agent 对每一组行情 以及 对应的 order_detail_list 进行 plot
-    # fig = plt.figure(1, figsize=(20, 4.8 * agent_count))
-    for num, ((md_agent_key, period), (cor_func, meta_dic)) in enumerate(md_agent_key_cor_func_dic.items(), start=1):
+    for num, ((md_agent_key, period, symbol), (df_by_symbol, close_key)) in enumerate(symbol_rr_dic.items(), start=1):
         detail_list = md_agent_key_order_detail_list_dic[md_agent_key]
-        df = pd.DataFrame([md_s for num, datetime_tag, md_s in cor_func])
-        if df.shape[0] == 0:
-            continue
-        # ax = fig.add_subplot(num, 1, 1)
-        # 行情
-        symbol_key = meta_dic['symbol_key']
-        close_key = meta_dic['close_key']
-        timestamp_key = meta_dic['timestamp_key']
-        for symbol, df_by_symbol in df.groupby(symbol_key):
-            # df_by_symbol.set_index(timestamp_key)[close_key].plot(ax=ax, colormap='jet')
-            data_dict[(md_agent_key, period, symbol)]['md'].append(df_by_symbol.set_index(timestamp_key)[close_key])
-            # 开仓
-            detail_list_sub = [_ for _ in detail_list
-                               if _.symbol == symbol
-                               and ((_.direction == Direction.Long.value and _.action == Action.Open.value)
-                                    or (_.direction == Direction.Short.value and _.action != Action.Open.value)
-                                    )
-                               ]
-            trade_date_list = [_.trade_dt for _ in detail_list_sub]
-            price = [_.trade_price for _ in detail_list_sub]
-            # ax.scatter(trade_date_list, price, c='r', marker='^')
-            data_dict[(md_agent_key, period, symbol)]['long_open_or_short_close'].append((trade_date_list, price))
-            # 关仓
-            detail_list_sub = [_ for _ in detail_list
-                               if (_.direction == Direction.Long.value and _.action != Action.Open.value)
-                               or (_.direction == Direction.Short.value and _.action == Action.Open.value)]
-            trade_date_list = [_.order_dt for _ in detail_list_sub]
-            price = [_.trade_price for _ in detail_list_sub]
-            # ax.scatter(trade_date_list, price, c='g', marker='v')
-            data_dict[(md_agent_key, period, symbol)]['short_open_or_long_close'].append((trade_date_list, price))
-            # 建立连线
-            detail_list_symbol = [_ for _ in detail_list if _.symbol == symbol]
-            for point1, point2 in zip(detail_list_symbol[:-1], detail_list_symbol[1:]):
-                if point1.trade_dt == point2.trade_dt:
-                    # logger.debug("%s %f %s ignore", point2.order_dt, point2.order_price, point2.action)
-                    continue
-                # logger.debug("%s %f -> %s %f %d",
-                #              point1.order_dt, point1.order_price, point2.order_dt, point2.order_price, point2.action)
-                # ax.plot([point1.order_dt, point2.order_dt], [point1.order_price, point2.order_price],
-                #         c='r' if point2.direction != Direction.Long.value else 'g')
-                if point2.direction != Direction.Long:
-                    data_dict[(md_agent_key, period, symbol)]['buy_sell_point_pair'].append(
-                        ([point1.trade_dt, point2.trade_dt], [point1.trade_price, point2.trade_price])
-                    )
-                else:
-                    data_dict[(md_agent_key, period, symbol)]['sell_buy_point_pair'].append(
-                        ([point1.trade_dt, point2.trade_dt], [point1.trade_price, point2.trade_price])
-                    )
+        data_dict[(md_agent_key, period, symbol)]['md'].append(df_by_symbol[close_key])
+        # 开仓
+        detail_list_sub = [_ for _ in detail_list
+                           if _.symbol == symbol
+                           and ((_.direction == Direction.Long.value and _.action == Action.Open.value)
+                                or (_.direction == Direction.Short.value and _.action != Action.Open.value)
+                                )
+                           ]
+        trade_date_list = [_.trade_dt for _ in detail_list_sub]
+        price = [_.trade_price for _ in detail_list_sub]
+        # ax.scatter(trade_date_list, price, c='r', marker='^')
+        data_dict[(md_agent_key, period, symbol)]['long_open_or_short_close'].append((trade_date_list, price))
+        # 关仓
+        detail_list_sub = [_ for _ in detail_list
+                           if (_.direction == Direction.Long.value and _.action != Action.Open.value)
+                           or (_.direction == Direction.Short.value and _.action == Action.Open.value)]
+        trade_date_list = [_.trade_dt for _ in detail_list_sub]
+        price = [_.trade_price for _ in detail_list_sub]
+        # ax.scatter(trade_date_list, price, c='g', marker='v')
+        data_dict[(md_agent_key, period, symbol)]['short_open_or_long_close'].append((trade_date_list, price))
+        # 建立连线
+        detail_list_symbol = [_ for _ in detail_list if _.symbol == symbol]
+        for point1, point2 in zip(detail_list_symbol[:-1], detail_list_symbol[1:]):
+            if point1.trade_dt == point2.trade_dt:
+                # logger.debug("%s %f %s ignore", point2.order_dt, point2.order_price, point2.action)
+                continue
+            # logger.debug("%s %f -> %s %f %d",
+            #              point1.order_dt, point1.order_price, point2.order_dt, point2.order_price, point2.action)
+            # ax.plot([point1.order_dt, point2.order_dt], [point1.order_price, point2.order_price],
+            #         c='r' if point2.direction != Direction.Long.value else 'g')
+            if point2.direction != Direction.Long:
+                data_dict[(md_agent_key, period, symbol)]['buy_sell_point_pair'].append(
+                    ([point1.trade_dt, point2.trade_dt], [point1.trade_price, point2.trade_price])
+                )
+            else:
+                data_dict[(md_agent_key, period, symbol)]['sell_buy_point_pair'].append(
+                    ([point1.trade_dt, point2.trade_dt], [point1.trade_price, point2.trade_price])
+                )
 
     # show
-    show_plot_data(data_dict, title=f"MD and Trade figure [{stg_run_id}]")
-    return data_dict
+    file_path = show_plot_data_dic(data_dict, title=f"MD and Trade figure [{stg_run_id}]", **kwargs)
+    return data_dict, file_path
 
 
-def show_plot_data(data_dict: dict, title=None):
+def show_plot_data_dic(data_dict: dict, title=None, enable_show_plot=True, enable_save_plot=False):
     """
     将数据plot展示出来
     :param data_dict:
     :param title:
+    :param enable_show_plot:
+    :param enable_save_plot:
     :return:
     """
     data_len = len(data_dict)
-    # fig = plt.figure(1, figsize=(20, 4.8 * data_len))
-    fig, axs = plt.subplots(
-        data_len, 1,
-        # constrained_layout=True,
-        figsize=(20, 4.8 * data_len))
-    if title is None:
-        # fig.suptitle(title, fontsize=16)
-        title = ''
-    # 容易与 ax title 重叠
-    # if title is not None:
-    #     fig.suptitle(title, fontsize=16)
-    for num, ((md_agent_key, period, symbol), plot_data_dic) in enumerate(data_dict.items()):
-        # ax = fig.add_subplot(num, 1, 1)
-        ax = axs[num] if data_len > 1 else axs
-        ax.set_title(f"{title} - md_agent_key={md_agent_key} - period={period} - symbol={symbol}")
-        for md in plot_data_dic['md']:
-            md.plot(ax=ax, colormap='jet')
-        for x, y in plot_data_dic['long_open_or_short_close']:
-            ax.scatter(x, y, c='r', marker='^')
-        for x, y in plot_data_dic['short_open_or_long_close']:
-            ax.scatter(x, y, c='g', marker='v')
-        for x, y in plot_data_dic['buy_sell_point_pair']:
-            ax.plot(x, y, c='r')
-        for x, y in plot_data_dic['sell_buy_point_pair']:
-            ax.plot(x, y, c='g')
 
-    plt.show()
-    plt.close(fig)
+    def func():
+        fig, axs = plt.subplots(
+            data_len, 1,
+            # constrained_layout=True,
+            figsize=(20, 4.8 * data_len))
+        name = '' if title is None else title
+
+        # 容易与 ax title 重叠
+        # if title is not None:
+        #     fig.suptitle(title, fontsize=16)
+        for num, ((md_agent_key, period, symbol), plot_data_dic) in enumerate(data_dict.items()):
+            # ax = fig.add_subplot(num, 1, 1)
+            ax = axs[num] if data_len > 1 else axs
+            ax.set_title(f"{name} - md_agent_key={md_agent_key} - period={period} - symbol={symbol}")
+            for md in plot_data_dic['md']:
+                md.plot(ax=ax, colormap='jet')
+            for x, y in plot_data_dic['long_open_or_short_close']:
+                ax.scatter(x, y, c='r', marker='^')
+            for x, y in plot_data_dic['short_open_or_long_close']:
+                ax.scatter(x, y, c='g', marker='v')
+            for x, y in plot_data_dic['buy_sell_point_pair']:
+                ax.plot(x, y, c='r')
+            for x, y in plot_data_dic['sell_buy_point_pair']:
+                ax.plot(x, y, c='g')
+
+    if enable_show_plot:
+        func()
+        plt.show()
+
+    if enable_save_plot:
+        func()
+        file_name = get_file_name(f'title', name=title)
+        file_path = os.path.join(get_cache_folder_path(), file_name)
+        plt.savefig(file_path, dpi=75)
+    else:
+        file_path = None
+
+    return file_path
 
 
 def _test_use():

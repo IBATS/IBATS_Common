@@ -34,7 +34,7 @@ def clean_cache():
     """
     folder_path = get_cache_folder_path()
     for root, dirs, files in os.walk(folder_path, topdown=False):
-        print(root, dirs, files)
+        # print(root, dirs, files)
         for name in files:
             os.remove(os.path.join(root, name))
         for name in dirs:
