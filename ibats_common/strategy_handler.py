@@ -180,9 +180,9 @@ class StgHandlerRealtime(StgHandlerBase):
 
 class StgHandlerBacktest(StgHandlerBase):
 
-    def __init__(self, stg_run_id, stg_base: StgBase, md_key_period_agent_dic, date_from, date_to,
+    def __init__(self, stg_run_id, stg_base: StgBase, run_mode, md_key_period_agent_dic, date_from, date_to,
                  md_td_agent_key_list_map=None, **kwargs):
-        super().__init__(stg_run_id=stg_run_id, stg_base=stg_base, run_mode=RunMode.Backtest,
+        super().__init__(stg_run_id=stg_run_id, stg_base=stg_base, run_mode=run_mode,
                          md_key_period_agent_dic=md_key_period_agent_dic)
         # 设置回测时间区间
         self.date_from = try_2_date(date_from)
@@ -493,7 +493,7 @@ def strategy_handler_factory_multi_exchange(
             **strategy_handler_param)
     elif run_mode in (RunMode.Backtest, RunMode.Backtest_FixPercent):
         stg_handler = StgHandlerBacktest(
-            stg_run_id=stg_run_id, stg_base=stg_base, md_key_period_agent_dic=md_key_period_agent_dic,
+            stg_run_id=stg_run_id, stg_base=stg_base, run_mode=run_mode, md_key_period_agent_dic=md_key_period_agent_dic,
             **strategy_handler_param)
     else:
         raise ValueError('run_mode %d error' % run_mode)
