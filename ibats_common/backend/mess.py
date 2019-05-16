@@ -32,13 +32,26 @@ def csv_formatter(file_path_from, file_path_to):
     ret_df.to_csv(file_path_to, index=False)
 
 
-def get_latest_stg_run_id() -> int:
+def get_stg_run_info(stg_run_id=None) -> StgRunInfo:
     """
     查询数据库获取最新的 stg_run_id
+    :param stg_run_id:
     :return:
     """
     engine_ibats = engines.engine_ibats
     # 获取 收益曲线
+    with with_db_session(engine_ibats) as session:
+        if stg_run_id is None:
+            stg_run_id = session.query(func.max(StgRunInfo.stg_run_id)).scalar()
+
+        info = session.query(StgRunInfo).filter(StgRunInfo.stg_run_id == stg_run_id).first()
+
+    return info
+
+
+def get_stg_run_id_latest():
+    """获取最新的 stg_run_id"""
+    engine_ibats = engines.engine_ibats
     with with_db_session(engine_ibats) as session:
         stg_run_id = session.query(func.max(StgRunInfo.stg_run_id)).scalar()
 
