@@ -144,6 +144,9 @@ def get_rr_with_md(stg_run_id):
         )
 
     rr_df = pd.read_sql(sql_str, engine_ibats, params=[stg_run_id]).set_index('trade_dt')
+    if rr_df.shape[0] == 0:
+        return None, None
+
     rr_df['rr'] = rr_df['cash and margin'] / rr_df['cash and margin'].iloc[0]
     rr_df['rr without commission'] = rr_df['without commission'] / rr_df['without commission'].iloc[0]
 
