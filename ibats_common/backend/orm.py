@@ -313,8 +313,8 @@ class PosStatusDetail(BaseModel):
         self.multiple = multiple
         self.margin_ratio = margin_ratio
         self.calc_mode = calc_mode.value if isinstance(calc_mode, CalcMode) else calc_mode
-        self.last_status = None         # 记录上一个状态实例
-        self.last_date_status = None    # 记录上一日最后一个状态实例
+        self.last_status = None  # 记录上一个状态实例
+        self.last_date_status = None  # 记录上一日最后一个状态实例
 
     @staticmethod
     def create_by_trade_detail(trade_detail: TradeDetail):
@@ -805,8 +805,10 @@ class TradeAgentStatusDetail(BaseModel):
     cash_and_margin = Column(DOUBLE, default=0.0)
     cashflow_daily = Column(DOUBLE, default=0.0)
     cashflow_cum = Column(DOUBLE, default=0.0)
-    rr = Column(DOUBLE, default=0.0)
-    rr_compound = Column(DOUBLE, default=0.0)
+    rr = Column(DOUBLE, default=0.0)  # Return Rate
+    rr_nc = Column(DOUBLE, default=0.0)  # Return Rate Compound
+    rr_compound = Column(DOUBLE, default=0.0)  # Return Rate No Commission
+    rr_compound_nc = Column(DOUBLE, default=0.0)  # Return Rate Compound No Commission
     calc_mode = Column(TINYINT)  # 计算模式：0 普通模式，1 保证金模式
     logger = logging.getLogger(f'<Table:{__tablename__}>')
 
@@ -836,12 +838,14 @@ class TradeAgentStatusDetail(BaseModel):
         self.cash_and_margin = cash_available + curr_margin
         self.cashflow_daily = cashflow_daily
         self.cashflow_cum = cashflow_cum
-        self.rr = 0
-        self.rr_compound = 0
+        self.rr = 0  # Return Rate
+        self.rr_compound = 0  # Return Rate Compound
+        self.rr_nc = 0  # Return Rate No Commission
+        self.rr_compound_nc = 0  # Return Rate Compound No Commission
         self.calc_mode = calc_mode.value if isinstance(calc_mode, CalcMode) else calc_mode
         self.run_mode = run_mode.value if isinstance(run_mode, RunMode) else run_mode
-        self.pos_status_detail_dic = {}     # 用于记录当期状态对应的 pos_status_detail_dic
-        self.last_status = None             # 用于记录上一个状态的实力
+        self.pos_status_detail_dic = {}  # 用于记录当期状态对应的 pos_status_detail_dic
+        self.last_status = None  # 用于记录上一个状态的实力
 
     def __repr__(self):
         return f"<TradeAgentStatusDetail(id='{self.trade_agent_status_detail_idx}', " \
@@ -1045,11 +1049,13 @@ class TradeAgentStatusDetail(BaseModel):
         detail.commission_tot = commission_tot
         detail.cash_and_margin = detail.cash_available + curr_margin
         detail.rr = detail.cash_and_margin / detail.cash_init - 1
+        detail.rr_nc = (detail.cash_and_margin + commission_tot) / detail.cash_init - 1
         # 当期盈利及现金的计算均是按照单利计算的，计算rr的时候需要将单利转化为复利
         # 计算方法为：
         # 当期状态复利rr = ("当期状态的单利 rr" - "上一状态的单利 rr" + 1) * ("上一状态的复利 rr" + 1) - 1
         # 进一步合并公式 =  （“当期 cash_and_margin” - “上一状态 cash_and_margin” + cash_init）/ cash_init * "上一状态的复利 rr"
         detail.rr_compound = (detail.rr - self.rr + 1) * (self.rr + 1) - 1
+        detail.rr_compound_nc = (detail.rr_nc - self.rr_nc + 1) * (self.rr_nc + 1) - 1
 
         if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
@@ -1181,13 +1187,15 @@ class TradeAgentStatusDetail(BaseModel):
         detail.cashflow_daily = cashflow_daily
         detail.cashflow_cum = cashflow_cum
         detail.commission_tot = commission_tot
-        detail.cash_and_margin = cash_available + curr_margin
+        detail.cash_and_margin = self.cash_init + cashflow_cum + curr_margin
         detail.rr = detail.cash_and_margin / detail.cash_init - 1
+        detail.rr_nc = (detail.cash_and_margin + commission_tot) / detail.cash_init - 1
         # 当期盈利及现金的计算均是按照单利计算的，计算rr的时候需要将单利转化为复利
         # 计算方法为：
         # 当期状态复利rr = ("当期状态的单利 rr" - "上一状态的单利 rr" + 1) * ("上一状态的复利 rr" + 1) - 1
         # 进一步合并公式 =  （“当期 cash_and_margin” - “上一状态 cash_and_margin” + cash_init）/ cash_init * "上一状态的复利 rr"
         detail.rr_compound = (detail.rr - self.rr + 1) * (self.rr + 1) - 1
+        detail.rr_compound_nc = (detail.rr_nc - self.rr_nc + 1) * (self.rr_nc + 1) - 1
 
         if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
@@ -1218,13 +1226,16 @@ class StgRunStatusDetail(BaseModel):
     cash_and_margin = Column(DOUBLE, default=0.0)
     cashflow_daily = Column(DOUBLE, default=0.0)
     cashflow_cum = Column(DOUBLE, default=0.0)
-    rr = Column(DOUBLE, default=0.0)
-    rr_compound = Column(DOUBLE, default=0.0)
+    rr = Column(DOUBLE, default=0.0)  # Return Rate
+    rr_nc = Column(DOUBLE, default=0.0)  # Return Rate Compound
+    rr_compound = Column(DOUBLE, default=0.0)  # Return Rate No Commission
+    rr_compound_nc = Column(DOUBLE, default=0.0)  # Return Rate Compound No Commission
 
     def __init__(self, stg_run_id=None,
                  trade_dt=None, trade_date=None, trade_time=None, trade_millisec=None, cash_available_last_day=0.0,
                  cash_available=None, curr_margin=None, close_profit=None, position_profit=None, floating_pl_cum=None,
-                 commission_tot=None, cash_init=None, cashflow_daily=0.0, cashflow_cum=0.0, rr=0, rr_compound=0.0):
+                 commission_tot=None, cash_init=None, cashflow_daily=0.0, cashflow_cum=0.0,
+                 rr=0, rr_nc=0.0, rr_compound=0.0, rr_compound_nc=0.0):
         self.stg_run_id = stg_run_id
         self.stg_run_status_detail_idx = None if stg_run_id is None else idx_generator(
             stg_run_id, StgRunStatusDetail)
@@ -1244,7 +1255,9 @@ class StgRunStatusDetail(BaseModel):
         self.cashflow_daily = cashflow_daily
         self.cashflow_cum = cashflow_cum
         self.rr = rr
+        self.rr_nc = rr_nc
         self.rr_compound = rr_compound
+        self.rr_compound_nc = rr_compound_nc
 
     @staticmethod
     def create_t_1(
@@ -1324,11 +1337,13 @@ class StgRunStatusDetail(BaseModel):
             cashflow_cum += 0 if detail.cashflow_cum is None else detail.cashflow_cum
 
         rr = cash_and_margin / cash_init - 1
+        rr_nc = (cash_and_margin + commission_tot) / cash_init - 1
         # 当期盈利及现金的计算均是按照单利计算的，计算rr的时候需要将单利转化为复利
         # 计算方法为：
         # 当期状态复利rr = ("当期状态的单利 rr" - "上一状态的单利 rr" + 1) * ("上一状态的复利 rr" + 1) - 1
         # 进一步合并公式 =  （“当期 cash_and_margin” - “上一状态 cash_and_margin” + cash_init）/ cash_init * "上一状态的复利 rr"
         rr_compound = (rr - self.rr + 1) * (self.rr + 1) - 1
+        rr_compound_nc = (rr_nc - self.rr_nc + 1) * (self.rr_nc + 1) - 1
 
         detail = StgRunStatusDetail(
             stg_run_id=self.stg_run_id,
@@ -1347,7 +1362,9 @@ class StgRunStatusDetail(BaseModel):
             cashflow_daily=cashflow_daily,
             cashflow_cum=cashflow_cum,
             rr=rr,
+            rr_nc=rr_nc,
             rr_compound=rr_compound,
+            rr_compound_nc=rr_compound_nc,
         )
         return detail
 
