@@ -3,21 +3,23 @@
 Created on 2017/10/9
 @author: MG
 """
+import logging
+import warnings
+from collections import defaultdict
 from datetime import datetime, timedelta
-from sqlalchemy import MetaData, Table, Column, Integer, String, DateTime, Boolean, SmallInteger, Date, Time, func
+
+import numpy as np
+import pandas as pd
+from ibats_utils.db import with_db_session
+from ibats_utils.mess import str_2_date, pd_timedelta_2_timedelta, datetime_2_str, date_time_2_str, try_2_datetime
+from sqlalchemy import Column, Integer, String, DateTime, SmallInteger, Date, Time
 from sqlalchemy.dialects.mysql import DOUBLE, TINYINT
 from sqlalchemy.ext.declarative import declarative_base
-import pandas as pd
+
 from ibats_common.backend import engines
-from ibats_utils.db import with_db_session, get_db_session
-from ibats_common.common import Action, Direction, CalcMode, ExchangeName
-from ibats_utils.mess import str_2_date, pd_timedelta_2_timedelta, datetime_2_str, date_time_2_str, try_2_datetime
-import logging
-from collections import defaultdict
-import warnings
+from ibats_common.common import Action, Direction, CalcMode, ExchangeName, RunMode
 from ibats_common.common import PositionDateType
 from ibats_common.config import config
-import numpy as np
 
 engine_ibats = engines.engine_ibats
 BaseModel = declarative_base()
@@ -311,6 +313,8 @@ class PosStatusDetail(BaseModel):
         self.multiple = multiple
         self.margin_ratio = margin_ratio
         self.calc_mode = calc_mode.value if isinstance(calc_mode, CalcMode) else calc_mode
+        self.last_status = None         # 记录上一个状态实例
+        self.last_date_status = None    # 记录上一日最后一个状态实例
 
     @staticmethod
     def create_by_trade_detail(trade_detail: TradeDetail):
@@ -440,7 +444,8 @@ class PosStatusDetail(BaseModel):
                         position_cur = position_last - trade_vol
                         position_value = position_cur * trade_price
                         pos_status_detail.position_value = position_value
-                        avg_price = (position_last * avg_price_last - trade_price * trade_vol + commission) / position_cur
+                        avg_price = (
+                                            position_last * avg_price_last - trade_price * trade_vol + commission) / position_cur
                         pos_status_detail.avg_price = avg_price
                         pos_status_detail.position = position_cur
                         # 计算浮动收益 floating_pl floating_pl_rate
@@ -684,7 +689,8 @@ class PosStatusDetail(BaseModel):
             # 本次现金流
             # 保证金模式下的现金流变化 = 盈利增量 - 保证金增量 - 手续费
             # 盈利增量 = 持仓市值增量 × 方向
-            detail.cashflow = cashflow = (position_value - self.position_value) * direction_int - margin_chg - commission
+            detail.cashflow = cashflow = (
+                                                 position_value - self.position_value) * direction_int - margin_chg - commission
             # 每日现金流
             if self.trade_date != trade_date:
                 detail.cashflow_daily = cashflow
@@ -751,6 +757,12 @@ class PosStatusDetail(BaseModel):
                                             margin_ratio=self.margin_ratio,
                                             calc_mode=self.calc_mode
                                             )
+        pos_status_detail.last_status = self
+        if is_new_day:
+            pos_status_detail.last_date_status = self
+        else:
+            pos_status_detail.last_date_status = self.last_date_status
+
         return pos_status_detail
 
     @staticmethod
@@ -794,6 +806,7 @@ class TradeAgentStatusDetail(BaseModel):
     cashflow_daily = Column(DOUBLE, default=0.0)
     cashflow_cum = Column(DOUBLE, default=0.0)
     rr = Column(DOUBLE, default=0.0)
+    rr_compound = Column(DOUBLE, default=0.0)
     calc_mode = Column(TINYINT)  # 计算模式：0 普通模式，1 保证金模式
     logger = logging.getLogger(f'<Table:{__tablename__}>')
 
@@ -801,7 +814,8 @@ class TradeAgentStatusDetail(BaseModel):
                  trade_dt=None, trade_date=None, trade_time=None, trade_millisec=None, cash_available_last_day=0.0,
                  cash_available=0.0, position_value=0.0, curr_margin=0.0, close_profit=0.0, position_profit=0.0,
                  floating_pl_cum=0.0, cashflow_daily=0.0, cashflow_cum=0.0,
-                 commission_tot=0.0, cash_init=0.0, calc_mode: (int, CalcMode) = CalcMode.Normal.value):
+                 commission_tot=0.0, cash_init=0.0, calc_mode: (int, CalcMode) = CalcMode.Normal.value,
+                 run_mode: (int, RunMode) = RunMode.Backtest.value):
         self.stg_run_id = stg_run_id
         self.trade_agent_status_detail_idx = None if stg_run_id is None else idx_generator(
             stg_run_id, TradeAgentStatusDetail)
@@ -823,7 +837,11 @@ class TradeAgentStatusDetail(BaseModel):
         self.cashflow_daily = cashflow_daily
         self.cashflow_cum = cashflow_cum
         self.rr = 0
-        self.calc_mode = calc_mode.value if calc_mode is CalcMode else calc_mode
+        self.rr_compound = 0
+        self.calc_mode = calc_mode.value if isinstance(calc_mode, CalcMode) else calc_mode
+        self.run_mode = run_mode.value if isinstance(run_mode, RunMode) else run_mode
+        self.pos_status_detail_dic = {}     # 用于记录当期状态对应的 pos_status_detail_dic
+        self.last_status = None             # 用于记录上一个状态的实力
 
     def __repr__(self):
         return f"<TradeAgentStatusDetail(id='{self.trade_agent_status_detail_idx}', " \
@@ -835,8 +853,9 @@ class TradeAgentStatusDetail(BaseModel):
 
     @staticmethod
     def create_t_1(stg_run_id, trade_agent_key, init_cash: int, timestamp_curr: (datetime, pd.Timestamp) = None,
-               md: dict = None, timestamp_key=None, date_key=None, time_key=None, milli_sec_key=None,
-                   calc_mode: (int, CalcMode) = CalcMode.Normal.value):
+                   md: dict = None, timestamp_key=None, date_key=None, time_key=None, milli_sec_key=None,
+                   calc_mode: (int, CalcMode) = CalcMode.Normal.value,
+                   run_mode: (int, RunMode) = RunMode.Backtest.value):
         """
         根据 md 及 初始化资金 创建对象，默认日期为当前md数据-1天
         :param stg_run_id:
@@ -849,6 +868,7 @@ class TradeAgentStatusDetail(BaseModel):
         :param time_key: timestamp_curr 或 md + key 参数 两组参数二选其一
         :param milli_sec_key: timestamp_curr 或 md + key 参数 两组参数二选其一
         :param calc_mode:
+        :param run_mode:
         :return:
         """
         warnings.warn('该函数为范例函数，可以根据实际情况改写', UserWarning)
@@ -868,7 +888,7 @@ class TradeAgentStatusDetail(BaseModel):
             trade_dt = timestamp_curr
             trade_millisec = int(md.setdefault(milli_sec_key, 0)) if milli_sec_key is not None else 0
 
-        calc_mode = calc_mode.value if isinstance(calc_mode, CalcMode) else calc_mode
+        # calc_mode = calc_mode.value if isinstance(calc_mode, CalcMode) else calc_mode
         acc_status_detail = TradeAgentStatusDetail(stg_run_id=stg_run_id,
                                                    trade_agent_key=trade_agent_key,
                                                    trade_dt=trade_dt,
@@ -883,6 +903,7 @@ class TradeAgentStatusDetail(BaseModel):
                                                    position_profit=0,
                                                    cash_init=init_cash,
                                                    calc_mode=calc_mode,
+                                                   run_mode=run_mode,
                                                    )
         if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
@@ -913,12 +934,38 @@ class TradeAgentStatusDetail(BaseModel):
                                                            commission_tot=self.commission_tot,
                                                            cash_init=self.cash_init,
                                                            calc_mode=self.calc_mode,
+                                                           run_mode=self.run_mode,
                                                            )
+        trade_agent_status_detail.last_status = self
         return trade_agent_status_detail
 
-    def update_by_pos_status_detail(self, pos_status_detail_dic, timestamp_curr: (datetime, pd.Timestamp) = None,
-                                    md: dict = None,
-                                    timestamp_key=None, date_key=None, time_key=None, milli_sec_key=None):
+    def update_by_pos_status_detail(
+            self, pos_status_detail_dic, timestamp_curr: (datetime, pd.Timestamp) = None, md: dict = None,
+            timestamp_key=None, date_key=None, time_key=None, milli_sec_key=None):
+        """
+        根据 持仓列表更新账户信息
+        :param pos_status_detail_dic:
+        :param timestamp_curr: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param md: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param timestamp_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param date_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param time_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param milli_sec_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :return:
+        """
+        if self.run_mode == RunMode.Backtest.value:
+            detail = self._update_by_pos_status_detail(
+                pos_status_detail_dic, timestamp_curr, md, timestamp_key, date_key, time_key, milli_sec_key)
+        elif self.run_mode == RunMode.Backtest_FixPercent.value:
+            detail = self._update_by_pos_status_detail_fix_percent(
+                pos_status_detail_dic, timestamp_curr, md, timestamp_key, date_key, time_key, milli_sec_key)
+
+        detail.pos_status_detail_dic = pos_status_detail_dic.copy()
+        return detail
+
+    def _update_by_pos_status_detail(self, pos_status_detail_dic, timestamp_curr: (datetime, pd.Timestamp) = None,
+                                     md: dict = None,
+                                     timestamp_key=None, date_key=None, time_key=None, milli_sec_key=None):
         """
         根据 持仓列表更新账户信息
         :param pos_status_detail_dic:
@@ -983,7 +1030,7 @@ class TradeAgentStatusDetail(BaseModel):
                 "cash_init=%10.2f cashflow_cum=%10.2f cash_available_last_day=%10.2f cashflow_daily=%10.2f",
                 detail.trade_dt,
                 cash_available, cash_available_last_day + cashflow_daily,
-                cash_available - (cash_available_last_day + cashflow_daily),
+                                cash_available - (cash_available_last_day + cashflow_daily),
                 self.cash_init, cashflow_cum, cash_available_last_day, cashflow_daily)
         else:
             pass
@@ -997,7 +1044,150 @@ class TradeAgentStatusDetail(BaseModel):
         detail.cashflow_cum = cashflow_cum
         detail.commission_tot = commission_tot
         detail.cash_and_margin = detail.cash_available + curr_margin
-        detail.rr = detail.cash_and_margin / detail.cash_init
+        detail.rr = detail.cash_and_margin / detail.cash_init - 1
+        # 当期盈利及现金的计算均是按照单利计算的，计算rr的时候需要将单利转化为复利
+        # 计算方法为：
+        # 当期状态复利rr = ("当期状态的单利 rr" - "上一状态的单利 rr" + 1) * ("上一状态的复利 rr" + 1) - 1
+        # 进一步合并公式 =  （“当期 cash_and_margin” - “上一状态 cash_and_margin” + cash_init）/ cash_init * "上一状态的复利 rr"
+        detail.rr_compound = (detail.rr - self.rr + 1) * (self.rr + 1) - 1
+
+        if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
+            # 更新最新持仓纪录
+            with with_db_session(engine_ibats, expire_on_commit=False) as session:
+                session.add(detail)
+                session.commit()
+        return detail
+
+    def _update_by_pos_status_detail_fix_percent(self, pos_status_detail_dic,
+                                                 timestamp_curr: (datetime, pd.Timestamp) = None, md: dict = None,
+                                                 timestamp_key=None, date_key=None, time_key=None, milli_sec_key=None):
+        """
+        根据 持仓列表更新账户信息
+        :param pos_status_detail_dic:
+        :param timestamp_curr: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param md: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param timestamp_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param date_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param time_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :param milli_sec_key: timestamp_curr 或 md + key 参数 两组参数二选其一
+        :return:
+        """
+        warnings.warn('该函数为范例函数，可以根据实际情况改写', UserWarning)
+        # 更新日期、时间
+        if timestamp_curr is None:
+            timestamp_curr = md[timestamp_key]
+
+        if timestamp_curr is None:
+            trade_date = str_2_date(md[date_key]) - timedelta(days=1)
+            trade_time = pd_timedelta_2_timedelta(md[time_key])
+            trade_dt = datetime_2_str(date_time_2_str(trade_date, trade_time))
+            trade_millisec = int(md.setdefault(milli_sec_key, 0)) if milli_sec_key is not None else 0
+        else:
+            trade_date = timestamp_curr.date()
+            trade_time = timestamp_curr.time()
+            trade_dt = timestamp_curr
+            trade_millisec = int(md.setdefault(milli_sec_key, 0)) if milli_sec_key is not None else 0
+
+        is_new_day = self.trade_date != trade_date
+        detail = self.create_by_self(is_new_day=is_new_day)
+        detail.trade_dt = trade_dt
+        detail.trade_date = trade_date
+        detail.trade_time = trade_time
+        detail.trade_millisec = trade_millisec
+
+        # 上一状态时的 pos_status_detail_dic
+        # pos_status_detail_dic_last = self.last_status.pos_status_detail_dic if self.last_status is not None else {}
+        pos_status_detail_dic_last = self.pos_status_detail_dic
+        # 更新非日期数据
+        curr_margin = 0
+        position_value = 0
+        close_profit = 0
+        position_profit = 0
+        floating_pl_cum = 0
+        cashflow_daily, cashflow_cum = 0, 0
+        commission_tot = 0
+        position_rate_tot = 0
+        for instrument_id, pos_status_detail in pos_status_detail_dic.items():
+            position_rate = pos_status_detail.position
+            curr_margin += position_rate  # curr_margin 记录的是持仓比例例如 1 满仓; 0 空仓;
+            position_rate_tot += position_rate  # 累计持仓比例 1 满仓; 0 空仓;
+            # 固定比例仓位下，固定的是“margin 固定保证金比例”，而不是 “position_value 持仓手数”，因此，其他数据的计算需要进行一次转换
+            # margin_2_pos_rate 是用来记录 从在固定 margin 的情况下，其他数据的转换比例
+            if instrument_id in pos_status_detail_dic_last:
+                pos_status_detail_last = pos_status_detail_dic_last[instrument_id]
+                if pos_status_detail.margin > 0:
+                    margin_2_pos_rate = position_rate / pos_status_detail.margin
+                elif pos_status_detail.margin == 0 and pos_status_detail_last.margin > 0:
+                    margin_2_pos_rate = position_rate / pos_status_detail_last.margin
+                else:
+                    margin_2_pos_rate = 0
+
+                # 计算 close_profit, floating_pl_cum, cashflow_cum, commission_tot 需要与上一状态插值进行计算
+                close_profit += ((pos_status_detail.floating_pl_cum - pos_status_detail.floating_pl) -
+                                 (pos_status_detail_last.floating_pl_cum - pos_status_detail_last.floating_pl)
+                                 ) * margin_2_pos_rate
+                floating_pl_cum += (pos_status_detail.floating_pl_cum - pos_status_detail_last.floating_pl_cum
+                                    ) * margin_2_pos_rate
+                cashflow_cum += (pos_status_detail.cashflow_cum - pos_status_detail_last.cashflow_cum
+                                 ) * margin_2_pos_rate
+                commission_tot += (pos_status_detail.commission_tot - pos_status_detail_last.commission_tot
+                                   ) * margin_2_pos_rate
+
+            else:
+                if pos_status_detail.margin > 0:
+                    margin_2_pos_rate = position_rate / pos_status_detail.margin
+                else:
+                    margin_2_pos_rate = 0
+
+                # 计算 close_profit, floating_pl_cum, cashflow_cum, commission_tot 需要与上一状态插值进行计算
+                close_profit += (pos_status_detail.floating_pl_cum - pos_status_detail.floating_pl) * margin_2_pos_rate
+                floating_pl_cum += pos_status_detail.floating_pl_cum * margin_2_pos_rate
+                cashflow_cum += pos_status_detail.cashflow_cum * margin_2_pos_rate
+                commission_tot += pos_status_detail.commission_tot * margin_2_pos_rate
+
+            # 计算position_value, cashflow_daily, position_profit
+            position_value += pos_status_detail.position_value * margin_2_pos_rate
+            cashflow_daily += pos_status_detail.cashflow_daily * margin_2_pos_rate
+            position_profit += pos_status_detail.floating_pl * margin_2_pos_rate
+
+        # 计算 close_profit, floating_pl_cum, cashflow_cum, commission_tot 需要与上一状态插值进行计算
+        close_profit = self.close_profit + close_profit
+        floating_pl_cum = self.floating_pl_cum + floating_pl_cum
+        cashflow_cum = self.cashflow_cum + cashflow_cum
+        commission_tot = self.commission_tot + commission_tot
+
+        # 这里不考虑手续费造成的实际可用现金可能为负数的清空，仅简单计算 cash + margin = 1
+        # cash_available = 1 - curr_margin
+
+        # 记录当前可用现金，在补丁比例模式下，可用现金等于初始现金 - 累计持仓比例
+        detail.cash_available = cash_available = self.cash_init - position_rate_tot
+        # 以下检查不适用。因为固定比例持仓分析，cash_available 相当于闲置现金比例，不会随盈利现金增长而等比例变化
+        # cash_available_last_day = detail.cash_available_last_day
+        # calc_gap = cash_available - (cash_available_last_day + cashflow_daily)
+        # if calc_gap < -0.01 or 0.01 < calc_gap:
+        #     self.logger.warning(
+        #         "%s cash_init + cashflow_cum = %10.5f 比 cash_available_last_day + cashflow_daily = %10.5f 多 %10.5f。"
+        #         "cash_init=%10.5f cashflow_cum=%10.5f cash_available_last_day=%10.5f cashflow_daily=%10.5f",
+        #         detail.trade_dt,
+        #         cash_available, cash_available_last_day + cashflow_daily,
+        #                         cash_available - (cash_available_last_day + cashflow_daily),
+        #         self.cash_init, cashflow_cum, cash_available_last_day, cashflow_daily)
+
+        detail.position_value = position_value
+        detail.curr_margin = curr_margin
+        detail.close_profit = close_profit
+        detail.position_profit = position_profit
+        detail.floating_pl_cum = floating_pl_cum
+        detail.cashflow_daily = cashflow_daily
+        detail.cashflow_cum = cashflow_cum
+        detail.commission_tot = commission_tot
+        detail.cash_and_margin = cash_available + curr_margin
+        detail.rr = detail.cash_and_margin / detail.cash_init - 1
+        # 当期盈利及现金的计算均是按照单利计算的，计算rr的时候需要将单利转化为复利
+        # 计算方法为：
+        # 当期状态复利rr = ("当期状态的单利 rr" - "上一状态的单利 rr" + 1) * ("上一状态的复利 rr" + 1) - 1
+        # 进一步合并公式 =  （“当期 cash_and_margin” - “上一状态 cash_and_margin” + cash_init）/ cash_init * "上一状态的复利 rr"
+        detail.rr_compound = (detail.rr - self.rr + 1) * (self.rr + 1) - 1
 
         if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
@@ -1029,11 +1219,12 @@ class StgRunStatusDetail(BaseModel):
     cashflow_daily = Column(DOUBLE, default=0.0)
     cashflow_cum = Column(DOUBLE, default=0.0)
     rr = Column(DOUBLE, default=0.0)
+    rr_compound = Column(DOUBLE, default=0.0)
 
     def __init__(self, stg_run_id=None,
                  trade_dt=None, trade_date=None, trade_time=None, trade_millisec=None, cash_available_last_day=0.0,
                  cash_available=None, curr_margin=None, close_profit=None, position_profit=None, floating_pl_cum=None,
-                 commission_tot=None, cash_init=None, cashflow_daily=0.0, cashflow_cum=0.0, rr=0):
+                 commission_tot=None, cash_init=None, cashflow_daily=0.0, cashflow_cum=0.0, rr=0, rr_compound=0.0):
         self.stg_run_id = stg_run_id
         self.stg_run_status_detail_idx = None if stg_run_id is None else idx_generator(
             stg_run_id, StgRunStatusDetail)
@@ -1053,15 +1244,16 @@ class StgRunStatusDetail(BaseModel):
         self.cashflow_daily = cashflow_daily
         self.cashflow_cum = cashflow_cum
         self.rr = rr
+        self.rr_compound = rr_compound
 
     @staticmethod
-    def create_by_trade_agent_status_detail_list(stg_run_id, trade_agent_status_detail_list):
+    def create_t_1(
+            stg_run_id, trade_agent_status_detail_list):
         """通过 trade_agent_status_detail_list 更新当前 stg_run_detail 状态"""
         data_len = len(trade_agent_status_detail_list)
         if data_len == 0:
             return None
 
-        stg_run_id = stg_run_id
         trade_dt, trade_date, trade_time, trade_millisec = None, None, None, None
         cash_available_last_day, cash_available, curr_margin, close_profit, position_profit = 0, 0, 0, 0, 0
         floating_pl_cum, commission_tot, cash_init, cash_and_margin, cashflow_daily, cashflow_cum, rr = 0, 0, 0, 0, 0, 0, 0
@@ -1084,7 +1276,7 @@ class StgRunStatusDetail(BaseModel):
             cashflow_daily += 0 if detail.cashflow_daily is None else detail.cashflow_daily
             cashflow_cum += 0 if detail.cashflow_cum is None else detail.cashflow_cum
 
-        stg_run_status_detail = StgRunStatusDetail(
+        detail = StgRunStatusDetail(
             stg_run_id=stg_run_id,
             trade_dt=trade_dt,
             trade_date=trade_date,
@@ -1100,9 +1292,64 @@ class StgRunStatusDetail(BaseModel):
             cash_init=cash_init,
             cashflow_daily=cashflow_daily,
             cashflow_cum=cashflow_cum,
-            rr=rr,
         )
-        return stg_run_status_detail
+
+        return detail
+
+    def update_by_trade_agent_status_detail_list(self, trade_agent_status_detail_list):
+        data_len = len(trade_agent_status_detail_list)
+        if data_len == 0:
+            return None
+
+        trade_dt, trade_date, trade_time, trade_millisec = None, None, None, None
+        cash_available_last_day, cash_available, curr_margin, close_profit, position_profit = 0, 0, 0, 0, 0
+        floating_pl_cum, commission_tot, cash_init, cash_and_margin, cashflow_daily, cashflow_cum, rr = 0, 0, 0, 0, 0, 0, 0
+        for detail in trade_agent_status_detail_list:
+            if trade_dt is None or trade_dt < detail.trade_dt:
+                trade_dt = detail.trade_dt
+                trade_date = detail.trade_date
+                trade_time = detail.trade_time
+                trade_millisec = detail.trade_millisec
+
+            cash_available_last_day += 0 if detail.cash_available_last_day is None else detail.cash_available_last_day
+            cash_available += 0 if detail.cash_available is None else detail.cash_available
+            curr_margin += 0 if detail.curr_margin is None else detail.curr_margin
+            close_profit += 0 if detail.close_profit is None else detail.close_profit
+            position_profit += 0 if detail.position_profit is None else detail.position_profit
+            floating_pl_cum += 0 if detail.floating_pl_cum is None else detail.floating_pl_cum
+            commission_tot += 0 if detail.commission_tot is None else detail.commission_tot
+            cash_init += 0 if detail.cash_init is None else detail.cash_init
+            cash_and_margin += 0 if detail.cash_and_margin is None else detail.cash_and_margin
+            cashflow_daily += 0 if detail.cashflow_daily is None else detail.cashflow_daily
+            cashflow_cum += 0 if detail.cashflow_cum is None else detail.cashflow_cum
+
+        rr = cash_and_margin / cash_init - 1
+        # 当期盈利及现金的计算均是按照单利计算的，计算rr的时候需要将单利转化为复利
+        # 计算方法为：
+        # 当期状态复利rr = ("当期状态的单利 rr" - "上一状态的单利 rr" + 1) * ("上一状态的复利 rr" + 1) - 1
+        # 进一步合并公式 =  （“当期 cash_and_margin” - “上一状态 cash_and_margin” + cash_init）/ cash_init * "上一状态的复利 rr"
+        rr_compound = (rr - self.rr + 1) * (self.rr + 1) - 1
+
+        detail = StgRunStatusDetail(
+            stg_run_id=self.stg_run_id,
+            trade_dt=trade_dt,
+            trade_date=trade_date,
+            trade_time=trade_time,
+            trade_millisec=trade_millisec,
+            cash_available_last_day=cash_available_last_day,
+            cash_available=cash_available,
+            curr_margin=curr_margin,
+            close_profit=close_profit,
+            position_profit=position_profit,
+            floating_pl_cum=floating_pl_cum,
+            commission_tot=commission_tot,
+            cash_init=cash_init,
+            cashflow_daily=cashflow_daily,
+            cashflow_cum=cashflow_cum,
+            rr=rr,
+            rr_compound=rr_compound,
+        )
+        return detail
 
 
 def init():

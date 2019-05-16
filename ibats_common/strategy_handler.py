@@ -9,26 +9,26 @@
 """
 import json
 import logging
-from collections import defaultdict
-from functools import lru_cache
-from threading import Thread
-import warnings
-from queue import Empty
 import time
-from datetime import date, datetime
+import warnings
 from abc import ABC
+from collections import defaultdict
+from datetime import date, datetime
+from functools import lru_cache
+from queue import Empty
+from threading import Thread
 
+from ibats_utils.db import with_db_session
+from ibats_utils.mess import try_2_date, load_class, get_module_path
 from sqlalchemy.exc import SQLAlchemyError
 
 from ibats_common.backend import engines
 from ibats_common.backend.orm import StgRunInfo, StgRunStatusDetail
 from ibats_common.common import ExchangeName, RunMode, ContextKey
+from ibats_common.config import config
 from ibats_common.md import md_agent_factory
 from ibats_common.strategy import StgBase
-from ibats_utils.db import with_db_session
-from ibats_utils.mess import try_2_date, load_class, get_module_path
 from ibats_common.trade import trader_agent_factory
-from ibats_common.config import config
 
 engine_ibats = engines.engine_ibats
 logger = logging.getLogger(__name__)
@@ -281,6 +281,19 @@ class StgHandlerBacktest(StgHandlerBase):
 
         self.logger.info('全部数据推送完成， 累计推送 %d 条数据', data_count)
 
+    def _update_stg_run_status_detail(self, trade_agent_status_detail_list):
+        if trade_agent_status_detail_list is not None and len(trade_agent_status_detail_list) > 0:
+            if len(self.stg_run_status_detail_list) == 0:
+                detail_last = StgRunStatusDetail.create_t_1(
+                    self.stg_run_id, trade_agent_status_detail_list)
+                self.stg_run_status_detail_list.append(detail_last)
+            else:
+                detail_last = self.stg_run_status_detail_list[-1]
+
+            detail = detail_last.update_by_trade_agent_status_detail_list(
+                trade_agent_status_detail_list)
+            self.stg_run_status_detail_list.append(detail)
+
     def run(self):
         """
         执行回测
@@ -320,21 +333,41 @@ class StgHandlerBacktest(StgHandlerBase):
                         continue
                     self.stg_base.trade_agent_dic[trade_agent_key].update_trade_agent_status_detail()
 
-                if config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 1 or (
-                        config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 2 and datetime_tag_last is not None and
-                        datetime_tag_last.date() != datetime_tag.date()):
-                    trade_agent_status_detail_list = [trade_agent.trade_agent_status_detail_latest
-                                                      for trade_agent in self.stg_base.trade_agent_dic.values()
-                                                      if trade_agent.trade_agent_status_detail_latest is not None]
-                    detail = StgRunStatusDetail.create_by_trade_agent_status_detail_list(
-                        self.stg_run_id, trade_agent_status_detail_list)
-                    self.stg_run_status_detail_list.append(detail)
+                # 以下两种情况开始计算 StgRunStatusDetail：
+                # 1）config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 1 时，每一次状态更新均重新计算
+                # 2）每一个自然日开始
+                # 首次运行的时候，回触发一次初始化，先生成一条 T-1日的状态记录
+                if config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 1:
+                    trade_agent_status_detail_list = [
+                        trade_agent.trade_agent_status_detail_latest
+                        for key, trade_agent in self.stg_base.trade_agent_dic.items()
+                        if key != ExchangeName.Default and trade_agent.trade_agent_status_detail_latest is not None]
+
+                elif (config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 2
+                      and datetime_tag_last is not None
+                      and datetime_tag_last.date() != datetime_tag.date()):
+                    # TODO: 这里应该是找前一交易日的最后一个 trade_agent_status_detail
+                    trade_agent_status_detail_list = [
+                        trade_agent.trade_agent_status_detail_latest
+                        for key, trade_agent in self.stg_base.trade_agent_dic.items()
+                        if key != ExchangeName.Default and trade_agent.trade_agent_status_detail_latest is not None]
+                else:
+                    trade_agent_status_detail_list = None
+
+                self._update_stg_run_status_detail(trade_agent_status_detail_list)
 
                 datetime_tag_last = datetime_tag
 
             # 循环结束
             self.logger.info('执行回测任务【%s - %s】完成，处理数据 %d 条', self.date_from, self.date_to, data_count)
         finally:
+            if config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 2:
+                trade_agent_status_detail_list = [
+                    trade_agent.trade_agent_status_detail_latest
+                    for trade_agent in self.stg_base.trade_agent_dic.values()
+                    if trade_agent is not None]
+                self._update_stg_run_status_detail(trade_agent_status_detail_list)
+
             self.is_working = False
             self.stg_run_ending()
 
@@ -493,7 +526,8 @@ def strategy_handler_factory_multi_exchange(
             **strategy_handler_param)
     elif run_mode in (RunMode.Backtest, RunMode.Backtest_FixPercent):
         stg_handler = StgHandlerBacktest(
-            stg_run_id=stg_run_id, stg_base=stg_base, run_mode=run_mode, md_key_period_agent_dic=md_key_period_agent_dic,
+            stg_run_id=stg_run_id, stg_base=stg_base, run_mode=run_mode,
+            md_key_period_agent_dic=md_key_period_agent_dic,
             **strategy_handler_param)
     else:
         raise ValueError('run_mode %d error' % run_mode)

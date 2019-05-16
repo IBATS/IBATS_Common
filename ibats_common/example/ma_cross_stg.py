@@ -65,7 +65,6 @@ def _test_use(is_plot):
     import os
     # 参数设置
     run_mode = RunMode.Backtest
-    strategy_params = {'unit': 100}
     md_agent_params_list = [{
         'md_period': PeriodType.Min1,
         'instrument_id_list': ['RB'],
@@ -77,11 +76,13 @@ def _test_use(is_plot):
         'symbol_key': 'instrument_type',
     }]
     if run_mode == RunMode.Realtime:
+        strategy_params = {'unit': 100}
         trade_agent_params = {
         }
         strategy_handler_param = {
         }
-    else:
+    elif run_mode == RunMode.Backtest:
+        strategy_params = {'unit': 100}
         trade_agent_params = {
             'trade_mode': BacktestTradeMode.Order_2_Deal,
             'init_cash': 1000000,
@@ -91,13 +92,25 @@ def _test_use(is_plot):
             'date_from': '2010-1-1',  # 策略回测历史数据，回测指定时间段的历史行情
             'date_to': '2018-10-18',
         }
+    else:
+        # RunMode.Backtest_FixPercent
+        strategy_params = {'unit': 1}
+        trade_agent_params = {
+            'trade_mode': BacktestTradeMode.Order_2_Deal,
+            "calc_mode": CalcMode.Margin,
+        }
+        strategy_handler_param = {
+            'date_from': '2010-1-1',  # 策略回测历史数据，回测指定时间段的历史行情
+            'date_to': '2018-10-18',
+        }
+
     # 初始化策略处理器
     stghandler = strategy_handler_factory(
         stg_class=MACrossStg,
         strategy_params=strategy_params,
         md_agent_params_list=md_agent_params_list,
         exchange_name=ExchangeName.LocalFile,
-        run_mode=RunMode.Backtest,
+        run_mode=run_mode,
         trade_agent_params=trade_agent_params,
         strategy_handler_param=strategy_handler_param,
     )
