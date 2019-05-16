@@ -21,7 +21,8 @@ from ibats_common.analysis import get_report_folder_path
 from ibats_common.analysis.corr import corr
 from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix, plot_corr, clean_cache
 from ibats_common.analysis.plot_db import get_rr_with_md, show_trade, show_cash_and_margin
-from ibats_common.backend.mess import get_latest_stg_run_id
+from ibats_common.backend.mess import get_stg_run_info
+from ibats_common.common import RunMode
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,8 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
                drawdown_col_name_list=None,
                enable_show_plot=True,
                enable_save_plot=False,
-               name=None
+               name=None,
+               **kwargs
                ):
     """
     汇总展示数据分析结果，同时以 dict 形式返回各项指标分析结果
@@ -107,6 +109,7 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     :param enable_show_plot: 展示plot
     :param enable_save_plot: 保存文件
     :param name:
+    :param kwargs:
     :return:
     """
     columns = list(df.columns)
@@ -241,8 +244,8 @@ def _test_summary_md():
 
 def summary_stg(stg_run_id=None):
     from ibats_common.analysis.plot_db import show_order, show_cash_and_margin, show_rr_with_md
-    if stg_run_id is None:
-        stg_run_id = get_latest_stg_run_id()
+    info = get_stg_run_info(stg_run_id)
+    stg_run_id = info.stg_run_id
 
     data_dict, file_path = show_order(stg_run_id)
     df = show_cash_and_margin(stg_run_id)
@@ -267,11 +270,15 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
     :param enable_clean_cache:
     :return:
     """
-    if stg_run_id is None:
-        stg_run_id = get_latest_stg_run_id()
+    info = get_stg_run_info(stg_run_id)
+    stg_run_id = info.stg_run_id
+    run_mode = RunMode(info.run_mode)
+    kwargs = {"enable_show_plot": enable_show_plot, "enable_save_plot": enable_save_plot, "run_mode": run_mode}
+    if run_mode == RunMode.Backtest_FixPercent:
+        sum_df, symbol_rr_dic = get_rr_with_md(stg_run_id, compound_rr=True)
+    else:
+        sum_df, symbol_rr_dic = get_rr_with_md(stg_run_id, compound_rr=False)
 
-    kwargs = {"enable_show_plot": enable_show_plot, "enable_save_plot": enable_save_plot}
-    sum_df, symbol_rr_dic = get_rr_with_md(stg_run_id)
     ret_dic, each_col_dic, file_path_dic = summary_rr(sum_df, **kwargs)
 
     _, file_path = show_trade(stg_run_id, **kwargs)
@@ -303,29 +310,36 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
     document.add_heading(heading_title, 0).alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
     document.add_paragraph('')
     document.add_paragraph('')
-    document.add_heading('一、策略回测收益曲线', 1)
+    heading_count = 1
+    document.add_heading(f'{heading_count}、策略回测收益曲线', 1)
     # 增加图片（此处使用相对位置）
     document.add_picture(file_path_dic['rr'])  # , width=docx.shared.Inches(1.25)
+    heading_count += 1
     # 添加分页符
     document.add_page_break()
 
-    document.add_heading('二、策略回撤曲线', 1)
+    document.add_heading(f'{heading_count}、策略回撤曲线', 1)
     document.add_picture(file_path_dic['drawdown'])
+    heading_count += 1
     document.add_page_break()
 
-    document.add_heading('三、现金与仓位堆叠图', 1)
-    document.add_picture(file_path_dic['cash_and_margin'])
-    document.add_page_break()
+    if run_mode != RunMode.Backtest_FixPercent:
+        document.add_heading(f'{heading_count}、现金与仓位堆叠图', 1)
+        document.add_picture(file_path_dic['cash_and_margin'])
+        heading_count += 1
+        document.add_page_break()
 
-    document.add_heading('四、散点图矩阵图（Scatter Matrix）', 1)
+    document.add_heading(f'{heading_count}、散点图矩阵图（Scatter Matrix）', 1)
     document.add_picture(file_path_dic['scatter_matrix'])
+    heading_count += 1
     document.add_page_break()
 
-    document.add_heading('五、相关性矩阵图（Correlation）', 1)
+    document.add_heading(f'{heading_count}、相关性矩阵图（Correlation）', 1)
     document.add_picture(file_path_dic['correlation'])
+    heading_count += 1
     document.add_page_break()
 
-    document.add_heading('六、绩效统计数据（Porformance stat）', 1)
+    document.add_heading(f'{heading_count}、绩效统计数据（Porformance stat）', 1)
     stats_df = ret_dic['stats'].stats
     format_2_percent = lambda x: f"{x * 100: .2f}%"
     format_2_float2 = r"{0:.2f}"
@@ -378,11 +392,13 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
         "end": date_2_str,
     }
     df_2_table(document, stats_df, format_by_index=format_by_index)
+    heading_count += 1
     document.add_page_break()
 
     # 交易记录
-    document.add_heading('七、买卖点记录', 1)
+    document.add_heading(f'{heading_count}、买卖点记录', 1)
     document.add_picture(file_path_dic['trade'])
+    heading_count += 1
     document.add_page_break()
 
     # 保存文件
@@ -396,7 +412,7 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
 
 
 def _test_summary_stg_2_docx(auto_open_file=True):
-    stg_run_id = 3
+    stg_run_id = 1
     file_path = summary_stg_2_docx(stg_run_id, enable_clean_cache=True)
     if auto_open_file:
         open_file_with_system_app(file_path)
