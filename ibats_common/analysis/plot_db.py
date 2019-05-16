@@ -7,29 +7,34 @@
 @contact : mmmaaaggg@163.com
 @desc    : 需要依赖于数据库进行输出展示的函数
 """
+import logging
 import os
 from collections import defaultdict
-import pandas as pd
+
 import matplotlib.pyplot as plt
-import logging
+import pandas as pd
+from ibats_utils.db import with_db_session
 from ibats_utils.mess import date_2_str
 from sqlalchemy.sql import func
-from ibats_utils.db import with_db_session, get_db_session, execute_scalar
 
 from ibats_common.analysis import get_cache_folder_path
 from ibats_common.analysis.plot import get_file_name
-from ibats_common.backend.orm import StgRunStatusDetail, OrderDetail, TradeDetail, StgRunInfo
 from ibats_common.backend import engines
-from ibats_common.common import Action, Direction
+from ibats_common.backend.mess import get_stg_run_id_latest
+from ibats_common.backend.orm import StgRunStatusDetail, OrderDetail, TradeDetail, StgRunInfo
+from ibats_common.common import Action, Direction, RunMode
 from ibats_common.strategy_handler import strategy_handler_loader
 
 logger = logging.getLogger(__name__)
 
 
-def show_cash_and_margin(stg_run_id, enable_show_plot=True, enable_save_plot=False):
+def show_cash_and_margin(stg_run_id, enable_show_plot=True, enable_save_plot=False, run_mode=RunMode.Backtest, **kwargs):
     """
     plot cash_and_margin
     :param stg_run_id:
+    :param enable_show_plot:
+    :param enable_save_plot:
+    :param run_mode:
     :param kwargs:
     :return:
     """
@@ -47,7 +52,7 @@ def show_cash_and_margin(stg_run_id, enable_show_plot=True, enable_save_plot=Fal
                 StgRunStatusDetail.curr_margin.label('margin'),
                 StgRunStatusDetail.cash_and_margin.label('cash_and_margin'),
                 (StgRunStatusDetail.cash_and_margin.label('cash_and_margin') + StgRunStatusDetail.commission_tot.label(
-                    'commission_tot')).label('without commission'),
+                    'commission_tot')).label('no commission'),
             ).filter(
                 StgRunStatusDetail.stg_run_id == stg_run_id
             )
@@ -57,7 +62,9 @@ def show_cash_and_margin(stg_run_id, enable_show_plot=True, enable_save_plot=Fal
 
     def plot_func():
         ax = df[['cash', 'margin']].plot.area()
-        df[['cash_and_margin', 'without commission']].plot(ax=ax)
+        if run_mode != RunMode.Backtest_FixPercent:
+            df[['cash_and_margin', 'no commission']].plot(ax=ax)
+
         ax.set_title(
             f"Cash + Margin [{stg_run_id}] "
             f"{date_2_str(min(df.index))} - {date_2_str(max(df.index))} ({df.shape[0]} days)")
@@ -75,16 +82,6 @@ def show_cash_and_margin(stg_run_id, enable_show_plot=True, enable_save_plot=Fal
         file_path = None
 
     return df, file_path
-
-
-def get_stg_run_id_latest():
-    """获取最新的 stg_run_id"""
-    engine_ibats = engines.engine_ibats
-    with with_db_session(engine_ibats) as session:
-        logger.warning('没有设置 stg_run_id 参数，将输出最新的 stg_run_id 对应记录')
-        stg_run_id = session.query(func.max(StgRunInfo.stg_run_id)).scalar()
-
-    return stg_run_id
 
 
 def get_md(stg_run_id, return_td_md_agent_key_map=False):
@@ -128,35 +125,62 @@ def get_md(stg_run_id, return_td_md_agent_key_map=False):
         return sum_rr_df, symbol_rr_dic
 
 
-def get_rr_with_md(stg_run_id):
+def get_rr_with_md(stg_run_id, compound_rr=True):
+    """
+    获取策略收益率数据
+    :param stg_run_id:
+    :param compound_rr:复合收益率
+    :return:
+    """
     engine_ibats = engines.engine_ibats
     # 获取 收益曲线
     with with_db_session(engine_ibats) as session:
-        sql_str = str(
-            session.query(
-                StgRunStatusDetail.trade_dt.label('trade_dt'),
-                StgRunStatusDetail.cash_and_margin.label('cash and margin'),
-                (StgRunStatusDetail.cash_and_margin.label('cash_and_margin') +
-                 StgRunStatusDetail.commission_tot.label('commission_tot')).label('without commission'),
-            ).filter(
-                StgRunStatusDetail.stg_run_id == stg_run_id
+        if compound_rr:
+            sql_str = str(
+                session.query(
+                    StgRunStatusDetail.trade_dt.label('trade_dt'),
+                    StgRunStatusDetail.cash_and_margin.label('cash and margin'),
+                    (StgRunStatusDetail.cash_and_margin.label('cash_and_margin') +
+                     StgRunStatusDetail.commission_tot.label('commission_tot')).label('no_commission'),
+                    StgRunStatusDetail.rr_compound.label('rr'),
+                    StgRunStatusDetail.rr_compound_nc.label('rr no commission'),
+                ).filter(
+                    StgRunStatusDetail.stg_run_id == stg_run_id
+                )
             )
-        )
+        else:
+            sql_str = str(
+                session.query(
+                    StgRunStatusDetail.trade_dt.label('trade_dt'),
+                    StgRunStatusDetail.cash_and_margin.label('cash and margin'),
+                    (StgRunStatusDetail.cash_and_margin.label('cash_and_margin') +
+                     StgRunStatusDetail.commission_tot.label('commission_tot')).label('no_commission'),
+                    StgRunStatusDetail.rr.label('rr'),
+                    StgRunStatusDetail.rr_nc.label('rr no commission'),
+                ).filter(
+                    StgRunStatusDetail.stg_run_id == stg_run_id
+                )
+            )
 
     rr_df = pd.read_sql(sql_str, engine_ibats, params=[stg_run_id]).set_index('trade_dt')
-    if rr_df.shape[0] == 0:
+    if rr_df is None or rr_df.shape[0] == 0:
         return None, None
 
-    rr_df['rr'] = rr_df['cash and margin'] / rr_df['cash and margin'].iloc[0]
-    rr_df['rr without commission'] = rr_df['without commission'] / rr_df['without commission'].iloc[0]
+    # rr_df['rr'] = rr_df['cash and margin'] / rr_df['cash and margin'].iloc[0]
+    # rr_df['rr without commission'] = rr_df['without commission'] / rr_df['without commission'].iloc[0]
+    col_list_rr = ['rr', 'rr no commission']
+    rr_df[col_list_rr] += 1
 
     # 获取行情数据
     sum_df, symbol_rr_dic = get_md(stg_run_id)
-    sum_df = sum_df.join(rr_df[['rr', 'rr without commission']])
+    sum_df = sum_df.join(rr_df[col_list_rr])
+
+    col_list = ['md_rr']
+    col_list.extend(col_list)
     for num, (key, (df, close_key)) in enumerate(symbol_rr_dic.items()):
         md_df = df[[close_key]].copy()
         md_df['md_rr'] = md_df[close_key] / md_df[close_key].iloc[0]
-        md_df = md_df.join(rr_df)[['md_rr', 'rr', 'rr without commission']]
+        md_df = md_df.join(rr_df)[col_list]
         symbol_rr_dic[key] = (md_df, close_key)
 
     return sum_df, symbol_rr_dic
@@ -170,7 +194,7 @@ def show_rr_with_md(stg_run_id, show_sum_plot=True, show_each_md_plot=False, ena
     save_file_path_dic = {}
 
     if show_each_md_plot:
-        for num, (symbol, df) in enumerate(symbol_rr_dic.items(), start=1):
+        for num, (symbol, (df, close_key)) in enumerate(symbol_rr_dic.items(), start=1):
             ax = df.plot()
             ax.set_title(
                 f"Return Rate {symbol} [{stg_run_id}] "
@@ -362,13 +386,14 @@ def show_trade(stg_run_id, **kwargs) -> (defaultdict(lambda: defaultdict(list)),
     return data_dict, file_path
 
 
-def show_plot_data_dic(data_dict: dict, title=None, enable_show_plot=True, enable_save_plot=False):
+def show_plot_data_dic(data_dict: dict, title=None, enable_show_plot=True, enable_save_plot=False, **kwargs):
     """
     将数据plot展示出来
     :param data_dict:
     :param title:
     :param enable_show_plot:
     :param enable_save_plot:
+    :param kwargs:
     :return:
     """
     data_len = len(data_dict)
@@ -430,5 +455,5 @@ def _test_show_cash_and_margin():
 
 
 if __name__ == '__main__':
-    # _test_show_rr_with_md()
-    _test_show_cash_and_margin()
+    _test_show_rr_with_md()
+    # _test_show_cash_and_margin()
