@@ -412,8 +412,8 @@ def _test_use(is_plot):
     from ibats_common import module_root_path
     import os
     # 参数设置
-    run_mode = RunMode.Backtest
-    strategy_params = {'unit': 10}
+    run_mode = RunMode.Backtest_FixPercent
+    strategy_params = {'unit': 1}
     md_agent_params_list = [{
         'md_period': PeriodType.Min1,
         'instrument_id_list': ['RB'],
@@ -429,10 +429,19 @@ def _test_use(is_plot):
         }
         strategy_handler_param = {
         }
-    else:
+    elif run_mode == RunMode.Backtest:
         trade_agent_params = {
             'trade_mode': BacktestTradeMode.Order_2_Deal,
             'init_cash': 10000,
+            "calc_mode": CalcMode.Margin,
+        }
+        strategy_handler_param = {
+            'date_from': '2013-1-1',  # 策略回测历史数据，回测指定时间段的历史行情
+            'date_to': '2018-10-18',
+        }
+    else:
+        trade_agent_params = {
+            'trade_mode': BacktestTradeMode.Order_2_Deal,
             "calc_mode": CalcMode.Margin,
         }
         strategy_handler_param = {
@@ -445,7 +454,7 @@ def _test_use(is_plot):
         strategy_params=strategy_params,
         md_agent_params_list=md_agent_params_list,
         exchange_name=ExchangeName.LocalFile,
-        run_mode=RunMode.Backtest,
+        run_mode=run_mode,
         trade_agent_params=trade_agent_params,
         strategy_handler_param=strategy_handler_param,
     )
