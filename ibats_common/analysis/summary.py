@@ -18,7 +18,6 @@ from ibats_utils.mess import open_file_with_system_app, date_2_str
 from scipy.stats import anderson, normaltest
 
 from ibats_common.analysis import get_report_folder_path
-from ibats_common.analysis.corr import corr
 from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix, plot_corr, clean_cache
 from ibats_common.analysis.plot_db import get_rr_with_md, show_trade, show_cash_and_margin
 from ibats_common.backend.mess import get_stg_run_info
@@ -29,41 +28,76 @@ logger = logging.getLogger(__name__)
 
 def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
                risk_free=0.03,
-               figure_4_each_col=False,
-               col_transfer_dic: (dict, None) = None,
                stat_col_name_list=None,
-               drawdown_col_name_list=None,
+               enable_show_plot=True,
+               enable_save_plot=False,
+               name=None,
+               func_kwargs_dic={},
+               **kwargs,
                ):
     """
     汇总展示数据分析结果，同时以 dict 形式返回各项指标分析结果
     第一个返回值，df的各项分析结果
     第二个返回值，各个列的各项分析结果
+    第三个返回值，相关文件输出路径或路径列表（当 enable_save_plot=True）
     :param df:
-    :param percentiles:分为数信息
     :param risk_free:无风险收益率
-    :param figure_4_each_col:hist图使用，每一列显示单独一张图片
-    :param col_transfer_dic:列转换方法
     :param stat_col_name_list:对哪些列的数据执行统计
-    :param drawdown_col_name_list:对哪些列进行回撤统计
+    :param enable_show_plot: 展示plot
+    :param enable_save_plot: 保存文件
+    :param name:
+    :param func_kwargs_dic:
+    :param kwargs:
     :return:
     """
     columns = list(df.columns)
     logger.info('data columns: %s', columns)
-    ret_dic = {}
-    each_col_dic = defaultdict(dict)
+    ret_dic, each_col_dic, file_path_dic = {}, defaultdict(dict), {}
 
     logger.info('Description:')
     df.describe(percentiles=percentiles)
-    corr_df = corr(df)
-    ret_dic['corr'] = corr_df
-    logger.info('Correlation Coefficient:\n%s', corr_df)
-    # ffn_stats = ffn.calc_stats(df)
+
+    quantile_df = df.quantile(percentiles)
+    ret_dic['quantile_df'] = quantile_df
+
+    # 获取统计数据
+    stats = df.calc_stats()
+    stats.set_riskfree_rate(risk_free)
+    ret_dic['stats'] = stats
+    enable_kwargs_dic = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot, "name": name}
+
+    # scatter_matrix
+    # diagonal，必须且只能在{'hist', 'kde'}中选择1个，
+    # 'hist'表示直方图(Histogram plot),'kde'表示核密度估计(Kernel Density Estimation)
+    # 该参数是scatter_matrix函数的关键参数
+    file_path = plot_scatter_matrix(df, diagonal='kde', **enable_kwargs_dic)
+    if enable_save_plot:
+        file_path_dic['scatter_matrix'] = file_path
+
+    # stats.plot_correlation()
+    file_path = plot_corr(df, **enable_kwargs_dic)
+    if enable_save_plot:
+        file_path_dic['correlation'] = file_path
+
+    # return rate plot 图
+    file_path = plot_rr_df(df, **enable_kwargs_dic)
+    if enable_save_plot:
+        file_path_dic['rr'] = file_path
+
     # histgram 分布图
-    n_bins_dic = wave_hist(df, figure_4_each_col=figure_4_each_col, col_transfer_dic=col_transfer_dic)
-    ret_dic['wave_hist'] = n_bins_dic
-    # 回撤曲线
-    drawdown_df = drawdown_plot(df, col_name_list=drawdown_col_name_list)
+    func_kwargs = func_kwargs_dic.setdefault('hist', {})
+    n_bins_dic, file_path = wave_hist(df, **func_kwargs, **enable_kwargs_dic)
+    ret_dic['hist'] = n_bins_dic
+    if enable_save_plot:
+        file_path_dic['hist'] = file_path
+
+    # 回撤图
+    func_kwargs = func_kwargs_dic.setdefault('drawdown', {})
+    drawdown_df, file_path = drawdown_plot(df, perf_stats=stats, **func_kwargs, **enable_kwargs_dic)
     ret_dic['drawdown'] = drawdown_df
+    if enable_save_plot:
+        file_path_dic['drawdown'] = file_path
+
     # 单列分析
     stat_df = (df if stat_col_name_list is None else df[stat_col_name_list])
     for col_name, data in stat_df.items():
@@ -82,7 +116,7 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
         stats.set_riskfree_rate(risk_free)
         stats.display()
 
-    return ret_dic, each_col_dic
+    return ret_dic, each_col_dic, file_path_dic
 
 
 def summary_rr(df: pd.DataFrame, risk_free=0.03,
@@ -238,8 +272,18 @@ def _test_summary_md():
     col_transfer_dic = {
         'return': ['open', 'high', 'low', 'close', 'volume']
     }
-    summary_md(df, drawdown_col_name_list=['close'], figure_4_each_col=False, stat_col_name_list=['close'],
-               col_transfer_dic=col_transfer_dic)
+    ret_dic, each_col_dic, file_path_dic = summary_md(
+        df, enable_show_plot=True, enable_save_plot=False,
+        func_kwargs_dic={
+            "hist": {
+                "figure_4_each_col": False,
+                "col_transfer_dic": col_transfer_dic,
+            },
+            "drawdown": {
+                "drawdown_col_name_list": ['close'],
+                "stat_col_name_list": ['close'],
+            }
+        })
 
 
 def summary_stg(stg_run_id=None):
@@ -259,6 +303,66 @@ def summary_stg(stg_run_id=None):
 def _test_summary_stg():
     stg_run_id = None
     summary_stg(stg_run_id)
+
+
+def stats_df_2_docx_table(stats_df, document):
+    """
+    将 stats_df 统计信息以表格形式写入 docx 文件中
+    :param stats_df:
+    :param document:
+    :return:
+    """
+    format_2_percent = lambda x: f"{x * 100: .2f}%"
+    format_2_float2 = r"{0:.2f}"
+    format_by_index = {
+        "total_return": format_2_percent,
+        "cagr": format_2_percent,
+        "mtd": format_2_percent,
+        "three_month": format_2_percent,
+        "six_month": format_2_percent,
+        "ytd": format_2_percent,
+        "one_year": format_2_percent,
+        "three_year": format_2_percent,
+        "five_year": format_2_percent,
+        "ten_year": format_2_percent,
+        "best_day": format_2_percent,
+        "worst_day": format_2_percent,
+        "best_month": format_2_percent,
+        "worst_month": format_2_percent,
+        "best_year": format_2_percent,
+        "worst_year": format_2_percent,
+        "avg_drawdown": format_2_percent,
+        "avg_up_month": format_2_percent,
+        "win_year_perc": format_2_percent,
+        "twelve_month_win_perc": format_2_percent,
+        "incep": format_2_percent,
+        "rf": format_2_float2,
+        "max_drawdown": format_2_percent,
+        "calmar": format_2_float2,
+        "daily_sharpe": format_2_float2,
+        "daily_sortino": format_2_float2,
+        "daily_mean": format_2_float2,
+        "daily_vol": format_2_float2,
+        "daily_skew": format_2_float2,
+        "daily_kurt": format_2_float2,
+        "monthly_sharpe": format_2_float2,
+        "monthly_sortino": format_2_float2,
+        "monthly_mean": format_2_float2,
+        "monthly_vol": format_2_float2,
+        "monthly_skew": format_2_float2,
+        "monthly_kurt": format_2_float2,
+        "yearly_sharpe": format_2_float2,
+        "yearly_sortino": format_2_float2,
+        "yearly_mean": format_2_float2,
+        "yearly_vol": format_2_float2,
+        "yearly_skew": format_2_float2,
+        "yearly_kurt": format_2_float2,
+        "avg_drawdown_days": format_2_float2,
+        "avg_down_month": format_2_float2,
+        "start": date_2_str,
+        "end": date_2_str,
+    }
+    df_2_table(document, stats_df, format_by_index=format_by_index)
 
 
 def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=False, enable_clean_cache=True):
@@ -341,57 +445,7 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
 
     document.add_heading(f'{heading_count}、绩效统计数据（Porformance stat）', 1)
     stats_df = ret_dic['stats'].stats
-    format_2_percent = lambda x: f"{x * 100: .2f}%"
-    format_2_float2 = r"{0:.2f}"
-    format_by_index = {
-        "total_return": format_2_percent,
-        "cagr": format_2_percent,
-        "mtd": format_2_percent,
-        "three_month": format_2_percent,
-        "six_month": format_2_percent,
-        "ytd": format_2_percent,
-        "one_year": format_2_percent,
-        "three_year": format_2_percent,
-        "five_year": format_2_percent,
-        "ten_year": format_2_percent,
-        "best_day": format_2_percent,
-        "worst_day": format_2_percent,
-        "best_month": format_2_percent,
-        "worst_month": format_2_percent,
-        "best_year": format_2_percent,
-        "worst_year": format_2_percent,
-        "avg_drawdown": format_2_percent,
-        "avg_up_month": format_2_percent,
-        "win_year_perc": format_2_percent,
-        "twelve_month_win_perc": format_2_percent,
-        "incep": format_2_percent,
-        "rf": format_2_float2,
-        "max_drawdown": format_2_float2,
-        "calmar": format_2_float2,
-        "daily_sharpe": format_2_float2,
-        "daily_sortino": format_2_float2,
-        "daily_mean": format_2_float2,
-        "daily_vol": format_2_float2,
-        "daily_skew": format_2_float2,
-        "daily_kurt": format_2_float2,
-        "monthly_sharpe": format_2_float2,
-        "monthly_sortino": format_2_float2,
-        "monthly_mean": format_2_float2,
-        "monthly_vol": format_2_float2,
-        "monthly_skew": format_2_float2,
-        "monthly_kurt": format_2_float2,
-        "yearly_sharpe": format_2_float2,
-        "yearly_sortino": format_2_float2,
-        "yearly_mean": format_2_float2,
-        "yearly_vol": format_2_float2,
-        "yearly_skew": format_2_float2,
-        "yearly_kurt": format_2_float2,
-        "avg_drawdown_days": format_2_float2,
-        "avg_down_month": format_2_float2,
-        "start": date_2_str,
-        "end": date_2_str,
-    }
-    df_2_table(document, stats_df, format_by_index=format_by_index)
+    stats_df_2_docx_table(stats_df, document)
     heading_count += 1
     document.add_page_break()
 
@@ -416,6 +470,103 @@ def _test_summary_stg_2_docx(auto_open_file=True):
     file_path = summary_stg_2_docx(stg_run_id, enable_clean_cache=True)
     if auto_open_file:
         open_file_with_system_app(file_path)
+
+
+def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
+                      risk_free=0.03,
+                      stat_col_name_list=None,
+                      enable_show_plot=True,
+                      enable_save_plot=False,
+                      name=None,
+                      func_kwargs_dic={},
+                      enable_clean_cache=True,
+                      ):
+    """
+    汇总展示数据分析结果，同时以 dict 形式返回各项指标分析结果
+    第一个返回值，df的各项分析结果
+    第二个返回值，各个列的各项分析结果
+    :param df:
+    :param percentiles:分为数信息
+    :param risk_free:无风险收益率
+    :param stat_col_name_list:对哪些列的数据执行统计
+    :param enable_show_plot:显示plot
+    :param enable_save_plot:保存plot
+    :param name:
+    :param func_kwargs_dic:
+    :return:
+    """
+    ret_dic, each_col_dic, file_path_dic = summary_md(
+        df, percentiles=percentiles, risk_free=risk_free, stat_col_name_list=stat_col_name_list,
+        enable_show_plot=enable_show_plot, enable_save_plot=enable_save_plot, name=name,
+        func_kwargs_dic=func_kwargs_dic)
+
+    # 生成 docx 文档将所需变量
+    heading_title = f'数据分析报告 {date_2_str(min(df.index))} - {date_2_str(max(df.index))} ({df.shape[0]} days)'
+
+    # 生成 docx 文件
+    document = docx.Document()
+    # 设置默认字体
+    document.styles['Normal'].font.name = '微软雅黑'
+    document.styles['Normal']._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
+    # 创建自定义段落样式(第一个参数为样式名, 第二个参数为样式类型, 1为段落样式, 2为字符样式, 3为表格样式)
+    UserStyle1 = document.styles.add_style('UserStyle1', 1)
+    # 设置字体尺寸
+    UserStyle1.font.size = docx.shared.Pt(40)
+    # 设置字体颜色
+    UserStyle1.font.color.rgb = docx.shared.RGBColor(0xff, 0xde, 0x00)
+    # 居中文本
+    UserStyle1.paragraph_format.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+    # 设置中文字体
+    UserStyle1.font.name = '微软雅黑'
+    UserStyle1._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
+
+    # 文件内容
+    document.add_heading(heading_title, 0).alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+    document.add_paragraph('')
+    document.add_paragraph('')
+    heading_count = 1
+    document.add_heading(f'{heading_count}、策略回测收益曲线', 1)
+    # 增加图片（此处使用相对位置）
+    document.add_picture(file_path_dic['rr'])  # , width=docx.shared.Inches(1.25)
+    heading_count += 1
+    # 添加分页符
+    document.add_page_break()
+
+    document.add_heading(f'{heading_count}、策略回撤曲线', 1)
+    document.add_picture(file_path_dic['drawdown'])
+    heading_count += 1
+    document.add_page_break()
+
+    document.add_heading(f'{heading_count}、散点图矩阵图（Scatter Matrix）', 1)
+    document.add_picture(file_path_dic['scatter_matrix'])
+    heading_count += 1
+    document.add_page_break()
+
+    document.add_heading(f'{heading_count}、相关性矩阵图（Correlation）', 1)
+    document.add_picture(file_path_dic['correlation'])
+    heading_count += 1
+    document.add_page_break()
+
+    document.add_heading(f'{heading_count}、绩效统计数据（Porformance stat）', 1)
+    stats_df = ret_dic['stats'].stats
+    stats_df_2_docx_table(stats_df, document)
+    heading_count += 1
+    document.add_page_break()
+
+    # 交易记录
+    document.add_heading(f'{heading_count}、买卖点记录', 1)
+    document.add_picture(file_path_dic['trade'])
+    heading_count += 1
+    document.add_page_break()
+
+    # 保存文件
+    file_name = f"MD {date_2_str(min(df.index))} - {date_2_str(max(df.index))} ({df.shape[0]} days) {np.random.randint(10000)}.docx"
+    file_path = os.path.join(get_report_folder_path(), file_name)
+    document.save(file_path)
+    if enable_clean_cache:
+        clean_cache()
+
+    return file_path
 
 
 if __name__ == "__main__":
