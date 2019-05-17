@@ -42,8 +42,8 @@ def show_cash_and_margin(stg_run_id, enable_show_plot=True, enable_save_plot=Fal
     engine_ibats = engines.engine_ibats
     with with_db_session(engine_ibats) as session:
         if stg_run_id is None:
-            logger.warning('没有设置 stg_run_id 参数，将输出最新的 stg_run_id 对应记录')
             stg_run_id = session.query(func.max(StgRunInfo.stg_run_id)).scalar()
+            logger.warning('没有设置 stg_run_id 参数，将输出最新的 stg_run_id=%d 对应记录', stg_run_id)
 
         sql_str = str(
             session.query(
@@ -184,6 +184,11 @@ def get_rr_with_md(stg_run_id, compound_rr=True):
         symbol_rr_dic[key] = (md_df, close_key)
 
     return sum_df, symbol_rr_dic
+
+
+def _test_show_rr_with_md():
+    stg_run_id = None
+    show_rr_with_md(stg_run_id)
 
 
 def show_rr_with_md(stg_run_id, show_sum_plot=True, show_each_md_plot=False, enable_save_plot=False):
@@ -456,4 +461,5 @@ def _test_show_cash_and_margin():
 
 if __name__ == '__main__':
     _test_show_rr_with_md()
+    # _test_show_rr_with_md()
     # _test_show_cash_and_margin()
