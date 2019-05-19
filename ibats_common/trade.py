@@ -249,7 +249,6 @@ class BacktestTraderAgentBase(TraderAgentBase):
             pos_status_detail.trade_date, pos_status_detail.trade_time, pos_status_detail.trade_millisec
         self.pos_status_detail_dic[(trade_date, trade_time, trade_millisec)] = pos_status_detail
         self._pos_status_detail_dic[symbol] = pos_status_detail
-        # self.c_save_acount_info(pos_status_detail)
 
     def _update_trade_agent_status_detail_by_pos_status_detail(self) -> TradeAgentStatusDetail:
         """根据 持仓列表更新账户信息"""
@@ -258,11 +257,15 @@ class BacktestTraderAgentBase(TraderAgentBase):
             pos_status_detail_dic, self.curr_timestamp)
         return trade_agent_status_detail
 
-    def _update_pos_status_detail_by_md(self, pos_status_detail_last: PosStatusDetail) -> PosStatusDetail:
+    def _update_pos_status_detail_by_md(self, pos_status_detail_last: PosStatusDetail, symbol) -> PosStatusDetail:
         """创建新的对象，根据 trade_detail 更新相关信息"""
         timestamp_curr = self.curr_timestamp
         trade_price = self.curr_close
         pos_status_detail = pos_status_detail_last.update_by_md(trade_price=trade_price, timestamp_curr=timestamp_curr)
+        self._pos_status_detail_dic[symbol] = pos_status_detail
+        trade_date, trade_time, trade_millisec = \
+            pos_status_detail.trade_date, pos_status_detail.trade_time, pos_status_detail.trade_millisec
+        self.pos_status_detail_dic[(trade_date, trade_time, trade_millisec)] = pos_status_detail
         return pos_status_detail
 
     def update_trade_agent_status_detail(self):
@@ -289,10 +292,8 @@ class BacktestTraderAgentBase(TraderAgentBase):
         symbol = self.curr_symbol
         if symbol in self._pos_status_detail_dic:
             pos_status_detail_last = self._pos_status_detail_dic[symbol]
-            # trade_date = pos_status_detail_last.trade_date
-            # trade_time = pos_status_detail_last.trade_time
             # 2019-04-18 每一次行情变化均进行 self._update_pos_status_detail_by_md(pos_status_detail_last) 更新
-            # 如果当前K线以及更新则不需再次更新。如果当前K线以及有交易产生，则 pos_info 将会在 _save_pos_status_detail 函数中被更新，因此无需再次更新
+            # 如果当前K线已经更新则不需再次更新。如果当前K线已经有交易产生，则 pos_info 将会在 _save_pos_status_detail 函数中被更新，因此无需再次更新
             # if trade_date == self.curr_timestamp.date() and trade_time == self.curr_timestamp.time():
             #     return
             # 2019-04-18 已清仓的状态不再清除，而是继续进行后续计算
@@ -301,8 +302,7 @@ class BacktestTraderAgentBase(TraderAgentBase):
             #     del self._pos_status_detail_dic[symbol]
             # 根据 md 数据更新 仓位信息
             # pos_status_detail = pos_status_detail_last.update_by_md(self.curr_md)
-            pos_status_detail = self._update_pos_status_detail_by_md(pos_status_detail_last)
-            self._pos_status_detail_dic[symbol] = pos_status_detail
+            pos_status_detail = self._update_pos_status_detail_by_md(pos_status_detail_last, symbol)
 
         # 统计账户信息，更新账户信息
         # trade_agent_status_detail = self.trade_agent_status_detail_latest.update_by_pos_status_detail(
