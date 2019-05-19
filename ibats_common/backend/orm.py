@@ -326,8 +326,10 @@ class PosStatusDetail(BaseModel):
         commission = trade_detail.commission
         tot_value = trade_vol * trade_price
         margin = trade_detail.margin
-        tot_cost = tot_value + commission
-        avg_price = tot_cost / trade_vol
+        # tot_cost = tot_value + commission
+        # avg_price = tot_cost / trade_vol
+        # 2019-05-19 bug fix on avg_price
+        avg_price = (tot_value + commission * int(direction)) / trade_vol
         floating_pl = -commission
         floating_pl_rate = floating_pl / margin
         cashflow = -margin - commission
@@ -400,6 +402,7 @@ class PosStatusDetail(BaseModel):
             # 如果前一状态仓位为 0 则本次方向与当前订单方向相同
             detail.direction = trade_detail.direction
 
+        direction_int = int(detail.direction)
         if self.calc_mode == CalcMode.Normal.value:
             # 普通模式：非保证金交易模式
             # 普通模式 默认 margin_rate, multiple 均为 1
@@ -412,13 +415,11 @@ class PosStatusDetail(BaseModel):
                     detail.position_chg = trade_vol
                     detail.position = position_cur
                     avg_price = (position_last * avg_price_last + trade_price * trade_vol +
-                                 commission * int(detail.direction)) / position_cur
+                                 commission * direction_int) / position_cur
                     detail.avg_price = avg_price
                     # 计算浮动收益 floating_pl floating_pl_rate
-                    detail.floating_pl = (trade_price - avg_price) * position_cur * int(
-                        detail.direction)
-                    detail.floating_pl_rate = (trade_price - avg_price) / avg_price * int(
-                        detail.direction)
+                    detail.floating_pl = (trade_price - avg_price) * position_cur * direction_int
+                    detail.floating_pl_rate = (trade_price - avg_price) / avg_price * direction_int
                 else:
                     # 方向相反：清仓 or 减仓；
                     detail.position_chg = - trade_vol
@@ -433,26 +434,24 @@ class PosStatusDetail(BaseModel):
                         detail.position = position_cur
                         # 计算浮动收益 floating_pl floating_pl_rate
                         # 与其他地方计算公式的区别在于 position_curr == 0 因此使用 position_last
-                        detail.floating_pl = (trade_price - avg_price_last) * position_last * int(
-                            detail.direction) - commission
-                        detail.floating_pl_rate = ((trade_price - avg_price_last) * int(
-                            detail.direction) - commission / position_last) / avg_price_last \
-                            if avg_price_last > 0.001 else MAX_RATE
+                        detail.floating_pl = (trade_price - avg_price_last) * position_last * direction_int - commission
+                        detail.floating_pl_rate = (
+                                ((trade_price - avg_price_last) * direction_int - commission / position_last)
+                                / avg_price_last
+                        ) if avg_price_last > 0.001 else MAX_RATE
 
                     else:
                         # 减仓
                         position_cur = position_last - trade_vol
                         position_value = position_cur * trade_price
                         detail.position_value = position_value
-                        avg_price = (
-                                            position_last * avg_price_last - trade_price * trade_vol + commission) / position_cur
+                        avg_price = (position_last * avg_price_last - trade_price * trade_vol + commission
+                                     ) / position_cur
                         detail.avg_price = avg_price
                         detail.position = position_cur
                         # 计算浮动收益 floating_pl floating_pl_rate
-                        detail.floating_pl = (trade_price - avg_price) * position_cur * int(
-                            detail.direction)
-                        detail.floating_pl_rate = (trade_price - avg_price) / avg_price * int(
-                            detail.direction)
+                        detail.floating_pl = (trade_price - avg_price) * position_cur * direction_int
+                        detail.floating_pl_rate = (trade_price - avg_price) / avg_price * direction_int
 
             else:
                 # 方向相反
@@ -462,8 +461,10 @@ class PosStatusDetail(BaseModel):
                 ))
 
             # 设置其他属性 floating_pl_chg、floating_pl_cum、cur_price、trade_dt、trade_date、trade_time、trade_millisec
-            # position_cur = pos_status_detail.position     # 上面代码已经赋值
-            detail.floating_pl_chg = detail.floating_pl - self.floating_pl
+            # 2019-05-19 当 position_last == 0 时，代表本次交易为重新开仓
+            # 因此，floating_pl_chg = floating_pl，而非与上一状态的差
+            detail.floating_pl_chg = (detail.floating_pl - self.floating_pl
+                                      ) if position_last != 0 else detail.floating_pl
             detail.floating_pl_cum += detail.floating_pl_chg
 
             # 计算 position_value、margin、margin_chg
@@ -507,7 +508,7 @@ class PosStatusDetail(BaseModel):
                     detail.position_chg = trade_vol
                     detail.position = position_cur
                     avg_price = (position_last * avg_price_last * multiple + trade_price * trade_vol * multiple
-                                 + commission * int(detail.direction)) / position_cur
+                                 + commission * direction_int) / position_cur
                     detail.avg_price = avg_price
                     # 计算 margin、margin_chg
                     margin = position_value * margin_ratio
@@ -515,10 +516,8 @@ class PosStatusDetail(BaseModel):
                     margin_chg = margin - margin_last
                     detail.margin_chg = margin_chg
                     # 计算浮动收益 floating_pl floating_pl_rate
-                    detail.floating_pl = (trade_price - avg_price) * position_cur * multiple * int(
-                        detail.direction)
-                    detail.floating_pl_rate = (trade_price - avg_price) / avg_price * int(
-                        detail.direction)
+                    detail.floating_pl = (trade_price - avg_price) * position_cur * multiple * direction_int
+                    detail.floating_pl_rate = (trade_price - avg_price) / avg_price * direction_int
                 else:
                     # 方向相反：清仓 or 减仓；
                     detail.position_chg = - trade_vol
@@ -539,11 +538,12 @@ class PosStatusDetail(BaseModel):
                         detail.margin_chg = margin_chg
                         # 计算浮动收益 floating_pl floating_pl_rate
                         # 与其他地方计算公式的区别在于 position_curr == 0 因此使用 position_last
-                        detail.floating_pl = (trade_price - avg_price_last) * position_last * multiple * int(
-                            detail.direction) - commission
-                        detail.floating_pl_rate = ((trade_price - avg_price_last) * int(
-                            detail.direction) - commission / position_last) / avg_price_last \
-                            if avg_price_last > 0.001 else MAX_RATE
+                        detail.floating_pl = (trade_price - avg_price_last
+                                              ) * position_last * multiple * direction_int - commission
+                        detail.floating_pl_rate = (
+                                ((trade_price - avg_price_last) * direction_int - commission / position_last)
+                                / avg_price_last
+                        )if avg_price_last > 0.001 else MAX_RATE
 
                     else:
                         # 减仓
@@ -560,10 +560,8 @@ class PosStatusDetail(BaseModel):
                         margin_chg = margin - margin_last
                         detail.margin_chg = margin_chg
                         # 计算浮动收益 floating_pl floating_pl_rate
-                        detail.floating_pl = (trade_price - avg_price) * position_cur * multiple * int(
-                            detail.direction)
-                        detail.floating_pl_rate = (trade_price - avg_price) / avg_price * int(
-                            detail.direction)
+                        detail.floating_pl = (trade_price - avg_price) * position_cur * multiple * direction_int
+                        detail.floating_pl_rate = (trade_price - avg_price) / avg_price * direction_int
 
             else:
                 # 方向相反
@@ -573,8 +571,10 @@ class PosStatusDetail(BaseModel):
                 ))
 
             # 设置其他属性 floating_pl_chg、floating_pl_cum、cur_price、trade_dt、trade_date、trade_time、trade_millisec
-            # position_cur = pos_status_detail.position     # 上面代码已经赋值
-            detail.floating_pl_chg = detail.floating_pl - self.floating_pl
+            # 2019-05-19 当 position_last == 0 时，代表本次交易为重新开仓
+            # 因此，floating_pl_chg = floating_pl，而非与上一状态的差
+            detail.floating_pl_chg = (detail.floating_pl - self.floating_pl
+                                      ) if position_last != 0 else detail.floating_pl
             detail.floating_pl_cum += detail.floating_pl_chg
 
             # 计算 cashflow_daily、commission、commission_tot、rr、position_date_type
@@ -689,8 +689,8 @@ class PosStatusDetail(BaseModel):
             # 本次现金流
             # 保证金模式下的现金流变化 = 盈利增量 - 保证金增量 - 手续费
             # 盈利增量 = 持仓市值增量 × 方向
-            detail.cashflow = cashflow = (
-                                                 position_value - self.position_value) * direction_int - margin_chg - commission
+            detail.cashflow = cashflow = (position_value - self.position_value
+                                          ) * direction_int - margin_chg - commission
             # 每日现金流
             if self.trade_date != trade_date:
                 detail.cashflow_daily = cashflow
@@ -1048,8 +1048,8 @@ class TradeAgentStatusDetail(BaseModel):
         detail.cashflow_cum = cashflow_cum
         detail.commission_tot = commission_tot
         detail.cash_and_margin = detail.cash_available + curr_margin
-        detail.rr = detail.cash_and_margin / detail.cash_init - 1
-        detail.rr_nc = (detail.cash_and_margin + commission_tot) / detail.cash_init - 1
+        detail.rr = detail.floating_pl_cum / detail.cash_init
+        detail.rr_nc = (detail.floating_pl_cum + commission_tot) / detail.cash_init
         # 当期盈利及现金的计算均是按照单利计算的，计算rr的时候需要将单利转化为复利
         # 计算方法为：
         # 当期状态复利rr = ("当期状态的单利 rr" - "上一状态的单利 rr" + 1) * ("上一状态的复利 rr" + 1) - 1
@@ -1188,8 +1188,8 @@ class TradeAgentStatusDetail(BaseModel):
         detail.cashflow_cum = cashflow_cum
         detail.commission_tot = commission_tot
         detail.cash_and_margin = self.cash_init + cashflow_cum + curr_margin
-        detail.rr = detail.cash_and_margin / detail.cash_init - 1
-        detail.rr_nc = (detail.cash_and_margin + commission_tot) / detail.cash_init - 1
+        detail.rr = detail.floating_pl_cum / detail.cash_init
+        detail.rr_nc = (detail.floating_pl_cum + commission_tot) / detail.cash_init
         # 当期盈利及现金的计算均是按照单利计算的，计算rr的时候需要将单利转化为复利
         # 计算方法为：
         # 当期状态复利rr = ("当期状态的单利 rr" - "上一状态的单利 rr" + 1) * ("上一状态的复利 rr" + 1) - 1
@@ -1336,8 +1336,8 @@ class StgRunStatusDetail(BaseModel):
             cashflow_daily += 0 if detail.cashflow_daily is None else detail.cashflow_daily
             cashflow_cum += 0 if detail.cashflow_cum is None else detail.cashflow_cum
 
-        rr = cash_and_margin / cash_init - 1
-        rr_nc = (cash_and_margin + commission_tot) / cash_init - 1
+        rr = floating_pl_cum / cash_init
+        rr_nc = (floating_pl_cum + commission_tot) / cash_init
         # 当期盈利及现金的计算均是按照单利计算的，计算rr的时候需要将单利转化为复利
         # 计算方法为：
         # 当期状态复利rr = ("当期状态的单利 rr" - "上一状态的单利 rr" + 1) * ("上一状态的复利 rr" + 1) - 1
