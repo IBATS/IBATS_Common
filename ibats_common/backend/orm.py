@@ -87,9 +87,9 @@ class OrderDetail(BaseModel):
 
     def __repr__(self):
         return f"<OrderDetail(stg_run_id='{self.stg_run_id}' idx='{self.order_idx}', " \
-            f"trade_agent_key={self.trade_agent_key}, direction='{Direction(self.direction)}', " \
-            f"action='{Action(self.action)}', symbol='{self.symbol}', order_price='{self.order_price}', " \
-            f"order_vol='{self.order_vol}')>"
+               f"trade_agent_key={self.trade_agent_key}, direction='{Direction(self.direction)}', " \
+               f"action='{Action(self.action)}', symbol='{self.symbol}', order_price='{self.order_price}', " \
+               f"order_vol='{self.order_vol}')>"
 
     @staticmethod
     def remove(stg_run_id: int):
@@ -188,30 +188,30 @@ class TradeDetail(BaseModel):
         multiple, margin_ratio, commission_rate = 1, 1, 0.0005
         margin = order_vol * order_price * multiple * margin_ratio
         commission = order_vol * order_price * multiple * commission_rate
-        trade_detail = TradeDetail(stg_run_id=order_detail.stg_run_id,
-                                   trade_agent_key=order_detail.trade_agent_key,
-                                   order_idx=order_detail.order_idx,
-                                   trade_date=order_detail.order_date,
-                                   trade_time=order_detail.order_time,
-                                   trade_millisec=order_detail.order_millisec,
-                                   direction=order_detail.direction,
-                                   action=order_detail.action,
-                                   symbol=symbol,
-                                   order_price=order_price,
-                                   order_vol=order_vol,
-                                   trade_price=order_price,
-                                   trade_vol=order_vol,
-                                   margin=margin,
-                                   commission=commission,
-                                   multiple=multiple,
-                                   margin_ratio=margin_ratio,
-                                   calc_mode=order_detail.calc_mode,
-                                   )
+        detail = TradeDetail(stg_run_id=order_detail.stg_run_id,
+                             trade_agent_key=order_detail.trade_agent_key,
+                             order_idx=order_detail.order_idx,
+                             trade_date=order_detail.order_date,
+                             trade_time=order_detail.order_time,
+                             trade_millisec=order_detail.order_millisec,
+                             direction=order_detail.direction,
+                             action=order_detail.action,
+                             symbol=symbol,
+                             order_price=order_price,
+                             order_vol=order_vol,
+                             trade_price=order_price,
+                             trade_vol=order_vol,
+                             margin=margin,
+                             commission=commission,
+                             multiple=multiple,
+                             margin_ratio=margin_ratio,
+                             calc_mode=order_detail.calc_mode,
+                             )
         if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
-                session.add(trade_detail)
+                session.add(detail)
                 session.commit()
-        return trade_detail
+        return detail
 
 
 class PosStatusDetail(BaseModel):
@@ -270,11 +270,11 @@ class PosStatusDetail(BaseModel):
 
     def __repr__(self):
         return f"<PosStatusDetail(id='{self.pos_status_detail_idx}', trade_agent_key={self.trade_agent_key}, " \
-            f"trade_dt='{datetime_2_str(self.trade_dt)}', trade_idx='{self.trade_idx}', symbol='{self.symbol}', " \
-            f"direction='{self.direction}', position='{self.position}', avg_price='{self.avg_price}', " \
-            f"floating_pl='{self.floating_pl}', floating_pl_chg='{self.floating_pl_chg}', " \
-            f"floating_pl_cum='{self.floating_pl_cum}', cashflow='{self.cashflow}', " \
-            f"cashflow_daily='{self.cashflow_daily}', cashflow_cum='{self.cashflow_cum}')>"
+               f"trade_dt='{datetime_2_str(self.trade_dt)}', trade_idx='{self.trade_idx}', symbol='{self.symbol}', " \
+               f"direction='{self.direction}', position='{self.position}', avg_price='{self.avg_price}', " \
+               f"floating_pl='{self.floating_pl}', floating_pl_chg='{self.floating_pl_chg}', " \
+               f"floating_pl_cum='{self.floating_pl_cum}', cashflow='{self.cashflow}', " \
+               f"cashflow_daily='{self.cashflow_daily}', cashflow_cum='{self.cashflow_cum}')>"
 
     def __init__(self, stg_run_id=None, trade_agent_key=None, trade_idx=None, trade_dt=None, trade_date=None,
                  trade_time=None, trade_millisec=None, direction=None, symbol=None, position=None, position_chg=0.0,
@@ -331,42 +331,42 @@ class PosStatusDetail(BaseModel):
         floating_pl = -commission
         floating_pl_rate = floating_pl / margin
         cashflow = -margin - commission
-        pos_status_detail = PosStatusDetail(stg_run_id=trade_detail.stg_run_id,
-                                            trade_agent_key=trade_detail.trade_agent_key,
-                                            trade_idx=trade_detail.trade_idx,
-                                            trade_dt=trade_detail.trade_dt,
-                                            trade_date=trade_detail.trade_date,
-                                            trade_time=trade_detail.trade_time,
-                                            trade_millisec=trade_detail.trade_millisec,
-                                            direction=trade_detail.direction,
-                                            symbol=trade_detail.symbol,
-                                            position=trade_vol,
-                                            position_chg=trade_vol,
-                                            avg_price=avg_price,
-                                            cur_price=trade_price,
-                                            margin=margin,
-                                            margin_chg=margin,
-                                            floating_pl=floating_pl,
-                                            floating_pl_rate=floating_pl_rate,
-                                            floating_pl_chg=floating_pl,
-                                            floating_pl_cum=floating_pl,
-                                            cashflow=cashflow,
-                                            cashflow_daily=cashflow,
-                                            cashflow_cum=cashflow,
-                                            rr=floating_pl_rate,
-                                            commission=commission,
-                                            commission_tot=commission,
-                                            position_date_type=PositionDateType.Today.value,
-                                            multiple=trade_detail.multiple,
-                                            margin_ratio=trade_detail.margin_ratio,
-                                            calc_mode=trade_detail.calc_mode,
-                                            )
+        detail = PosStatusDetail(stg_run_id=trade_detail.stg_run_id,
+                                 trade_agent_key=trade_detail.trade_agent_key,
+                                 trade_idx=trade_detail.trade_idx,
+                                 trade_dt=trade_detail.trade_dt,
+                                 trade_date=trade_detail.trade_date,
+                                 trade_time=trade_detail.trade_time,
+                                 trade_millisec=trade_detail.trade_millisec,
+                                 direction=trade_detail.direction,
+                                 symbol=trade_detail.symbol,
+                                 position=trade_vol,
+                                 position_chg=trade_vol,
+                                 avg_price=avg_price,
+                                 cur_price=trade_price,
+                                 margin=margin,
+                                 margin_chg=margin,
+                                 floating_pl=floating_pl,
+                                 floating_pl_rate=floating_pl_rate,
+                                 floating_pl_chg=floating_pl,
+                                 floating_pl_cum=floating_pl,
+                                 cashflow=cashflow,
+                                 cashflow_daily=cashflow,
+                                 cashflow_cum=cashflow,
+                                 rr=floating_pl_rate,
+                                 commission=commission,
+                                 commission_tot=commission,
+                                 position_date_type=PositionDateType.Today.value,
+                                 multiple=trade_detail.multiple,
+                                 margin_ratio=trade_detail.margin_ratio,
+                                 calc_mode=trade_detail.calc_mode,
+                                 )
         if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
-                session.add(pos_status_detail)
+                session.add(detail)
                 session.commit()
-        return pos_status_detail
+        return detail
 
     def update_by_trade_detail(self, trade_detail: TradeDetail):
         """
@@ -375,7 +375,7 @@ class PosStatusDetail(BaseModel):
         :return: 
         """
         # 复制前一个持仓状态
-        pos_status_detail = self.create_by_self()
+        detail = self.create_by_self()
         direction, action, symbol = trade_detail.direction, trade_detail.action, trade_detail.symbol
         trade_price, trade_vol, trade_idx = trade_detail.trade_price, trade_detail.trade_vol, trade_detail.trade_idx
         commission = trade_detail.commission
@@ -398,7 +398,7 @@ class PosStatusDetail(BaseModel):
 
         if position_last == 0:
             # 如果前一状态仓位为 0 则本次方向与当前订单方向相同
-            pos_status_detail.direction = trade_detail.direction
+            detail.direction = trade_detail.direction
 
         if self.calc_mode == CalcMode.Normal.value:
             # 普通模式：非保证金交易模式
@@ -408,51 +408,51 @@ class PosStatusDetail(BaseModel):
                     # 方向相同：开仓 or 加仓；
                     position_cur = position_last + trade_vol
                     position_value = position_cur * trade_price
-                    pos_status_detail.position_value = position_value
-                    pos_status_detail.position_chg = trade_vol
-                    pos_status_detail.position = position_cur
+                    detail.position_value = position_value
+                    detail.position_chg = trade_vol
+                    detail.position = position_cur
                     avg_price = (position_last * avg_price_last + trade_price * trade_vol +
-                                 commission * int(pos_status_detail.direction)) / position_cur
-                    pos_status_detail.avg_price = avg_price
+                                 commission * int(detail.direction)) / position_cur
+                    detail.avg_price = avg_price
                     # 计算浮动收益 floating_pl floating_pl_rate
-                    pos_status_detail.floating_pl = (trade_price - avg_price) * position_cur * int(
-                        pos_status_detail.direction)
-                    pos_status_detail.floating_pl_rate = (trade_price - avg_price) / avg_price * int(
-                        pos_status_detail.direction)
+                    detail.floating_pl = (trade_price - avg_price) * position_cur * int(
+                        detail.direction)
+                    detail.floating_pl_rate = (trade_price - avg_price) / avg_price * int(
+                        detail.direction)
                 else:
                     # 方向相反：清仓 or 减仓；
-                    pos_status_detail.position_chg = - trade_vol
+                    detail.position_chg = - trade_vol
                     if trade_vol > position_last:
                         raise ValueError("当前持仓%d，平仓%d，错误" % (position_last, trade_vol))
                     elif trade_vol == position_last:
                         # 清仓
                         position_cur = 0
                         position_value = position_cur * trade_price
-                        pos_status_detail.position_value = position_value
-                        pos_status_detail.avg_price = avg_price = 0
-                        pos_status_detail.position = position_cur
+                        detail.position_value = position_value
+                        detail.avg_price = avg_price = 0
+                        detail.position = position_cur
                         # 计算浮动收益 floating_pl floating_pl_rate
                         # 与其他地方计算公式的区别在于 position_curr == 0 因此使用 position_last
-                        pos_status_detail.floating_pl = (trade_price - avg_price_last) * position_last * int(
-                            pos_status_detail.direction) - commission
-                        pos_status_detail.floating_pl_rate = ((trade_price - avg_price_last) * int(
-                            pos_status_detail.direction) - commission / position_last) / avg_price_last \
+                        detail.floating_pl = (trade_price - avg_price_last) * position_last * int(
+                            detail.direction) - commission
+                        detail.floating_pl_rate = ((trade_price - avg_price_last) * int(
+                            detail.direction) - commission / position_last) / avg_price_last \
                             if avg_price_last > 0.001 else MAX_RATE
 
                     else:
                         # 减仓
                         position_cur = position_last - trade_vol
                         position_value = position_cur * trade_price
-                        pos_status_detail.position_value = position_value
+                        detail.position_value = position_value
                         avg_price = (
                                             position_last * avg_price_last - trade_price * trade_vol + commission) / position_cur
-                        pos_status_detail.avg_price = avg_price
-                        pos_status_detail.position = position_cur
+                        detail.avg_price = avg_price
+                        detail.position = position_cur
                         # 计算浮动收益 floating_pl floating_pl_rate
-                        pos_status_detail.floating_pl = (trade_price - avg_price) * position_cur * int(
-                            pos_status_detail.direction)
-                        pos_status_detail.floating_pl_rate = (trade_price - avg_price) / avg_price * int(
-                            pos_status_detail.direction)
+                        detail.floating_pl = (trade_price - avg_price) * position_cur * int(
+                            detail.direction)
+                        detail.floating_pl_rate = (trade_price - avg_price) / avg_price * int(
+                            detail.direction)
 
             else:
                 # 方向相反
@@ -463,38 +463,38 @@ class PosStatusDetail(BaseModel):
 
             # 设置其他属性 floating_pl_chg、floating_pl_cum、cur_price、trade_dt、trade_date、trade_time、trade_millisec
             # position_cur = pos_status_detail.position     # 上面代码已经赋值
-            pos_status_detail.floating_pl_chg = pos_status_detail.floating_pl - self.floating_pl
-            pos_status_detail.floating_pl_cum += pos_status_detail.floating_pl_chg
+            detail.floating_pl_chg = detail.floating_pl - self.floating_pl
+            detail.floating_pl_cum += detail.floating_pl_chg
 
             # 计算 position_value、margin、margin_chg
             # cur_price = pos_status_detail.cur_price
-            pos_status_detail.margin = position_cur * trade_price
+            detail.margin = position_cur * trade_price
             # 如果前一状态仓位为 0,  且不是多空切换的情况，则保留上一状态的浮动收益
             if self.position == 0 and self.trade_dt != trade_detail.trade_dt:
                 # 新建仓情况下，margin_last 为当前 margin
                 # 该变量用于后续计算 rr 使用
-                margin_last = pos_status_detail.margin
-                pos_status_detail.margin_chg = margin_chg = pos_status_detail.margin
+                margin_last = detail.margin
+                detail.margin_chg = margin_chg = detail.margin
             else:
                 margin_last_pos_cur_price = self.position * trade_price
-                pos_status_detail.margin_chg = margin_chg = pos_status_detail.margin - margin_last_pos_cur_price
+                detail.margin_chg = margin_chg = detail.margin - margin_last_pos_cur_price
 
             # 计算 cashflow_daily, cashflow_cum, commission, commission_tot, rr, position_date_type
             # 本次现金流
-            pos_status_detail.cashflow = cashflow = - margin_chg - commission
+            detail.cashflow = cashflow = - margin_chg - commission
             # 每日现金流
             if self.trade_date != trade_detail.trade_date:
-                pos_status_detail.cashflow_daily = cashflow
+                detail.cashflow_daily = cashflow
             else:
-                pos_status_detail.cashflow_daily += cashflow
+                detail.cashflow_daily += cashflow
 
             # 累计现金流
-            pos_status_detail.cashflow_cum += cashflow
-            pos_status_detail.commission = commission
-            pos_status_detail.commission_tot += commission
-            pos_status_detail.rr = pos_status_detail.floating_pl_cum / (
-                pos_status_detail.margin if pos_status_detail.margin > 0 else margin_last)
-            pos_status_detail.position_date_type = PositionDateType.Today.value
+            detail.cashflow_cum += cashflow
+            detail.commission = commission
+            detail.commission_tot += commission
+            detail.rr = detail.floating_pl_cum / (
+                detail.margin if detail.margin > 0 else margin_last)
+            detail.position_date_type = PositionDateType.Today.value
 
         elif self.calc_mode == CalcMode.Margin.value:
             # 保证金交易模式
@@ -503,67 +503,67 @@ class PosStatusDetail(BaseModel):
                     # 方向相同：开仓 or 加仓；
                     position_cur = position_last + trade_vol
                     position_value = position_cur * trade_price * multiple
-                    pos_status_detail.position_value = position_value
-                    pos_status_detail.position_chg = trade_vol
-                    pos_status_detail.position = position_cur
+                    detail.position_value = position_value
+                    detail.position_chg = trade_vol
+                    detail.position = position_cur
                     avg_price = (position_last * avg_price_last * multiple + trade_price * trade_vol * multiple
-                                 + commission * int(pos_status_detail.direction)) / position_cur
-                    pos_status_detail.avg_price = avg_price
+                                 + commission * int(detail.direction)) / position_cur
+                    detail.avg_price = avg_price
                     # 计算 margin、margin_chg
                     margin = position_value * margin_ratio
-                    pos_status_detail.margin = margin
+                    detail.margin = margin
                     margin_chg = margin - margin_last
-                    pos_status_detail.margin_chg = margin_chg
+                    detail.margin_chg = margin_chg
                     # 计算浮动收益 floating_pl floating_pl_rate
-                    pos_status_detail.floating_pl = (trade_price - avg_price) * position_cur * multiple * int(
-                        pos_status_detail.direction)
-                    pos_status_detail.floating_pl_rate = (trade_price - avg_price) / avg_price * int(
-                        pos_status_detail.direction)
+                    detail.floating_pl = (trade_price - avg_price) * position_cur * multiple * int(
+                        detail.direction)
+                    detail.floating_pl_rate = (trade_price - avg_price) / avg_price * int(
+                        detail.direction)
                 else:
                     # 方向相反：清仓 or 减仓；
-                    pos_status_detail.position_chg = - trade_vol
+                    detail.position_chg = - trade_vol
                     if trade_vol > position_last:
                         raise ValueError("当前持仓%d，平仓%d，错误" % (position_last, trade_vol))
                     elif trade_vol == position_last:
                         # 清仓
                         position_cur = 0
                         position_value = position_cur * trade_price * multiple
-                        pos_status_detail.position_value = position_value
-                        pos_status_detail.avg_price = avg_price = 0
-                        pos_status_detail.position = position_cur
+                        detail.position_value = position_value
+                        detail.avg_price = avg_price = 0
+                        detail.position = position_cur
                         # 计算 margin、margin_chg
                         margin_last_pos_cur_price = position_last * trade_price * multiple * margin_ratio
                         margin = position_value * margin_ratio
-                        pos_status_detail.margin = margin
+                        detail.margin = margin
                         margin_chg = margin - margin_last_pos_cur_price
-                        pos_status_detail.margin_chg = margin_chg
+                        detail.margin_chg = margin_chg
                         # 计算浮动收益 floating_pl floating_pl_rate
                         # 与其他地方计算公式的区别在于 position_curr == 0 因此使用 position_last
-                        pos_status_detail.floating_pl = (trade_price - avg_price_last) * position_last * multiple * int(
-                            pos_status_detail.direction) - commission
-                        pos_status_detail.floating_pl_rate = ((trade_price - avg_price_last) * int(
-                            pos_status_detail.direction) - commission / position_last) / avg_price_last \
+                        detail.floating_pl = (trade_price - avg_price_last) * position_last * multiple * int(
+                            detail.direction) - commission
+                        detail.floating_pl_rate = ((trade_price - avg_price_last) * int(
+                            detail.direction) - commission / position_last) / avg_price_last \
                             if avg_price_last > 0.001 else MAX_RATE
 
                     else:
                         # 减仓
                         position_cur = position_last - trade_vol
                         position_value = position_cur * trade_price * multiple
-                        pos_status_detail.position_value = position_value
+                        detail.position_value = position_value
                         avg_price = (position_last * avg_price_last * multiple - trade_price * trade_vol * multiple
                                      + commission) / position_cur
-                        pos_status_detail.avg_price = avg_price
-                        pos_status_detail.position = position_cur
+                        detail.avg_price = avg_price
+                        detail.position = position_cur
                         # 计算 margin、margin_chg
                         margin = position_value * margin_ratio
-                        pos_status_detail.margin = margin
+                        detail.margin = margin
                         margin_chg = margin - margin_last
-                        pos_status_detail.margin_chg = margin_chg
+                        detail.margin_chg = margin_chg
                         # 计算浮动收益 floating_pl floating_pl_rate
-                        pos_status_detail.floating_pl = (trade_price - avg_price) * position_cur * multiple * int(
-                            pos_status_detail.direction)
-                        pos_status_detail.floating_pl_rate = (trade_price - avg_price) / avg_price * int(
-                            pos_status_detail.direction)
+                        detail.floating_pl = (trade_price - avg_price) * position_cur * multiple * int(
+                            detail.direction)
+                        detail.floating_pl_rate = (trade_price - avg_price) / avg_price * int(
+                            detail.direction)
 
             else:
                 # 方向相反
@@ -574,43 +574,43 @@ class PosStatusDetail(BaseModel):
 
             # 设置其他属性 floating_pl_chg、floating_pl_cum、cur_price、trade_dt、trade_date、trade_time、trade_millisec
             # position_cur = pos_status_detail.position     # 上面代码已经赋值
-            pos_status_detail.floating_pl_chg = pos_status_detail.floating_pl - self.floating_pl
-            pos_status_detail.floating_pl_cum += pos_status_detail.floating_pl_chg
+            detail.floating_pl_chg = detail.floating_pl - self.floating_pl
+            detail.floating_pl_cum += detail.floating_pl_chg
 
             # 计算 cashflow_daily、commission、commission_tot、rr、position_date_type
             # 本次现金流
-            pos_status_detail.cashflow = cashflow = - margin_chg - commission
+            detail.cashflow = cashflow = - margin_chg - commission
             # 每日现金流
             if self.trade_date != trade_detail.trade_date:
-                pos_status_detail.cashflow_daily = cashflow
+                detail.cashflow_daily = cashflow
             else:
-                pos_status_detail.cashflow_daily += cashflow
+                detail.cashflow_daily += cashflow
 
             # 累计现金流
-            pos_status_detail.cashflow_cum += cashflow
-            pos_status_detail.commission += commission
-            pos_status_detail.commission_tot += commission
-            pos_status_detail.rr = pos_status_detail.floating_pl_cum / (
-                pos_status_detail.margin if pos_status_detail.margin > 0 else margin_last)
-            pos_status_detail.position_date_type = PositionDateType.Today.value
+            detail.cashflow_cum += cashflow
+            detail.commission += commission
+            detail.commission_tot += commission
+            detail.rr = detail.floating_pl_cum / (
+                detail.margin if detail.margin > 0 else margin_last)
+            detail.position_date_type = PositionDateType.Today.value
 
         else:
             ValueError('calc_mode 不是有效的值 %s', self.calc_mode)
 
-        pos_status_detail.cur_price = trade_price
-        pos_status_detail.trade_dt = trade_detail.trade_dt
-        pos_status_detail.trade_date = trade_detail.trade_date
-        pos_status_detail.trade_time = trade_detail.trade_time
-        pos_status_detail.trade_millisec = trade_detail.trade_millisec
+        detail.cur_price = trade_price
+        detail.trade_dt = trade_detail.trade_dt
+        detail.trade_date = trade_detail.trade_date
+        detail.trade_time = trade_detail.trade_time
+        detail.trade_millisec = trade_detail.trade_millisec
 
         # self.logger.debug("%s", pos_status_detail)
 
         if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
             with with_db_session(engine_ibats, expire_on_commit=False) as session:
-                session.add(pos_status_detail)
+                session.add(detail)
                 session.commit()
-        return pos_status_detail
+        return detail
 
     def update_by_md(self, trade_price, timestamp_curr: (datetime, pd.Timestamp) = None,
                      md: dict = None,
@@ -730,40 +730,40 @@ class PosStatusDetail(BaseModel):
             cashflow_daily = self.cashflow_daily
             position_date_type = self.position_date_type
 
-        pos_status_detail = PosStatusDetail(stg_run_id=self.stg_run_id,
-                                            trade_agent_key=self.trade_agent_key,
-                                            trade_idx=self.trade_idx,
-                                            trade_dt=self.trade_dt,
-                                            trade_date=self.trade_date,
-                                            trade_time=self.trade_time,
-                                            trade_millisec=self.trade_millisec,
-                                            direction=self.direction,
-                                            symbol=self.symbol,
-                                            position=position,
-                                            avg_price=self.avg_price,
-                                            cur_price=self.cur_price,
-                                            floating_pl=self.floating_pl if position > 0 else 0,
-                                            floating_pl_rate=0.0,
-                                            floating_pl_cum=self.floating_pl_cum,
-                                            cashflow=0.0,
-                                            cashflow_daily=cashflow_daily,
-                                            cashflow_cum=self.cashflow_cum,
-                                            margin=self.margin,
-                                            margin_chg=0,
-                                            position_date_type=position_date_type,
-                                            commission=0.0,
-                                            commission_tot=self.commission_tot,
-                                            multiple=self.multiple,
-                                            margin_ratio=self.margin_ratio,
-                                            calc_mode=self.calc_mode
-                                            )
-        pos_status_detail.last_status = self
+        detail = PosStatusDetail(stg_run_id=self.stg_run_id,
+                                 trade_agent_key=self.trade_agent_key,
+                                 trade_idx=self.trade_idx,
+                                 trade_dt=self.trade_dt,
+                                 trade_date=self.trade_date,
+                                 trade_time=self.trade_time,
+                                 trade_millisec=self.trade_millisec,
+                                 direction=self.direction,
+                                 symbol=self.symbol,
+                                 position=position,
+                                 avg_price=self.avg_price,
+                                 cur_price=self.cur_price,
+                                 floating_pl=self.floating_pl if position > 0 else 0,
+                                 floating_pl_rate=0.0,
+                                 floating_pl_cum=self.floating_pl_cum,
+                                 cashflow=0.0,
+                                 cashflow_daily=cashflow_daily,
+                                 cashflow_cum=self.cashflow_cum,
+                                 margin=self.margin,
+                                 margin_chg=0,
+                                 position_date_type=position_date_type,
+                                 commission=0.0,
+                                 commission_tot=self.commission_tot,
+                                 multiple=self.multiple,
+                                 margin_ratio=self.margin_ratio,
+                                 calc_mode=self.calc_mode
+                                 )
+        detail.last_status = self
         if is_new_day:
-            pos_status_detail.last_date_status = self
+            detail.last_date_status = self
         else:
-            pos_status_detail.last_date_status = self.last_date_status
+            detail.last_date_status = self.last_date_status
 
-        return pos_status_detail
+        return detail
 
     @staticmethod
     def remove(stg_run_id: int):
@@ -849,11 +849,11 @@ class TradeAgentStatusDetail(BaseModel):
 
     def __repr__(self):
         return f"<TradeAgentStatusDetail(id='{self.trade_agent_status_detail_idx}', " \
-            f"trade_agent_key={self.trade_agent_key}, trade_dt='{datetime_2_str(self.trade_dt)}', " \
-            f"cash_available='{self.cash_available}', cash_available_last_day='{self.cash_available_last_day}', " \
-            f"cashflow_daily='{self.cashflow_daily}', cashflow_cum='{self.cashflow_cum}', " \
-            f"cash_and_margin='{self.cashflow_cum}', cash_and_margin='{self.cashflow_cum}', " \
-            f"floating_pl_cum='{self.floating_pl_cum}')>"
+               f"trade_agent_key={self.trade_agent_key}, trade_dt='{datetime_2_str(self.trade_dt)}', " \
+               f"cash_available='{self.cash_available}', cash_available_last_day='{self.cash_available_last_day}', " \
+               f"cashflow_daily='{self.cashflow_daily}', cashflow_cum='{self.cashflow_cum}', " \
+               f"cash_and_margin='{self.cashflow_cum}', cash_and_margin='{self.cashflow_cum}', " \
+               f"floating_pl_cum='{self.floating_pl_cum}')>"
 
     @staticmethod
     def create_t_1(stg_run_id, trade_agent_key, init_cash: int, timestamp_curr: (datetime, pd.Timestamp) = None,
@@ -922,26 +922,26 @@ class TradeAgentStatusDetail(BaseModel):
         :return: 
         """
         cash_available_last_day = self.cash_available if is_new_day else self.cash_available_last_day
-        trade_agent_status_detail = TradeAgentStatusDetail(stg_run_id=self.stg_run_id,
-                                                           trade_agent_key=self.trade_agent_key,
-                                                           trade_date=self.trade_date,
-                                                           trade_time=self.trade_time,
-                                                           trade_millisec=self.trade_millisec,
-                                                           cash_available_last_day=cash_available_last_day,
-                                                           cash_available=self.cash_available,
-                                                           curr_margin=self.curr_margin,
-                                                           close_profit=self.close_profit,
-                                                           position_profit=self.position_profit,
-                                                           floating_pl_cum=self.floating_pl_cum,
-                                                           cashflow_daily=self.cashflow_daily,
-                                                           cashflow_cum=self.cashflow_cum,
-                                                           commission_tot=self.commission_tot,
-                                                           cash_init=self.cash_init,
-                                                           calc_mode=self.calc_mode,
-                                                           run_mode=self.run_mode,
-                                                           )
-        trade_agent_status_detail.last_status = self
-        return trade_agent_status_detail
+        detail = TradeAgentStatusDetail(stg_run_id=self.stg_run_id,
+                                        trade_agent_key=self.trade_agent_key,
+                                        trade_date=self.trade_date,
+                                        trade_time=self.trade_time,
+                                        trade_millisec=self.trade_millisec,
+                                        cash_available_last_day=cash_available_last_day,
+                                        cash_available=self.cash_available,
+                                        curr_margin=self.curr_margin,
+                                        close_profit=self.close_profit,
+                                        position_profit=self.position_profit,
+                                        floating_pl_cum=self.floating_pl_cum,
+                                        cashflow_daily=self.cashflow_daily,
+                                        cashflow_cum=self.cashflow_cum,
+                                        commission_tot=self.commission_tot,
+                                        cash_init=self.cash_init,
+                                        calc_mode=self.calc_mode,
+                                        run_mode=self.run_mode,
+                                        )
+        detail.last_status = self
+        return detail
 
     def update_by_pos_status_detail(
             self, pos_status_detail_dic, timestamp_curr: (datetime, pd.Timestamp) = None, md: dict = None,
