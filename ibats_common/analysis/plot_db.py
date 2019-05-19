@@ -49,10 +49,12 @@ def show_cash_and_margin(stg_run_id, enable_show_plot=True, enable_save_plot=Fal
             session.query(
                 StgRunStatusDetail.trade_dt.label('trade_dt'),
                 StgRunStatusDetail.cash_available.label('cash'),
+                (StgRunStatusDetail.cash_available.label('cash') + StgRunStatusDetail.commission_tot
+                 ).label('cash + commission'),
                 StgRunStatusDetail.curr_margin.label('margin'),
                 StgRunStatusDetail.cash_and_margin.label('cash_and_margin'),
-                (StgRunStatusDetail.cash_and_margin.label('cash_and_margin') + StgRunStatusDetail.commission_tot.label(
-                    'commission_tot')).label('no commission'),
+                (StgRunStatusDetail.cash_and_margin.label('cash_and_margin') + StgRunStatusDetail.commission_tot
+                 ).label('no commission'),
             ).filter(
                 StgRunStatusDetail.stg_run_id == stg_run_id
             )
@@ -63,7 +65,7 @@ def show_cash_and_margin(stg_run_id, enable_show_plot=True, enable_save_plot=Fal
     def plot_func():
         ax = df[['cash', 'margin']].plot.area()
         if run_mode != RunMode.Backtest_FixPercent:
-            df[['cash_and_margin', 'no commission']].plot(ax=ax)
+            df[['cash_and_margin', 'no commission', 'cash + commission']].plot(ax=ax)
 
         ax.set_title(
             f"Cash + Margin [{stg_run_id}] "
@@ -460,6 +462,6 @@ def _test_show_cash_and_margin():
 
 
 if __name__ == '__main__':
-    _test_show_rr_with_md()
     # _test_show_rr_with_md()
-    # _test_show_cash_and_margin()
+    # _test_show_rr_with_md()
+    _test_show_cash_and_margin()
