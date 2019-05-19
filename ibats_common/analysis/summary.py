@@ -10,20 +10,23 @@
 import logging
 import os
 from collections import defaultdict
+import datetime
+import json
 
 import docx
 import numpy as np
 import pandas as pd
-from ibats_utils.mess import open_file_with_system_app, date_2_str
+from ibats_utils.mess import open_file_with_system_app, date_2_str, datetime_2_str
 from scipy.stats import anderson, normaltest
 
 from ibats_common.analysis import get_report_folder_path
 from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix, plot_corr, clean_cache
 from ibats_common.analysis.plot_db import get_rr_with_md, show_trade, show_cash_and_margin
 from ibats_common.backend.mess import get_stg_run_info
-from ibats_common.common import RunMode
+from ibats_common.common import RunMode, CalcMode
 
 logger = logging.getLogger(__name__)
+STR_FORMAT_DATETIME_4_FILE_NAME = '%Y-%m-%d %H_%M_%S'
 
 
 def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
@@ -391,7 +394,8 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
     file_path_dic['cash_and_margin'] = file_path
 
     # 生成 docx 文档将所需变量
-    heading_title = f'策略分析报告[{stg_run_id}]'
+    heading_title = f'策略分析报告[{stg_run_id}] ' \
+                    f'{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days)'
 
     # 生成 docx 文件
     document = docx.Document()
@@ -456,7 +460,15 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
     document.add_page_break()
 
     # 保存文件
-    file_name = f"{stg_run_id} {np.random.randint(10000)}.docx"
+    try:
+        calc_mode_str = CalcMode(json.loads(info.trade_agent_params_list)[0]['calc_mode']).name + " "
+    except:
+        calc_mode_str = " "
+
+    run_mode_str = run_mode.name + " "
+    file_name = f"{stg_run_id} {run_mode_str}{calc_mode_str}" \
+                f"{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days) " \
+                f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
     file_path = os.path.join(get_report_folder_path(), file_name)
     document.save(file_path)
     if enable_clean_cache:
@@ -560,7 +572,8 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8
     document.add_page_break()
 
     # 保存文件
-    file_name = f"MD {date_2_str(min(df.index))} - {date_2_str(max(df.index))} ({df.shape[0]} days) {np.random.randint(10000)}.docx"
+    file_name = f"MD {date_2_str(min(df.index))} - {date_2_str(max(df.index))} ({df.shape[0]} days) " \
+                f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
     file_path = os.path.join(get_report_folder_path(), file_name)
     document.save(file_path)
     if enable_clean_cache:
