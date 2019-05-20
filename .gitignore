@@ -186,3 +186,4 @@ checkpoint
 # tmp files
 ibats_common/analysis/report/*.png
 ibats_common/analysis/report/*.doc*
+ibats_common/example/tflearn/*
