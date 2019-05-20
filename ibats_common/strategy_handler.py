@@ -24,7 +24,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from ibats_common.backend import engines
 from ibats_common.backend.orm import StgRunInfo, StgRunStatusDetail
-from ibats_common.common import ExchangeName, RunMode, ContextKey
+from ibats_common.common import ExchangeName, RunMode, ContextKey, CalcMode
 from ibats_common.config import config
 from ibats_common.md import md_agent_factory
 from ibats_common.strategy import StgBase
@@ -453,6 +453,9 @@ def strategy_handler_factory_multi_exchange(
     # 因为stg_base子类被继承后，参数主要用于设置策略所需各种参数使用
     for num, params in enumerate(trade_agent_params_list, start=1):
         logger.debug('%d) run_mode=%s, stg_run_id=%d, trade_agent_params: %s', num, run_mode.name, stg_run_id, params)
+        if run_mode == RunMode.Backtest_FixPercent and params['calc_mode'] == CalcMode.Margin:
+            raise ValueError(f'{num}) {RunMode.Backtest_FixPercent.name} 模式下，trade_agent 不支持 CalcMode.Margin 模式，'
+                             f'请切换到 CalcMode.Normal 模式')
         # 默认使用交易所名称，若同一交易所，多个账户交易，则可以单独指定名称
         agent_name = params.setdefault('agent_name', params['exchange_name'])
         trade_agent = trader_agent_factory(run_mode, stg_run_id, **params)
