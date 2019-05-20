@@ -65,6 +65,7 @@ def _test_use(is_plot):
     import os
     # 参数设置
     run_mode = RunMode.Backtest_FixPercent
+    calc_mode = CalcMode.Normal
     strategy_params = {'unit': 1}
     md_agent_params_list = [{
         'md_period': PeriodType.Min1,
@@ -85,7 +86,7 @@ def _test_use(is_plot):
         trade_agent_params = {
             'trade_mode': BacktestTradeMode.Order_2_Deal,
             'init_cash': 1000000,
-            "calc_mode": CalcMode.Margin,
+            "calc_mode": calc_mode,
         }
         strategy_handler_param = {
             'date_from': '2010-1-1',  # 策略回测历史数据，回测指定时间段的历史行情
@@ -95,7 +96,7 @@ def _test_use(is_plot):
         # RunMode.Backtest_FixPercent
         trade_agent_params = {
             'trade_mode': BacktestTradeMode.Order_2_Deal,
-            "calc_mode": CalcMode.Margin,
+            "calc_mode": calc_mode,
         }
         strategy_handler_param = {
             'date_from': '2010-1-1',  # 策略回测历史数据，回测指定时间段的历史行情
