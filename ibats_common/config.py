@@ -14,11 +14,11 @@ class ConfigBase:
 
     DB_SCHEMA_IBATS = 'ibats'
     DB_URL_DIC = {
-        DB_SCHEMA_IBATS: 'mysql://m*:****@localhost/' + DB_SCHEMA_IBATS,
+        DB_SCHEMA_IBATS: 'mysql://mg:Abcd1234@localhost/' + DB_SCHEMA_IBATS,
     }
 
     BACKTEST_UPDATE_OR_INSERT_PER_ACTION = False
-    ORM_UPDATE_OR_INSERT_PER_ACTION = False
+    ORM_UPDATE_OR_INSERT_PER_ACTION = True
     UPDATE_STG_RUN_STATUS_DETAIL_PERIOD = 1  # 1 每一个最小行情周期，2 每天
 
     # evn configuration
