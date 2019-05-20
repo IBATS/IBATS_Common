@@ -55,6 +55,7 @@ def drawdown_plot(df: pd.DataFrame, perf_stats=None, col_name_list=None,
     """
     if col_name_list is None:
         data_df = df.to_drawdown_series()
+        col_name_list = list(df.columns)
     else:
         data_df = df[col_name_list].to_drawdown_series()
 
@@ -71,12 +72,12 @@ def drawdown_plot(df: pd.DataFrame, perf_stats=None, col_name_list=None,
 
     if enable_show_plot:
         ax = data_df.plot()
-        ax.set_title(f"Drawdown {['{:.2f}%'.format(col_mdd_dic[_] * 100) for _ in df.columns]}")
+        ax.set_title(f"Drawdown {['{:.2f}%'.format(col_mdd_dic[_] * 100) for _ in col_name_list]}")
         plt.show()
 
     if enable_save_plot:
         ax = data_df.plot()
-        ax.set_title(f"Drawdown {['{:.2f}%'.format(col_mdd_dic[_] * 100) for _ in df.columns]}")
+        ax.set_title(f"Drawdown {['{:.2f}%'.format(col_mdd_dic[_] * 100) for _ in col_name_list]}")
         file_name = get_file_name(f'drawdown', name=name)
         file_path = os.path.join(get_cache_folder_path(), file_name)
         plt.savefig(file_path, dpi=75)
@@ -366,6 +367,7 @@ def wave_hist(df: pd.DataFrame, columns=None, bins=50, figure_4_each_col=True,
             plt.show()
 
         if enable_save_plot:
+            func()
             file_name = get_file_name(f'hist', name=name)
             file_path = os.path.join(get_cache_folder_path(), file_name)
             plt.savefig(file_path, dpi=75)
