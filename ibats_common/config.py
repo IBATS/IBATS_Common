@@ -14,7 +14,7 @@ class ConfigBase:
 
     DB_SCHEMA_IBATS = 'ibats'
     DB_URL_DIC = {
-        DB_SCHEMA_IBATS: 'mysql://mg:Abcd1234@localhost/' + DB_SCHEMA_IBATS,
+        DB_SCHEMA_IBATS: 'mysql://m*:****@localhost/' + DB_SCHEMA_IBATS,
     }
 
     BACKTEST_UPDATE_OR_INSERT_PER_ACTION = False

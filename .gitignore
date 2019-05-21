@@ -186,3 +186,4 @@ checkpoint
 # tmp files
 ibats_common/example/tflearn/*
 ibats_common/analysis/report/*
+config.py.bak
