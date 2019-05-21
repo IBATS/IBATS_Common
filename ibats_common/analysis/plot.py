@@ -298,6 +298,8 @@ def wave_hist(df: pd.DataFrame, columns=None, bins=50, figure_4_each_col=True,
             if func == 'return':
                 rename_dic = {}
                 for col_name in col_transfer_dic[func]:
+                    if col_name not in data_df:
+                        continue
                     rename_dic[col_name] = f"{col_name} {func}"
                     data_df.loc[:, col_name] = data_df[col_name].to_returns()
                 else:
@@ -306,6 +308,8 @@ def wave_hist(df: pd.DataFrame, columns=None, bins=50, figure_4_each_col=True,
             elif func == 'pct_change':
                 rename_dic = {}
                 for col_name in col_transfer_dic[func]:
+                    if col_name not in data_df:
+                        continue
                     rename_dic[col_name] = f"{col_name} {func}"
                     data_df.loc[:, col_name] = data_df[col_name].pct_change()
                 else:
@@ -313,6 +317,8 @@ def wave_hist(df: pd.DataFrame, columns=None, bins=50, figure_4_each_col=True,
             else:
                 rename_dic = {}
                 for col_name in col_transfer_dic[func]:
+                    if col_name not in data_df:
+                        continue
                     rename_dic[col_name] = f"{col_name} {str(func)}"
                     data_df.loc[:, col_name] = func(data_df[col_name])
                 else:

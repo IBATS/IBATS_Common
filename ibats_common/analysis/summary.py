@@ -7,11 +7,11 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
+import datetime
+import json
 import logging
 import os
 from collections import defaultdict
-import datetime
-import json
 
 import docx
 import numpy as np
@@ -33,7 +33,7 @@ FORMAT_2_FLOAT2 = r"{0:.2f}"
 
 def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
                risk_free=0.03,
-               stat_col_name_list=None,
+               close_key=None,
                enable_show_plot=True,
                enable_save_plot=False,
                name=None,
@@ -47,7 +47,7 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
     第三个返回值，相关文件输出路径或路径列表（当 enable_save_plot=True）
     :param df:
     :param risk_free:无风险收益率
-    :param stat_col_name_list:对哪些列的数据执行统计
+    :param close_key:对哪些列的数据执行统计
     :param enable_show_plot: 展示plot
     :param enable_save_plot: 保存文件
     :param name:
@@ -105,8 +105,10 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
         file_path_dic['drawdown'] = file_path
 
     # 单列分析
+    stat_col_name_list = [close_key]
     stat_df = (df if stat_col_name_list is None else df[stat_col_name_list])
     for col_name, data in stat_df.items():
+        data_df = df[[col_name]].dropna()
         data = data.dropna()
         data = data[~np.isinf(data)]
         logger.info("=" * 50 + ' %s ' + "=" * 50, col_name)
@@ -121,6 +123,17 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
         # 设置无风险收益率
         stats.set_riskfree_rate(risk_free)
         stats.display()
+        each_col_dic[col_name]['stats'] = stats
+        # plot
+        func_kwargs = func_kwargs_dic.setdefault('hist', {})
+        n_bins_dic, file_path = wave_hist(df[[col_name]], **func_kwargs, **enable_kwargs_dic)
+        each_col_dic[col_name]['hist'] = n_bins_dic
+        if enable_save_plot:
+            file_path_dic[f'{col_name} hist'] = file_path
+        rr = data_df.to_returns()
+        each_col_dic[col_name]['quantile_df'] = rr.quantile(
+            [0.25, 1 / 3, 0.5, 2 / 3, 0.75]
+        ).rename(colomns={col_name: f"{col_name} rr"})
 
     return ret_dic, each_col_dic, file_path_dic
 
@@ -246,7 +259,8 @@ def df_2_table(doc, df, format_by_index=None, format_by_col=None):
     for i in range(row_num):
         index = df.index[i]
         paragraph = t.cell(i + 1, 0).paragraphs[0]
-        paragraph.add_run(date_2_str(index)).bold = True
+        index_str = str(date_2_str(index))
+        paragraph.add_run(index_str).bold = True
         paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
         if format_by_index is not None and index in format_by_index:
             formater = format_by_index[index]
@@ -405,7 +419,7 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
 
     # 生成 docx 文档将所需变量
     heading_title = f'策略分析报告[{stg_run_id}] ' \
-                    f'{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days)'
+        f'{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days)'
 
     # 生成 docx 文件
     document = docx.Document()
@@ -477,8 +491,8 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
 
     run_mode_str = run_mode.name + " "
     file_name = f"{stg_run_id} {run_mode_str}{calc_mode_str}" \
-                f"{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days) " \
-                f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
+        f"{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days) " \
+        f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
     file_path = os.path.join(get_report_folder_path(), file_name)
     document.save(file_path)
     if enable_clean_cache:
@@ -496,7 +510,7 @@ def _test_summary_stg_2_docx(auto_open_file=True):
 
 def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
                       risk_free=0.03,
-                      stat_col_name_list=None,
+                      close_key=None,
                       enable_show_plot=True,
                       enable_save_plot=False,
                       name=None,
@@ -510,7 +524,7 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8
     :param df:
     :param percentiles:分为数信息
     :param risk_free:无风险收益率
-    :param stat_col_name_list:对哪些列的数据执行统计
+    :param close_key:对哪些列的数据执行统计
     :param enable_show_plot:显示plot
     :param enable_save_plot:保存plot
     :param name:
@@ -519,7 +533,7 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8
     :return:
     """
     ret_dic, each_col_dic, file_path_dic = summary_md(
-        df, percentiles=percentiles, risk_free=risk_free, stat_col_name_list=stat_col_name_list,
+        df, percentiles=percentiles, risk_free=risk_free, close_key=close_key,
         enable_show_plot=enable_show_plot, enable_save_plot=enable_save_plot, name=name,
         func_kwargs_dic=func_kwargs_dic)
 
@@ -595,9 +609,32 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8
         heading_count += 1
         document.add_page_break()
 
+    # 逐列分析
+    col_name = close_key
+    # 文件内容
+    heading_title = f'{col_name} 数据分析结果'
+    document.add_heading(heading_title, 0).alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+    document.add_paragraph('')
+    document.add_paragraph('')
+    heading_count = 1
+
+    if 'quantile_df' in ret_dic:
+        document.add_heading(f'{heading_count}、分位数信息（Quantile）', 1)
+        df = each_col_dic[col_name]['quantile_df']
+        format_by_col = {_: FORMAT_2_PERCENT for _ in df.columns}
+        df_2_table(document, df, format_by_col=format_by_col)
+        heading_count += 1
+        document.add_page_break()
+
+    if 'hist' in file_path_dic:
+        document.add_heading(f'{heading_count}、Histgram 分布图', 1)
+        document.add_picture(file_path_dic[f'{col_name} hist'])
+        heading_count += 1
+        document.add_page_break()
+
     # 保存文件
     file_name = f"MD {date_2_str(min(df.index))} - {date_2_str(max(df.index))} ({df.shape[0]} days) " \
-                f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
+        f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
     file_path = os.path.join(get_report_folder_path(), file_name)
     document.save(file_path)
     if enable_clean_cache:
@@ -615,7 +652,7 @@ def _test_summary_md_2_docx(auto_open_file=True):
         'return': ['open', 'high', 'low', 'close', 'volume']
     }
     file_path = summary_md_2_docx(
-        df, enable_show_plot=False, enable_save_plot=True, stat_col_name_list=['close'],
+        df, enable_show_plot=False, enable_save_plot=True, close_key='close',
         func_kwargs_dic={
             "hist": {
                 "figure_4_each_col": False,
