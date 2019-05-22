@@ -11,7 +11,8 @@ import pandas as pd
 import logging
 import datetime
 import numpy as np
-
+import ffn
+from ibats_common.example.data import get_delivery_date_series
 
 logger = logging.getLogger(__name__)
 
@@ -74,11 +75,62 @@ def add_factor_of_trade_date(df: pd.DataFrame, trade_date_series):
 
 
 def add_factor_of_delivery_date(df, delivery_date_series):
+    index_s = pd.Series(df.index)
+
+    # 当期合约距离交割日天数
+    result_arr = []
+    for _, trade_date in index_s.items():
+        next_2_date = delivery_date_series[delivery_date_series > trade_date].head(2)
+        if next_2_date.shape[0] < 2:
+            day_2_first_del_date, day_2_second_del_date = np.nan, np.nan
+        else:
+            first_del_date, secend_del_date = next_2_date[0], next_2_date[1]
+            day_2_first_del_date = (first_del_date - trade_date).days
+            day_2_second_del_date = (secend_del_date - trade_date).days
+
+        result_arr.append([day_2_first_del_date, day_2_second_del_date])
+
+    df['days_2_first_del_date'] = [_[0] for _ in result_arr]
+    df['days_2_second_del_date'] = [_[1] for _ in result_arr]
     return df
 
 
-def get_factor(df: pd.DataFrame, trade_date_series=None, delivery_date_series=None, dropna=True) -> pd.DataFrame:
+def get_factor(df: pd.DataFrame, close_key='close', vol_key='volume', trade_date_series=None, delivery_date_series=None, dropna=True) -> pd.DataFrame:
+    """
+    在当期时间序列数据基础上增加相关因子
+    :param df: 时间序列数据索引为日期
+    :param close_key:
+    :param vol_key:
+    :param trade_date_series: 交易日序列
+    :param delivery_date_series:交割日序列
+    :param dropna: 是否 dropna
+
+    :return:
+    """
     ret_df = df.copy()
+
+    # 增加量价因子
+    if close_key is not None:
+        # 均线因子
+        close_s = ret_df[close_key]
+        for n in [5, 10, 15, 20, 30, 60, 120, 240]:
+            ret_df[f'ma{n}'] = close_s.rolling(n).mean()
+        # EMA
+        for n in [12, 26, 60, 120]:
+            ret_df[f'ema{n}'] = close_s.ewm(span=n).mean()
+        # 波动率因子
+        expanding = close_s.expanding(5)
+        ret_df[f'volatility_all'] = expanding.std() / expanding.mean()
+        for n in [20, 60, 120, 240]:
+            ret_df[f'volatility{n}'] = close_s.rolling(n).std()/close_s.rolling(n).mean()
+
+        # 收益率方差
+        rr = close_s.to_returns()
+        for n in [20, 60, 120, 240]:
+            ret_df[f'rr_std{n}'] = rr.rolling(n).std()
+
+        ret_df[f'ema{n}'] = close_s.ewm(span=n).mean()
+
     # 自然日相关因子
     index_s = pd.Series(ret_df.index)
     ret_df['dayofweek'] = index_s.apply(lambda x: x.dayofweek).to_numpy()
@@ -93,7 +145,6 @@ def get_factor(df: pd.DataFrame, trade_date_series=None, delivery_date_series=No
     # 交割日相关因子
     if delivery_date_series is not None:
         ret_df = add_factor_of_delivery_date(ret_df, delivery_date_series)
-        # 当期合约距离交割日天数
 
     if dropna:
         ret_df.dropna(inplace=True)
@@ -102,10 +153,13 @@ def get_factor(df: pd.DataFrame, trade_date_series=None, delivery_date_series=No
 
 def _test_get_factor():
     from ibats_common.example.data import load_data, get_trade_date_series
-
-    df = load_data('RB.csv').set_index('trade_date').drop('instrument_type', axis=1)
+    instrument_type = 'RB'
+    file_name = f"{instrument_type}.csv"
+    df = load_data(file_name).set_index('trade_date').drop('instrument_type', axis=1)
     df.index = pd.DatetimeIndex(df.index)
-    factor = get_factor(df, trade_date_series=get_trade_date_series())
+    factor = get_factor(df,
+                        trade_date_series=get_trade_date_series(),
+                        delivery_date_series=get_delivery_date_series(instrument_type))
     logger.info("\n%s\t%s \n%s\t%s", df.shape, list(df.columns), factor.shape, list(factor.columns))
     print("\n%s\t%s \n%s\t%s" % (df.shape, list(df.columns), factor.shape, list(factor.columns)))
 
