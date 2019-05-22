@@ -24,8 +24,22 @@ def load_data(file_name, encoding=None)-> pd.DataFrame:
 def get_trade_date_series():
     df = load_data('trade_date.csv').astype('datetime64[ns]')
     # ret_list = [str_2_date(_) for _ in load_data('trade_date.csv').T.to_numpy()[0]]
-    trade_date_s = df.iloc[:, 0]
-    return trade_date_s
+    date_s = df.iloc[:, 0]
+    return date_s
+
+
+def get_delivery_date_series(instrument_type):
+    df = load_data(
+        'future_info.csv'
+    ).set_index(
+        'symbol'
+    ).filter(
+        regex='^' + instrument_type + r'(?=\d+$)', axis=0
+    )
+    # re_pattern_instrument_header = re.compile(r'[A-Za-z]+(?=\d+$)')
+    date_s = df["delist_date"].astype('datetime64[ns]').sort_values()
+    # ret_list = [str_2_date(_) for _ in load_data('trade_date.csv').T.to_numpy()[0]]
+    return date_s
 
 
 if __name__ == "__main__":
