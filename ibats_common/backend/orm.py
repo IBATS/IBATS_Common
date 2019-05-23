@@ -981,7 +981,7 @@ class TradeAgentStatusDetail(BaseModel):
         :param milli_sec_key: timestamp_curr 或 md + key 参数 两组参数二选其一
         :return:
         """
-        warnings.warn('该函数为范例函数，可以根据实际情况改写', UserWarning)
+        # warnings.warn('该函数为范例函数，可以根据实际情况改写', UserWarning)
         # 更新日期、时间
         if timestamp_curr is None:
             timestamp_curr = md[timestamp_key]
@@ -1078,7 +1078,7 @@ class TradeAgentStatusDetail(BaseModel):
         :param milli_sec_key: timestamp_curr 或 md + key 参数 两组参数二选其一
         :return:
         """
-        warnings.warn('该函数为范例函数，可以根据实际情况改写', UserWarning)
+        # warnings.warn('该函数为范例函数，可以根据实际情况改写', UserWarning)
         # 更新日期、时间
         if timestamp_curr is None:
             timestamp_curr = md[timestamp_key]
