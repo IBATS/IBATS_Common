@@ -16,7 +16,7 @@ from collections import defaultdict
 import docx
 import numpy as np
 import pandas as pd
-from ibats_utils.mess import open_file_with_system_app, date_2_str, datetime_2_str
+from ibats_utils.mess import open_file_with_system_app, date_2_str, datetime_2_str, split_chunk
 from scipy.stats import anderson, normaltest
 
 from ibats_common.analysis import get_report_folder_path
@@ -133,7 +133,7 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
         rr = data_df.to_returns()
         each_col_dic[col_name]['quantile_df'] = rr.quantile(
             [0.25, 1 / 3, 0.5, 2 / 3, 0.75]
-        ).rename(colomns={col_name: f"{col_name} rr"})
+        ).rename(columns={col_name: f"{col_name} rr"})
 
     return ret_dic, each_col_dic, file_path_dic
 
@@ -228,68 +228,73 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     return ret_dic, each_col_dic, file_path_dic
 
 
-def df_2_table(doc, df, format_by_index=None, format_by_col=None):
-    row_num, col_num = df.shape
-    t = doc.add_table(row_num + 1, col_num + 1)
+def df_2_table(doc, df, format_by_index=None, format_by_col=None, max_col_count=None):
+    if max_col_count is None:
+        max_col_count = df.shape[1]
 
-    # Highlight all cells limegreen (RGB 32CD32) if cell contains text "0.5"
-    from docx.oxml.ns import nsdecls
-    from docx.oxml import parse_xml
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    for col_name_list in split_chunk(list(df.columns), max_col_count):
+        sub_df = df[col_name_list]
+        row_num, col_num = sub_df.shape
+        t = doc.add_table(row_num + 1, col_num + 1)
 
-    # write head
-    col_name_list = list(df.columns)
-    for j in range(col_num):
-        # t.cell(0, j).text = df.columns[j]
-        # paragraph = t.cell(0, j).add_paragraph()
-        paragraph = t.cell(0, j + 1).paragraphs[0]
-        paragraph.add_run(col_name_list[j]).bold = True
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        # Highlight all cells limegreen (RGB 32CD32) if cell contains text "0.5"
+        from docx.oxml.ns import nsdecls
+        from docx.oxml import parse_xml
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-    # write head bg color
-    for j in range(col_num + 1):
-        # t.cell(0, j).text = df.columns[j]
-        t.cell(0, j)._tc.get_or_add_tcPr().append(
-            parse_xml(r'<w:shd {} w:fill="00A2E8"/>'.format(nsdecls('w'))))
-
-    # format table style to be a grid
-    t.style = 'TableGrid'
-
-    # populate the table with the dataframe
-    for i in range(row_num):
-        index = df.index[i]
-        paragraph = t.cell(i + 1, 0).paragraphs[0]
-        index_str = str(date_2_str(index))
-        paragraph.add_run(index_str).bold = True
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        if format_by_index is not None and index in format_by_index:
-            formater = format_by_index[index]
-        else:
-            formater = None
-
+        # write head
+        # col_name_list = list(sub_df.columns)
         for j in range(col_num):
-            if formater is None and format_by_col is not None and col_name_list[j] in format_by_col:
-                formater = format_by_col[col_name_list[j]]
+            # t.cell(0, j).text = df.columns[j]
+            # paragraph = t.cell(0, j).add_paragraph()
+            paragraph = t.cell(0, j + 1).paragraphs[0]
+            paragraph.add_run(col_name_list[j]).bold = True
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-            content = df.values[i, j]
-            if formater is None:
-                text = str(content)
-            elif isinstance(formater, str):
-                text = str.format(formater, content)
-            elif callable(formater):
-                text = formater(content)
-            else:
-                raise ValueError('%s: %s 无效', index, formater)
-
-            paragraph = t.cell(i + 1, j + 1).paragraphs[0]
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            paragraph.add_run(text)
-
-    for i in range(1, row_num + 1):
+        # write head bg color
         for j in range(col_num + 1):
-            if i % 2 == 0:
-                t.cell(i, j)._tc.get_or_add_tcPr().append(
-                    parse_xml(r'<w:shd {} w:fill="A3D9EA"/>'.format(nsdecls('w'))))
+            # t.cell(0, j).text = df.columns[j]
+            t.cell(0, j)._tc.get_or_add_tcPr().append(
+                parse_xml(r'<w:shd {} w:fill="00A2E8"/>'.format(nsdecls('w'))))
+
+        # format table style to be a grid
+        t.style = 'TableGrid'
+
+        # populate the table with the dataframe
+        for i in range(row_num):
+            index = sub_df.index[i]
+            paragraph = t.cell(i + 1, 0).paragraphs[0]
+            index_str = str(date_2_str(index))
+            paragraph.add_run(index_str).bold = True
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            if format_by_index is not None and index in format_by_index:
+                formater = format_by_index[index]
+            else:
+                formater = None
+
+            for j in range(col_num):
+                if formater is None and format_by_col is not None and col_name_list[j] in format_by_col:
+                    formater = format_by_col[col_name_list[j]]
+
+                content = sub_df.values[i, j]
+                if formater is None:
+                    text = str(content)
+                elif isinstance(formater, str):
+                    text = str.format(formater, content)
+                elif callable(formater):
+                    text = formater(content)
+                else:
+                    raise ValueError('%s: %s 无效', index, formater)
+
+                paragraph = t.cell(i + 1, j + 1).paragraphs[0]
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                paragraph.add_run(text)
+
+        for i in range(1, row_num + 1):
+            for j in range(col_num + 1):
+                if i % 2 == 0:
+                    t.cell(i, j)._tc.get_or_add_tcPr().append(
+                        parse_xml(r'<w:shd {} w:fill="A3D9EA"/>'.format(nsdecls('w'))))
 
 
 def _test_summary_md():
@@ -620,9 +625,9 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8
 
     if 'quantile_df' in ret_dic:
         document.add_heading(f'{heading_count}、分位数信息（Quantile）', 1)
-        df = each_col_dic[col_name]['quantile_df']
-        format_by_col = {_: FORMAT_2_PERCENT for _ in df.columns}
-        df_2_table(document, df, format_by_col=format_by_col)
+        data_df = each_col_dic[col_name]['quantile_df']
+        format_by_col = {_: FORMAT_2_PERCENT for _ in data_df.columns}
+        df_2_table(document, data_df, format_by_col=format_by_col, max_col_count=5)
         heading_count += 1
         document.add_page_break()
 
@@ -645,9 +650,20 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8
 
 def _test_summary_md_2_docx(auto_open_file=True):
     from ibats_common.example.data import load_data
+    instrument_type = 'RB'
+    file_name = f"{instrument_type}.csv"
 
-    df = load_data('RB.csv').set_index('trade_date').drop('instrument_type', axis=1)
+    df = load_data(file_name).set_index('trade_date').drop('instrument_type', axis=1)
     df.index = pd.DatetimeIndex(df.index)
+    column_list_oraginal = list(df.columns)
+
+    from ibats_common.backend.factor import get_factor
+    from ibats_common.example.data import get_trade_date_series
+    from ibats_common.example.data import get_delivery_date_series
+    df = get_factor(df, close_key='close',
+                    trade_date_series=get_trade_date_series(),
+                    delivery_date_series=get_delivery_date_series(instrument_type))
+
     col_transfer_dic = {
         'return': ['open', 'high', 'low', 'close', 'volume']
     }
@@ -656,6 +672,7 @@ def _test_summary_md_2_docx(auto_open_file=True):
         func_kwargs_dic={
             "hist": {
                 "figure_4_each_col": False,
+                "columns": column_list_oraginal,
                 "col_transfer_dic": col_transfer_dic,
             },
             "drawdown": {
