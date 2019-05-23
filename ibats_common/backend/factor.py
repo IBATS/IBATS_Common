@@ -18,7 +18,18 @@ logger = logging.getLogger(__name__)
 
 
 def add_factor_of_trade_date(df: pd.DataFrame, trade_date_series):
+    """
+    自然日，交易日相关因子
+    :param df:
+    :param trade_date_series:
+    :return:
+    """
+    # 自然日相关因子
     index_s = pd.Series(df.index)
+    df['dayofweek'] = index_s.apply(lambda x: x.dayofweek).to_numpy()
+    df['day'] = index_s.apply(lambda x: x.day).to_numpy()
+    df['month'] = index_s.apply(lambda x: x.month).to_numpy()
+    df['daysleftofmonth'] = index_s.apply(lambda x: x.days_in_month - x.day).to_numpy()
 
     # 本月第几个交易日, 本月还剩几个交易日
     groups = trade_date_series.groupby(trade_date_series.apply(lambda x: datetime.datetime(x.year, x.month, 1)))
@@ -95,48 +106,46 @@ def add_factor_of_delivery_date(df, delivery_date_series):
     return df
 
 
+def add_factor_of_price(df: pd.DataFrame, close_key='close'):
+    # 均线因子
+    close_s = df[close_key]
+    for n in [5, 10, 15, 20, 30, 60]:
+        df[f'ma{n}'] = close_s.rolling(n).mean()
+    # EMA
+    for n in [12, 26, 60]:
+        df[f'ema{n}'] = close_s.ewm(span=n).mean()
+    # 波动率因子
+    expanding = close_s.expanding(5)
+    df[f'volatility_all'] = expanding.std() / expanding.mean()
+    for n in [20, 60, 120, 240]:
+        df[f'volatility{n}'] = close_s.rolling(n).std() / close_s.rolling(n).mean()
+
+    # 收益率方差
+    rr = close_s.to_returns()
+    for n in [20, 60]:
+        df[f'rr_std{n}'] = rr.rolling(n).std()
+
+    df[f'ema{n}'] = close_s.ewm(span=n).mean()
+    return df
+
+
 def get_factor(df: pd.DataFrame, close_key='close', vol_key='volume', trade_date_series=None, delivery_date_series=None, dropna=True) -> pd.DataFrame:
     """
     在当期时间序列数据基础上增加相关因子
+    目前已经支持的因子包括量价因子、时间序列因子、交割日期因子
     :param df: 时间序列数据索引为日期
     :param close_key:
     :param vol_key:
     :param trade_date_series: 交易日序列
     :param delivery_date_series:交割日序列
     :param dropna: 是否 dropna
-
     :return:
     """
     ret_df = df.copy()
 
     # 增加量价因子
     if close_key is not None:
-        # 均线因子
-        close_s = ret_df[close_key]
-        for n in [5, 10, 15, 20, 30, 60, 120, 240]:
-            ret_df[f'ma{n}'] = close_s.rolling(n).mean()
-        # EMA
-        for n in [12, 26, 60, 120]:
-            ret_df[f'ema{n}'] = close_s.ewm(span=n).mean()
-        # 波动率因子
-        expanding = close_s.expanding(5)
-        ret_df[f'volatility_all'] = expanding.std() / expanding.mean()
-        for n in [20, 60, 120, 240]:
-            ret_df[f'volatility{n}'] = close_s.rolling(n).std()/close_s.rolling(n).mean()
-
-        # 收益率方差
-        rr = close_s.to_returns()
-        for n in [20, 60, 120, 240]:
-            ret_df[f'rr_std{n}'] = rr.rolling(n).std()
-
-        ret_df[f'ema{n}'] = close_s.ewm(span=n).mean()
-
-    # 自然日相关因子
-    index_s = pd.Series(ret_df.index)
-    ret_df['dayofweek'] = index_s.apply(lambda x: x.dayofweek).to_numpy()
-    ret_df['day'] = index_s.apply(lambda x: x.day).to_numpy()
-    ret_df['month'] = index_s.apply(lambda x: x.month).to_numpy()
-    ret_df['daysleftofmonth'] = index_s.apply(lambda x: x.days_in_month - x.day).to_numpy()
+        ret_df = add_factor_of_price(ret_df, close_key)
 
     # 交易日相关因子
     if trade_date_series is not None:
