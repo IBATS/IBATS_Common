@@ -232,7 +232,11 @@ def df_2_table(doc, df, format_by_index=None, format_by_col=None, max_col_count=
     if max_col_count is None:
         max_col_count = df.shape[1]
 
-    for col_name_list in split_chunk(list(df.columns), max_col_count):
+    for table_num, col_name_list in enumerate(split_chunk(list(df.columns), max_col_count)):
+        if table_num > 0:
+            # 如果是换行写入第二、三、四。。个表格，先打一个空行
+            doc.add_paragraph('')
+
         sub_df = df[col_name_list]
         row_num, col_num = sub_df.shape
         t = doc.add_table(row_num + 1, col_num + 1)
@@ -513,7 +517,7 @@ def _test_summary_stg_2_docx(auto_open_file=True):
         open_file_with_system_app(file_path)
 
 
-def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
+def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
                       risk_free=0.03,
                       close_key=None,
                       enable_show_plot=True,
@@ -579,7 +583,7 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8
         document.add_heading(f'{heading_count}、分位数信息（Quantile）', 1)
         df = ret_dic['quantile_df']
         format_by_col = {_: FORMAT_2_FLOAT2 for _ in df.columns}
-        df_2_table(document, df, format_by_col=format_by_col)
+        df_2_table(document, df, format_by_col=format_by_col, max_col_count=5)
         heading_count += 1
         document.add_page_break()
 
