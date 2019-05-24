@@ -44,4 +44,5 @@ setup(name='IBATS_Common',
           'ibats_utils>=1.1.16',
           'ffn>=0.3.4',
           'python-docx>=0.8.10',
+          'keras>=2.2.4',
       ])
