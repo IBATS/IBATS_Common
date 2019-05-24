@@ -13,6 +13,7 @@ import datetime
 import numpy as np
 import ffn
 from ibats_common.example.data import get_delivery_date_series
+from keras.utils import to_categorical
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +162,63 @@ def get_factor(df: pd.DataFrame, close_key='close', vol_key='volume', trade_date
     return ret_df
 
 
+def calc_label2(value_arr: np.ndarray, min_pct: float, max_pct: float, one_hot=True):
+    """
+    根据时间序列数据 pct_arr 计算每一个时点目标标示 -1 0 1
+    计算方式：
+    当某一点未来波动首先 > 上届 min_pct，则标记为： [0, 1]
+    当某一点未来波动首先 < 下届 max_pct，则标记为： [1, 0]
+    :param value_arr:
+    :param min_pct:
+    :param max_pct:
+    :param one_hot:
+    :return:
+    """
+
+    value_arr[np.isnan(value_arr)] = 0
+    arr_len = value_arr.shape[0]
+    # target_arr = np.zeros((arr_len, 2))
+    label_arr = np.zeros(arr_len)
+    for i in range(arr_len):
+        base = value_arr[i]
+        for j in range(i + 1, arr_len):
+            result = value_arr[j] / base - 1
+            if result < min_pct:
+                label_arr[i] = 1
+                break
+            elif result > max_pct:
+                label_arr[i] = 0
+                break
+    if one_hot:
+        # target_arr = pd.get_dummies(label_arr)
+        target_arr = to_categorical(label_arr)
+    else:
+        target_arr = label_arr
+
+    return target_arr
+
+
+def _test_calc_label2(show_plt=True):
+    import matplotlib.pyplot as plt
+    i_s = np.arange(0, 20, 0.1)
+    price_arr = np.cos(i_s) + 3  # cos(x) + 5
+    one_hot = False
+    labels = calc_label2(price_arr, -0.1, 0.1, one_hot=one_hot)
+    if show_plt:
+        plt.plot(i_s, labels, 'r',
+                 i_s, price_arr, 'b--',
+                 )
+        plt.show()
+
+    one_hot = True
+    labels = calc_label2(price_arr, -0.1, 0.1, one_hot=one_hot)
+    if show_plt:
+        plt.plot(i_s, np.argmax(labels, axis=1), 'r',
+                 i_s, price_arr, 'b--',
+                 )
+        plt.show()
+
+
 def _test_get_factor():
     from ibats_common.example.data import load_data, get_trade_date_series
     instrument_type = 'RB'
@@ -176,4 +234,5 @@ def _test_get_factor():
 
 if __name__ == '__main__':
     import ibats_common.config
-    _test_get_factor()
+    # _test_get_factor()
+    _test_calc_label2()
