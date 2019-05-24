@@ -288,7 +288,7 @@ def wave_hist(df: pd.DataFrame, columns=None, bins=50, figure_4_each_col=True,
     :return:
     """
     if columns is not None:
-        data_df = df[columns].copy()
+        data_df = df.loc[:, columns].copy()
     else:
         data_df = df.copy()
 
