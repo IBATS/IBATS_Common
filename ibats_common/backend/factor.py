@@ -109,6 +109,7 @@ def add_factor_of_delivery_date(df, delivery_date_series):
 def add_factor_of_price(df: pd.DataFrame, close_key='close'):
     # 均线因子
     close_s = df[close_key]
+    df[f'rr'] = close_s.to_returns()
     for n in [5, 10, 15, 20, 30, 60]:
         df[f'ma{n}'] = close_s.rolling(n).mean()
     # EMA
