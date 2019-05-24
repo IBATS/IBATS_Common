@@ -36,11 +36,11 @@ def calc_label2(value_arr: np.ndarray, min_pct: float, max_pct: float, one_hot=T
                 label_arr[i] = 1
                 break
             elif result > max_pct:
-                label_arr[i] = 0
+                label_arr[i] = 2
                 break
     if one_hot:
         # target_arr = pd.get_dummies(label_arr)
-        target_arr = to_categorical(label_arr)
+        target_arr = to_categorical(label_arr, num_classes=3)
     else:
         target_arr = label_arr
 
