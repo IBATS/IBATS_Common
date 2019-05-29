@@ -229,7 +229,7 @@ def hist_norm(data, bins=10, enable_show_plot=True, enable_save_plot=False, name
     plt.cla()
     plt.clf()
 
-    return n, bins_v, file_name
+    return n, bins_v, rr_plot_file_path
 
 
 def plot_norm(data: pd.Series, bins=10, ax=None, is_show_plot=None):
@@ -293,7 +293,7 @@ def wave_hist(df: pd.DataFrame, columns=None, bins=50, figure_4_each_col=True,
     :return:
     """
     if columns is not None:
-        data_df = df.loc[:, columns].copy()
+        data_df = df.loc[:, [_ for _ in columns if _ in df.columns]].copy()
     else:
         data_df = df.copy()
 
