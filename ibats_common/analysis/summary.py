@@ -75,61 +75,64 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
     stats = df.calc_stats()
     stats.set_riskfree_rate(risk_free)
     ret_dic['stats'] = stats
-    enable_kwargs_dic = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot, "name": name}
+    enable_kwargs = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot, "name": name}
 
     # scatter_matrix
     # diagonal，必须且只能在{'hist', 'kde'}中选择1个，
     # 'hist'表示直方图(Histogram plot),'kde'表示核密度估计(Kernel Density Estimation)
     # 该参数是scatter_matrix函数的关键参数
-    file_path = plot_scatter_matrix(df, diagonal='kde', **enable_kwargs_dic)
+    file_path = plot_scatter_matrix(df, diagonal='kde', **enable_kwargs)
     if enable_save_plot:
         file_path_dic['scatter_matrix'] = file_path
 
     # stats.plot_correlation()
-    file_path = plot_corr(df, **enable_kwargs_dic)
+    file_path = plot_corr(df, **enable_kwargs)
     if enable_save_plot:
         file_path_dic['correlation'] = file_path
 
     # return rate plot 图
     func_kwargs = func_kwargs_dic.setdefault('rr', {})
-    file_path = plot_rr_df(df, **func_kwargs, **enable_kwargs_dic)
+    file_path = plot_rr_df(df, **func_kwargs, **enable_kwargs)
     if enable_save_plot:
         file_path_dic['rr'] = file_path
 
     # histgram 分布图
     func_kwargs = func_kwargs_dic.setdefault('hist', {})
-    n_bins_dic, file_path = wave_hist(df, **func_kwargs, **enable_kwargs_dic)
+    n_bins_dic, file_path = wave_hist(df, **func_kwargs, **enable_kwargs)
     ret_dic['hist'] = n_bins_dic
     if enable_save_plot:
         file_path_dic['hist'] = file_path
 
     # 回撤图
     func_kwargs = func_kwargs_dic.setdefault('drawdown', {})
-    drawdown_df, file_path = drawdown_plot(df, perf_stats=stats, **func_kwargs, **enable_kwargs_dic)
+    drawdown_df, file_path = drawdown_plot(df, perf_stats=stats, **func_kwargs, **enable_kwargs)
     ret_dic['drawdown'] = drawdown_df
     if enable_save_plot:
         file_path_dic['drawdown'] = file_path
 
     # 未来N日收益率分布
     func_kwargs = func_kwargs_dic.setdefault('hist_future_n_rr', {})
-    tmp_dic, file_path = hist_n_rr(df, **func_kwargs, **enable_kwargs_dic)
+    tmp_dic, file_path = hist_n_rr(df, **func_kwargs, **enable_kwargs)
     ret_dic['hist_future_n_rr'] = tmp_dic
     if enable_save_plot:
         file_path_dic['hist_future_n_rr'] = file_path
 
     file_path_dic['label_distribution'] = defaultdict(dict)
     ret_dic['label_distribution'] = defaultdict(dict)
+    noname_enable_kwargs = enable_kwargs.copy()
+    del noname_enable_kwargs['name']
     for (n_day, col_name), quantile_df in tmp_dic['quantile_dic'].items():
-        file_path_dic = file_path_dic['label_distribution'][(n_day, col_name)]
+        tmp_path_dic = file_path_dic['label_distribution'][(n_day, col_name)]
         distribution_dic = ret_dic['label_distribution'][(n_day, col_name)]
         col_count = quantile_df.shape[1]
         for n in range(col_count):
-            min_pct = quantile_df.iloc[0, n]
-            max_pct = quantile_df.iloc[1, col_count - n - 1]
+            max_rr = quantile_df.iloc[0, n]
+            min_rr = quantile_df.iloc[1, col_count - n - 1]
             distribution_rate_df, file_path = label_distribution(
-                df[close_key], min_rr=min_pct, max_rr=max_pct, max_future=n_day, name=f"{col_name}[{min_pct}-{max_pct}")
-            file_path_dic[(min_pct, max_pct)] = file_path
-            distribution_dic[(min_pct, max_pct)] = distribution_rate_df
+                df[close_key], min_rr=min_rr, max_rr=max_rr, max_future=n_day,
+                name=f"{col_name}[{min_rr*100:.2f}%~{max_rr*100:.2f}%]", **noname_enable_kwargs)
+            tmp_path_dic[(min_rr, max_rr)] = file_path
+            distribution_dic[(min_rr, max_rr)] = distribution_rate_df
 
     # 单列分析
     stat_col_name_list = [close_key]
@@ -153,7 +156,7 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
         each_col_dic[col_name]['stats'] = stats
         # plot
         func_kwargs = func_kwargs_dic.setdefault('hist', {})
-        n_bins_dic, file_path = wave_hist(df[[col_name]], **func_kwargs, **enable_kwargs_dic)
+        n_bins_dic, file_path = wave_hist(df[[col_name]], **func_kwargs, **enable_kwargs)
         each_col_dic[col_name]['hist'] = n_bins_dic
         if enable_save_plot:
             file_path_dic[f'{col_name} hist'] = file_path
@@ -200,36 +203,36 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     stats = df.calc_stats()
     stats.set_riskfree_rate(risk_free)
     ret_dic['stats'] = stats
-    enable_kwargs_dic = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot, "name": name}
+    enable_kwargs = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot, "name": name}
 
     # scatter_matrix
     # diagonal，必须且只能在{'hist', 'kde'}中选择1个，
     # 'hist'表示直方图(Histogram plot),'kde'表示核密度估计(Kernel Density Estimation)
     # 该参数是scatter_matrix函数的关键参数
-    file_path = plot_scatter_matrix(df, diagonal='kde', **enable_kwargs_dic)
+    file_path = plot_scatter_matrix(df, diagonal='kde', **enable_kwargs)
     if enable_save_plot:
         file_path_dic['scatter_matrix'] = file_path
 
     # stats.plot_correlation()
-    file_path = plot_corr(df, **enable_kwargs_dic)
+    file_path = plot_corr(df, **enable_kwargs)
     if enable_save_plot:
         file_path_dic['correlation'] = file_path
 
     # return rate plot 图
-    file_path = plot_rr_df(df, **enable_kwargs_dic)
+    file_path = plot_rr_df(df, **enable_kwargs)
     if enable_save_plot:
         file_path_dic['rr'] = file_path
 
     # histgram 分布图
     n_bins_dic, file_path = wave_hist(df, figure_4_each_col=figure_4_each_col, col_transfer_dic=col_transfer_dic,
-                                      **enable_kwargs_dic)
+                                      **enable_kwargs)
     ret_dic['hist'] = n_bins_dic
     if enable_save_plot:
         file_path_dic['hist'] = file_path
 
     # 回撤图
     drawdown_df, file_path = drawdown_plot(df, perf_stats=stats, col_name_list=col_name_list,
-                                           **enable_kwargs_dic)
+                                           **enable_kwargs)
     ret_dic['drawdown'] = drawdown_df
     if enable_save_plot:
         file_path_dic['drawdown'] = file_path
