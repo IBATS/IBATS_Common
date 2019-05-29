@@ -420,11 +420,11 @@ def hist_n_rr(df: pd.DataFrame, n_days, columns=None, bins=50,
         max_df = data_df.rename(
             columns={_: _ + ' max rr' for _ in column_name_list}
         ).rolling(n_day).apply(
-            lambda x: max(x / x[0]), raw=True).shift(-(n_day - 1))
+            lambda x: max(x / x[0]) - 1, raw=True).shift(-(n_day - 1))
         min_df = data_df.rename(
             columns={_: _ + ' min rr' for _ in column_name_list}
         ).rolling(n_day).apply(
-            lambda x: min(x / x[0]), raw=True).shift(-(n_day - 1))
+            lambda x: min(x / x[0]) - 1, raw=True).shift(-(n_day - 1))
         # 合并数据
         merged_df = max_df.join(min_df).dropna()
         for col_name in column_name_list:
@@ -432,12 +432,12 @@ def hist_n_rr(df: pd.DataFrame, n_days, columns=None, bins=50,
             new_df = merged_df[col_names].copy()
             df_list = [new_df]
             # 计算收益率分位数信息
-            idxmax_s = abs(new_df - 1).idxmax(axis=1)
+            idxmax_s = abs(new_df).idxmax(axis=1)
             # df.loc[idxmax_s != 'close max rr', 'close max rr'] = np.nan
             # df.loc[idxmax_s != 'close min rr', 'close min rr'] = np.nan
             label_quantile_dic = {}
             for label in new_df.columns:
-                data_s = new_df.loc[idxmax_s == label, label].dropna() - 1
+                data_s = new_df.loc[idxmax_s == label, label].dropna()
                 df_list.append(data_s)
                 label_quantile_dic[label] = data_s.quantile([0.2, 0.33, 0.5, 0.66, 0.8])
 
@@ -499,6 +499,7 @@ def label_distribution(close_df: pd.DataFrame, min_rr: float, max_rr: float, max
     :param name:
     :return:
     """
+    logger.debug('%s [%f ~ %f] max_future=%d, name="%s"', close_df.shape, min_rr, max_rr, max_future, name)
     value_arr = close_df.to_numpy()
     if max_future is None:
         target_arr = calc_label2(value_arr, min_rr, max_rr, one_hot=False, dtype='int')
@@ -506,7 +507,7 @@ def label_distribution(close_df: pd.DataFrame, min_rr: float, max_rr: float, max
         target_arr = calc_label3(value_arr, min_rr, max_rr, max_future=max_future, one_hot=False, dtype='int')
 
     ax = close_df.plot()
-    plt.suptitle(f'label [{min_rr * 100:.2f}% - {max_rr * 100:.2f}%]')
+    plt.suptitle(f'label [{min_rr * 100:.2f}% ~ {max_rr * 100:.2f}%]')
     x_values = list(close_df.index)
     colors = [None, '#2ca02c', '#d62728']
 
@@ -561,7 +562,34 @@ def get_range_num_iter(arr):
         yield val_cur, range_from, range_to
 
 
+def _test_n_days_rr_distribution():
+    from ibats_common.example.data import load_data
+    df = load_data('RB.csv').set_index('trade_date').drop('instrument_type', axis=1)
+    df.index = pd.DatetimeIndex(df.index)
+    ret_dic, file_path_dic, enable_kwargs = {}, {}, dict(enable_save_plot=True, enable_show_plot=True)
+    tmp_dic, file_path = hist_n_rr(df, n_days=[3, 5], columns=['close'], **enable_kwargs)
+    ret_dic['hist_future_n_rr'] = tmp_dic
+    file_path_dic['hist_future_n_rr'] = file_path
+
+    from collections import defaultdict
+    file_path_dic['label_distribution'] = defaultdict(dict)
+    ret_dic['label_distribution'] = defaultdict(dict)
+    for (n_day, col_name), quantile_df in tmp_dic['quantile_dic'].items():
+        path_dic = file_path_dic['label_distribution'][(n_day, col_name)]
+        distribution_dic = ret_dic['label_distribution'][(n_day, col_name)]
+        col_count = quantile_df.shape[1]
+        for n in range(col_count):
+            max_rr = quantile_df.iloc[0, n]
+            min_rr = quantile_df.iloc[1, col_count - n - 1]
+            distribution_rate_df, file_path = label_distribution(
+                df['close'], min_rr=min_rr, max_rr=max_rr, max_future=n_day,
+                name=f"{col_name}[{min_rr*100:.2f}%-{max_rr*100:.2f}%]", **enable_kwargs)
+            path_dic[(min_rr, max_rr)] = file_path
+            distribution_dic[(min_rr, max_rr)] = distribution_rate_df
+
+
 if __name__ == "__main__":
     # _test_wave_hist()
     # _test_hist_n_rr()
-    _test_label_distribution()
+    # _test_label_distribution()
+    _test_n_days_rr_distribution()
