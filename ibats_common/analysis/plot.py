@@ -399,7 +399,7 @@ def _test_wave_hist():
 def hist_n_rr(df: pd.DataFrame, n_days, columns=None, bins=50,
               enable_show_plot=True, enable_save_plot=False, name=None):
     """
-    波动率分布图
+    未来N日收益率分布图
     :param df:
     :param n_days: 计算未来 N 日的收益率最高值，最低值
     :param columns: 显示哪些列
@@ -442,7 +442,7 @@ def hist_n_rr(df: pd.DataFrame, n_days, columns=None, bins=50,
                 label_quantile_dic[label] = data_s.quantile([0.2, 0.33, 0.5, 0.66, 0.8])
 
             df_dic[(n_day, col_name)] = df_list
-            quantile_dic[(n_day, col_name)] = pd.DataFrame(label_quantile_dic)
+            quantile_dic[(n_day, col_name)] = pd.DataFrame(label_quantile_dic).T
 
     # 输出图片
     for (n_day, col_name), df_list in df_dic.items():
@@ -483,15 +483,17 @@ def _test_hist_n_rr():
     df = load_data('RB.csv').set_index('trade_date').drop('instrument_type', axis=1)
     df.index = pd.DatetimeIndex(df.index)
     ret_dic, file_path_dic = hist_n_rr(df, n_days=[3, 5], columns=['close'], enable_save_plot=True)
+    for k, v in ret_dic['quantile_dic'].items():
+        logger.info('%s -> \n%s', k, v)
 
 
-def label_distribution(close_df: pd.DataFrame, min_pct: float, max_pct: float, max_future: int,
+def label_distribution(close_df: pd.DataFrame, min_rr: float, max_rr: float, max_future: int,
                        name=None, **enable_kwargs):
     """
     输出分类标签在行情图中的分布情况
     :param close_df:
-    :param min_pct:
-    :param max_pct:
+    :param min_rr:
+    :param max_rr:
     :param max_future:为空则进行2分类，不为空则3分类
     :param enable_kwargs:
     :param name:
@@ -499,13 +501,14 @@ def label_distribution(close_df: pd.DataFrame, min_pct: float, max_pct: float, m
     """
     value_arr = close_df.to_numpy()
     if max_future is None:
-        target_arr = calc_label2(value_arr, min_pct, max_pct, one_hot=False, dtype='int')
+        target_arr = calc_label2(value_arr, min_rr, max_rr, one_hot=False, dtype='int')
     else:
-        target_arr = calc_label3(value_arr, min_pct, max_pct, max_future=max_future, one_hot=False, dtype='int')
+        target_arr = calc_label3(value_arr, min_rr, max_rr, max_future=max_future, one_hot=False, dtype='int')
 
     ax = close_df.plot()
+    plt.suptitle(f'label [{min_rr * 100:.2f}% - {max_rr * 100:.2f}%]')
     x_values = list(close_df.index)
-    colors = [None, '#d62728', '#2ca02c']
+    colors = [None, '#2ca02c', '#d62728']
 
     value_count = len(value_arr)
     label_list = list(set(target_arr))
@@ -541,7 +544,7 @@ def _test_label_distribution():
     from ibats_common.example.data import load_data
     df = load_data('RB.csv').set_index('trade_date').drop('instrument_type', axis=1)
     df.index = pd.DatetimeIndex(df.index)
-    distribution_rate_df, file_path = label_distribution(df['close'], min_pct=-0.01, max_pct=0.01, max_future=3)
+    distribution_rate_df, file_path = label_distribution(df['close'], min_rr=-0.01, max_rr=0.01, max_future=3)
     logger.info('\n%s', distribution_rate_df)
     logger.info(file_path)
 
