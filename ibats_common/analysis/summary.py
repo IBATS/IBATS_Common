@@ -64,12 +64,12 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
     # logger.info('Description:')
     # df.describe(percentiles=percentiles)
 
-    func_kwargs = func_kwargs_dic.setdefault("quantile rr", None)
+    func_kwargs = func_kwargs_dic.setdefault("rr_quantile", None)
     if func_kwargs is not None:
         col_name_list = func_kwargs.setdefault('columns', columns)
         quantile_df = df[col_name_list].to_returns().quantile(percentiles).rename(
             columns={_: _ + ' rr' for _ in col_name_list})
-        ret_dic['quantile_rr_df'] = quantile_df
+        ret_dic['rr_quantile'] = quantile_df
 
     # 获取统计数据
     stats = df.calc_stats()
@@ -130,7 +130,7 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
             min_rr = quantile_df.iloc[1, col_count - n - 1]
             distribution_rate_df, file_path = label_distribution(
                 df[close_key], min_rr=min_rr, max_rr=max_rr, max_future=n_day,
-                name=f"{col_name}[{min_rr*100:.2f}%~{max_rr*100:.2f}%]", **noname_enable_kwargs)
+                name=f"{col_name}[{min_rr * 100:.2f}%~{max_rr * 100:.2f}%]", **noname_enable_kwargs)
             tmp_path_dic[(min_rr, max_rr)] = file_path
             distribution_dic[(min_rr, max_rr)] = distribution_rate_df
 
@@ -155,13 +155,14 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
         stats.display()
         each_col_dic[col_name]['stats'] = stats
         # plot
-        func_kwargs = func_kwargs_dic.setdefault('hist', {})
-        n_bins_dic, file_path = wave_hist(df[[col_name]], **func_kwargs, **enable_kwargs)
+        n_bins_dic, file_path = wave_hist(
+            df[[col_name]].dropna().to_returns().rename(columns={col_name: f'{col_name} rr'}),
+            figure_4_each_col=True, name=col_name, **noname_enable_kwargs)
         each_col_dic[col_name]['hist'] = n_bins_dic
         if enable_save_plot:
-            file_path_dic[f'{col_name} hist'] = file_path
+            file_path_dic[f'{col_name} hist'] = file_path[0]
         rr = data_df.to_returns()
-        each_col_dic[col_name]['quantile_df'] = rr.quantile(
+        each_col_dic[col_name]['rr_quantile'] = rr.quantile(
             [0.25, 1 / 3, 0.5, 2 / 3, 0.75]
         ).rename(columns={col_name: f"{col_name} rr"})
 
@@ -593,6 +594,18 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
         enable_show_plot=enable_show_plot, enable_save_plot=enable_save_plot, name=name,
         func_kwargs_dic=func_kwargs_dic)
 
+    logger.debug('file_path_dic')
+    for num, (k, v) in enumerate(file_path_dic.items(), start=1):
+        if isinstance(v, dict):
+            for num2, (k2, v2) in enumerate(v.items(), start=1):
+                if isinstance(v2, dict):
+                    for num3, (k3, v3) in enumerate(v2.items(), start=1):
+                        logger.debug("%d.%d.%d) %s %s %s -> %s", num, num2, num3, k, k2, k3, v3)
+                else:
+                    logger.debug("%d.%d) %s %s -> %s", num, num2, k, k2, v2)
+        else:
+            logger.debug("%d) %s -> %s", num, k, v)
+
     # 生成 docx 文档将所需变量
     heading_title = f'数据分析报告 {date_2_str(min(df.index))} - {date_2_str(max(df.index))} ({df.shape[0]} days)'
 
@@ -631,9 +644,9 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
         document.add_picture(file_path_dic['hist'])
         heading_count += 1
 
-    if 'quantile_rr_df' in ret_dic:
+    if 'rr_quantile' in ret_dic:
         document.add_heading(f'{heading_count}、分位数信息（Quantile）', 1)
-        df = ret_dic['quantile_rr_df']
+        df = ret_dic['rr_quantile']
         format_by_col = {_: FORMAT_2_PERCENT for _ in df.columns}
         df_2_table(document, df, format_by_col=format_by_col, max_col_count=5)
         heading_count += 1
@@ -644,16 +657,16 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
         quantile_dic = ret_dic['hist_future_n_rr']['quantile_dic']
         for num, ((n_day, col_name), file_path) in enumerate(file_path_dic['hist_future_n_rr'].items(), start=1):
             document.add_heading(f'{heading_count}.{num}) 未来 {n_day} 日 {col_name} 收益率最高最低值分布图', 2)
-            document.add_heading(f'{heading_count}.{num}.1) 未来 {n_day} 日 {col_name} 收益率最高最低值分布图', 3)
             document.add_picture(file_path)
-            document.add_heading(f'{heading_count}.{num}.2) 分位数信息', 3)
+            document.add_heading(f'{heading_count}.{num}.1) 分位数信息', 3)
             data_df = quantile_dic[(n_day, col_name)]
             df_2_table(document, data_df, format_by_index={_: FORMAT_2_PERCENT for _ in data_df.index})
-            document.add_heading(f'{heading_count}.{num}.3) 三分类标签分布比例', 3)
+            document.add_heading(f'{heading_count}.{num}.2) 三分类标签分布比例', 3)
             for (min_pct, max_pct), distribution_rate_df in ret_dic['label_distribution'][(n_day, col_name)].items():
-                document.add_paragraph(f'{min_pct*100:.2f}% ~ {max_pct*100:.2f}%')
-                distribution_rate_df.rename(columns={1: f'1 under {min_pct*100:.2f}%', 2: f'2 over {max_pct*100:.2f}%'},
-                                            inplace=True)
+                file_path = file_path_dic['label_distribution'][(n_day, col_name)][(min_pct, max_pct)]
+                document.add_picture(file_path)
+                distribution_rate_df.rename(
+                    columns={1: f'1 under {min_pct * 100:.2f}%', 2: f'2 over {max_pct * 100:.2f}%'}, inplace=True)
                 df_2_table(document, distribution_rate_df,
                            format_by_index={_: FORMAT_2_PERCENT for _ in distribution_rate_df.index})
 
@@ -695,15 +708,15 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
     document.add_paragraph('')
     heading_count = 1
 
-    if 'quantile_df' in ret_dic:
+    if 'rr_quantile' in ret_dic:
         document.add_heading(f'{heading_count}、分位数信息（Quantile）', 1)
-        data_df = each_col_dic[col_name]['quantile_df']
+        data_df = each_col_dic[col_name]['rr_quantile']
         format_by_col = {_: FORMAT_2_PERCENT for _ in data_df.columns}
         df_2_table(document, data_df, format_by_col=format_by_col, max_col_count=5)
         heading_count += 1
         document.add_page_break()
 
-    if 'hist' in file_path_dic:
+    if f'{col_name} hist' in file_path_dic:
         document.add_heading(f'{heading_count}、Histgram 分布图', 1)
         document.add_picture(file_path_dic[f'{col_name} hist'])
         heading_count += 1
@@ -757,7 +770,7 @@ def _test_summary_md_2_docx(auto_open_file=True):
                 'n_days': [3, 5],
                 "columns": ['close'],
             },
-            "quantile rr": {'columns': ['close']},
+            "rr_quantile": {'columns': ['close']},
             # "": {},
         })
     if auto_open_file:
