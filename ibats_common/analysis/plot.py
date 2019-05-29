@@ -431,7 +431,7 @@ def hist_n_rr(df: pd.DataFrame, n_days, columns=None, bins=50,
             # df.loc[idxmax_s != 'close min rr', 'close min rr'] = np.nan
             label_quantile_dic = {}
             for label in new_df.columns:
-                data_s = new_df.loc[idxmax_s == label, label].dropna()
+                data_s = new_df.loc[idxmax_s == label, label].dropna() - 1
                 df_list.append(data_s)
                 label_quantile_dic[label] = data_s.quantile([0.2, 0.33, 0.5, 0.66, 0.8])
 
