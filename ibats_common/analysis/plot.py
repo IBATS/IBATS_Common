@@ -83,6 +83,9 @@ def drawdown_plot(df: pd.DataFrame, perf_stats=None, col_name_list=None,
     if enable_show_plot:
         plt.show()
 
+    plt.cla()
+    plt.clf()
+
     return data_df, file_path
 
 
@@ -113,6 +116,9 @@ def plot_corr(df: pd.DataFrame, perf_stats=None,
 
     if enable_show_plot:
         plt.show()
+
+    plt.cla()
+    plt.clf()
 
     return file_path
 
@@ -147,6 +153,9 @@ def plot_rr_df(df: pd.DataFrame, col_name_list=None, enable_show_plot=True, enab
 
     if enable_show_plot:
         plt.show()
+
+    plt.cla()
+    plt.clf()
 
     return file_path
 
@@ -186,6 +195,9 @@ def plot_scatter_matrix(df: pd.DataFrame, diagonal='hist', col_name_list=None, e
     if enable_show_plot:
         plt.show()
 
+    plt.cla()
+    plt.clf()
+
     return file_path
 
 
@@ -210,6 +222,9 @@ def hist_norm(data, bins=10, enable_show_plot=True, enable_save_plot=False, name
 
     if enable_show_plot:
         plt.show()
+
+    plt.cla()
+    plt.clf()
 
     return n, bins_v, file_name
 
@@ -362,6 +377,9 @@ def wave_hist(df: pd.DataFrame, columns=None, bins=50, figure_4_each_col=True,
         if enable_show_plot:
             plt.show()
 
+        plt.cla()
+        plt.clf()
+
     return n_bins_dic, file_path
 
 
@@ -446,6 +464,9 @@ def hist_n_rr(df: pd.DataFrame, n_days, columns=None, bins=50,
 
         if enable_show_plot:
             plt.show()
+
+        plt.cla()
+        plt.clf()
 
     ret_dic = dict(df_dic=df_dic, n_bins_dic=n_bins_dic, quantile_dic=quantile_dic)
     return ret_dic, file_path_dic
