@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 STR_FORMAT_DATETIME_4_FILE_NAME = '%Y-%m-%d %H_%M_%S'
 FORMAT_2_PERCENT = lambda x: f"{x * 100: .2f}%"
 FORMAT_2_FLOAT2 = r"{0:.2f}"
-FORMAT_4_FLOAT2 = r"{0:.4f}"
+FORMAT_2_FLOAT4 = r"{0:.4f}"
 
 
 def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
@@ -61,8 +61,8 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
     logger.info('data columns: %s', columns)
     ret_dic, each_col_dic, file_path_dic = {}, defaultdict(dict), {}
 
-    logger.info('Description:')
-    df.describe(percentiles=percentiles)
+    # logger.info('Description:')
+    # df.describe(percentiles=percentiles)
 
     func_kwargs = func_kwargs_dic.setdefault("quantile rr", None)
     if func_kwargs is not None:
@@ -631,11 +631,10 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
             document.add_picture(file_path)
             document.add_paragraph(f'分位数信息')
             data_df = quantile_dic[(n_day, col_name)].T
-            df_2_table(document, data_df, format_by_index={_: FORMAT_4_FLOAT2 for _ in data_df.columns})
+            df_2_table(document, data_df, format_by_index={_: FORMAT_2_FLOAT4 for _ in data_df.index})
             document.add_page_break()
 
         heading_count += 1
-        document.add_page_break()
 
     if 'drawdown' in file_path_dic:
         document.add_heading(f'{heading_count}、行情回撤曲线', 1)
