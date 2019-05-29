@@ -714,7 +714,6 @@ def summary_md_2_docx(md_df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.
         format_by_col = {_: FORMAT_2_PERCENT for _ in data_df.columns}
         df_2_table(document, data_df, format_by_col=format_by_col, max_col_count=5)
         heading_count += 1
-        document.add_page_break()
 
     if f'{col_name} hist' in file_path_dic:
         document.add_heading(f'{heading_count}、Histgram 分布图', 1)
