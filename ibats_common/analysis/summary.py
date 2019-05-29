@@ -20,7 +20,8 @@ from ibats_utils.mess import open_file_with_system_app, date_2_str, datetime_2_s
 from scipy.stats import anderson, normaltest
 
 from ibats_common.analysis import get_report_folder_path
-from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix, plot_corr, clean_cache
+from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix, plot_corr, \
+    clean_cache, hist_n_rr
 from ibats_common.analysis.plot_db import get_rr_with_md, show_trade, show_cash_and_margin
 from ibats_common.backend.mess import get_stg_run_info
 from ibats_common.common import RunMode, CalcMode
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 STR_FORMAT_DATETIME_4_FILE_NAME = '%Y-%m-%d %H_%M_%S'
 FORMAT_2_PERCENT = lambda x: f"{x * 100: .2f}%"
 FORMAT_2_FLOAT2 = r"{0:.2f}"
+FORMAT_4_FLOAT2 = r"{0:.4f}"
 
 
 def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
@@ -62,8 +64,12 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
     logger.info('Description:')
     df.describe(percentiles=percentiles)
 
-    quantile_df = df.quantile(percentiles)
-    ret_dic['quantile_df'] = quantile_df
+    func_kwargs = func_kwargs_dic.setdefault("quantile rr", None)
+    if func_kwargs is not None:
+        col_name_list = func_kwargs.setdefault('columns', columns)
+        quantile_df = df[col_name_list].to_returns().quantile(percentiles).rename(
+            columns={_: _ + ' rr' for _ in col_name_list})
+        ret_dic['quantile_rr_df'] = quantile_df
 
     # 获取统计数据
     stats = df.calc_stats()
@@ -103,6 +109,13 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
     ret_dic['drawdown'] = drawdown_df
     if enable_save_plot:
         file_path_dic['drawdown'] = file_path
+
+    # 未来N日收益率分布
+    func_kwargs = func_kwargs_dic.setdefault('hist_future_n_rr', {})
+    tmp_dic, file_path = hist_n_rr(df, **func_kwargs, **enable_kwargs_dic)
+    ret_dic['hist_future_n_rr'] = tmp_dic
+    if enable_save_plot:
+        file_path_dic['hist_future_n_rr'] = file_path
 
     # 单列分析
     stat_col_name_list = [close_key]
@@ -252,7 +265,7 @@ def df_2_table(doc, df, format_by_index=None, format_by_col=None, max_col_count=
             # t.cell(0, j).text = df.columns[j]
             # paragraph = t.cell(0, j).add_paragraph()
             paragraph = t.cell(0, j + 1).paragraphs[0]
-            paragraph.add_run(col_name_list[j]).bold = True
+            paragraph.add_run(str(col_name_list[j])).bold = True
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
         # write head bg color
@@ -401,13 +414,15 @@ def stats_df_2_docx_table(stats_df, document):
     df_2_table(document, stats_df, format_by_index=format_by_index)
 
 
-def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=False, enable_clean_cache=True):
+def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=False, enable_clean_cache=True,
+                       doc_file_path=None):
     """
     生成策略分析报告
     :param stg_run_id:
     :param enable_save_plot:
     :param enable_show_plot:
     :param enable_clean_cache:
+    :param doc_file_path: 可以是目录 或 文件名路径
     :return:
     """
     info = get_stg_run_info(stg_run_id)
@@ -493,16 +508,31 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
     document.add_page_break()
 
     # 保存文件
-    try:
-        calc_mode_str = CalcMode(json.loads(info.trade_agent_params_list)[0]['calc_mode']).name + " "
-    except:
-        calc_mode_str = " "
+    if doc_file_path is not None:
+        if os.path.isdir(doc_file_path):
+            folder_path, file_name = doc_file_path, ''
+        else:
+            folder_path, file_name = os.path.split(doc_file_path)
+    else:
+        folder_path, file_name = get_report_folder_path(), ''
 
-    run_mode_str = run_mode.name + " "
-    file_name = f"{stg_run_id} {run_mode_str}{calc_mode_str}" \
-        f"{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days) " \
-        f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
-    file_path = os.path.join(get_report_folder_path(), file_name)
+    if folder_path != '' and not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+
+    if file_name == '':
+        try:
+            calc_mode_str = CalcMode(json.loads(info.trade_agent_params_list)[0]['calc_mode']).name + " "
+        except:
+            calc_mode_str = " "
+
+        run_mode_str = run_mode.name + " "
+        file_name = f"{stg_run_id} {run_mode_str}{calc_mode_str}" \
+            f"{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days) " \
+            f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
+        file_path = os.path.join(folder_path, file_name)
+    else:
+        file_path = doc_file_path
+
     document.save(file_path)
     if enable_clean_cache:
         clean_cache()
@@ -579,9 +609,9 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
         # 添加分页符
         document.add_page_break()
 
-    if 'quantile_df' in ret_dic:
+    if 'quantile_rr_df' in ret_dic:
         document.add_heading(f'{heading_count}、分位数信息（Quantile）', 1)
-        df = ret_dic['quantile_df']
+        df = ret_dic['quantile_rr_df']
         format_by_col = {_: FORMAT_2_FLOAT2 for _ in df.columns}
         df_2_table(document, df, format_by_col=format_by_col, max_col_count=5)
         heading_count += 1
@@ -590,6 +620,20 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
     if 'hist' in file_path_dic:
         document.add_heading(f'{heading_count}、Histgram 分布图', 1)
         document.add_picture(file_path_dic['hist'])
+        heading_count += 1
+        document.add_page_break()
+
+    if 'hist_future_n_rr' in file_path_dic:
+        document.add_heading(f'{heading_count}、未来N日收益率最高最低值分布图', 1)
+        quantile_dic = ret_dic['hist_future_n_rr']['quantile_dic']
+        for num, ((n_day, col_name), file_path) in enumerate(file_path_dic['hist_future_n_rr'].items(), start=1):
+            document.add_heading(f'{num}) 未来 {n_day} 日 {col_name} 收益率最高最低值分布图', 2)
+            document.add_picture(file_path)
+            document.add_paragraph(f'分位数信息')
+            data_df = quantile_dic[(n_day, col_name)].T
+            df_2_table(document, data_df, format_by_index={_: FORMAT_4_FLOAT2 for _ in data_df.columns})
+            document.add_page_break()
+
         heading_count += 1
         document.add_page_break()
 
@@ -685,6 +729,12 @@ def _test_summary_md_2_docx(auto_open_file=True):
             "rr": {
                 "col_name_list": ['close'],
             },
+            "hist_future_n_rr": {
+                'n_days': [3, 5],
+                "columns": ['close'],
+            },
+            "quantile rr": {'columns': ['close']},
+            # "": {},
         })
     if auto_open_file:
         open_file_with_system_app(file_path)
