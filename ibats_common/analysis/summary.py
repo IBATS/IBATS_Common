@@ -68,7 +68,7 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
     if func_kwargs is not None:
         col_name_list = func_kwargs.setdefault('columns', columns)
         quantile_df = df[col_name_list].to_returns().quantile(percentiles).rename(
-            columns={_: _ + ' rr' for _ in col_name_list})
+            columns={_: _ + ' rr' for _ in col_name_list}).T
         ret_dic['rr_quantile'] = quantile_df
 
     # 获取统计数据
@@ -163,8 +163,8 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
             file_path_dic[f'{col_name} hist'] = file_path[0]
         rr = data_df.to_returns()
         each_col_dic[col_name]['rr_quantile'] = rr.quantile(
-            [0.25, 1 / 3, 0.5, 2 / 3, 0.75]
-        ).rename(columns={col_name: f"{col_name} rr"})
+            [0.25, 0.33, 0.5, 0.66, 0.75]
+        ).rename(columns={col_name: f"{col_name} rr"}).T
 
     return ret_dic, each_col_dic, file_path_dic
 
