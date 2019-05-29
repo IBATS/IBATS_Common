@@ -609,17 +609,16 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
         # 添加分页符
         document.add_page_break()
 
-    if 'quantile_rr_df' in ret_dic:
-        document.add_heading(f'{heading_count}、分位数信息（Quantile）', 1)
-        df = ret_dic['quantile_rr_df']
-        format_by_col = {_: FORMAT_2_FLOAT2 for _ in df.columns}
-        df_2_table(document, df, format_by_col=format_by_col, max_col_count=5)
-        heading_count += 1
-        document.add_page_break()
-
     if 'hist' in file_path_dic:
         document.add_heading(f'{heading_count}、Histgram 分布图', 1)
         document.add_picture(file_path_dic['hist'])
+        heading_count += 1
+
+    if 'quantile_rr_df' in ret_dic:
+        document.add_heading(f'{heading_count}、分位数信息（Quantile）', 1)
+        df = ret_dic['quantile_rr_df']
+        format_by_col = {_: FORMAT_2_PERCENT for _ in df.columns}
+        df_2_table(document, df, format_by_col=format_by_col, max_col_count=5)
         heading_count += 1
         document.add_page_break()
 
@@ -631,7 +630,7 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
             document.add_picture(file_path)
             document.add_paragraph(f'分位数信息')
             data_df = quantile_dic[(n_day, col_name)].T
-            df_2_table(document, data_df, format_by_index={_: FORMAT_2_FLOAT4 for _ in data_df.index})
+            df_2_table(document, data_df, format_by_index={_: FORMAT_2_PERCENT for _ in data_df.index})
             document.add_page_break()
 
         heading_count += 1
