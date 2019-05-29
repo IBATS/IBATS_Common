@@ -11,15 +11,15 @@ import numpy as np
 from keras.utils import to_categorical
 
 
-def calc_label2(value_arr: np.ndarray, min_pct: float, max_pct: float, one_hot=True, dtype='float32'):
+def calc_label2(value_arr: np.ndarray, min_rr: float, max_rr: float, one_hot=True, dtype='float32'):
     """
     根据时间序列数据 pct_arr 计算每一个时点目标标示 0 1 2
     计算方式：
-    当某一点未来波动首先 > 上届 min_pct，则标记为： [0, 1, 0]
-    当某一点未来波动首先 < 下届 max_pct，则标记为： [0, 0, 1]
+    当某一点未来波动首先 < 下届 min_pct，则标记为： [0, 1, 0]
+    当某一点未来波动首先 > 上届 max_pct，则标记为： [0, 0, 1]
     :param value_arr:
-    :param min_pct:
-    :param max_pct:
+    :param min_rr:
+    :param max_rr:
     :param one_hot:
     :param dtype:
     :return:
@@ -33,10 +33,10 @@ def calc_label2(value_arr: np.ndarray, min_pct: float, max_pct: float, one_hot=T
         base = value_arr[i]
         for j in range(i + 1, arr_len):
             result = value_arr[j] / base - 1
-            if result < min_pct:
+            if result < min_rr:
                 label_arr[i] = 1
                 break
-            elif result > max_pct:
+            elif result > max_rr:
                 label_arr[i] = 2
                 break
     if one_hot:
@@ -69,16 +69,16 @@ def _test_calc_label2(show_plt=True):
         plt.show()
 
 
-def calc_label3(value_arr: np.ndarray, min_pct: float, max_pct: float, max_future: int, one_hot=True, dtype='float32'):
+def calc_label3(value_arr: np.ndarray, min_rr: float, max_rr: float, max_future: int, one_hot=True, dtype='float32'):
     """
     根据时间序列数据 pct_arr 计算每一个时点目标标示 -1 0 1
     计算方式：
     max_future 内未突破min_pct 或 max_pct，则标记为:  [1, 0, 0]
-    当某一点未来波动首先 > 上届 min_pct，则标记为:      [0, 1, 0]
-    当某一点未来波动首先 < 下届 max_pct，则标记为:      [0, 0, 1]
+    当某一点未来波动首先 < 下届 min_pct，则标记为:      [0, 1, 0]
+    当某一点未来波动首先 > 上届 max_pct，则标记为:      [0, 0, 1]
     :param value_arr:
-    :param min_pct:
-    :param max_pct:
+    :param min_rr:
+    :param max_rr:
     :param max_future:
     :param one_hot:
     :param dtype:
@@ -93,15 +93,15 @@ def calc_label3(value_arr: np.ndarray, min_pct: float, max_pct: float, max_futur
         base = value_arr[i]
         for j in range(i + 1, arr_len):
             result = value_arr[j] / base - 1
-            if result < min_pct:
+            if result < min_rr:
                 label_arr[i] = 1
                 break
-            elif result > max_pct:
+            elif result > max_rr:
                 label_arr[i] = 2
                 break
             elif max_future is not None and j-i >= max_future:
                 # 超过最大检测日期，则被认为是震荡势
-                label_arr[i] = 0
+                # label_arr[i] = 0
                 break
     if one_hot:
         # target_arr = pd.get_dummies(label_arr)
