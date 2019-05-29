@@ -33,7 +33,7 @@ FORMAT_2_FLOAT2 = r"{0:.2f}"
 FORMAT_2_FLOAT4 = r"{0:.4f}"
 
 
-def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
+def summary_md(md_df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
                risk_free=0.03,
                close_key=None,
                enable_show_plot=True,
@@ -47,7 +47,7 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
     第一个返回值，df的各项分析结果
     第二个返回值，各个列的各项分析结果
     第三个返回值，相关文件输出路径或路径列表（当 enable_save_plot=True）
-    :param df:
+    :param md_df:
     :param risk_free:无风险收益率
     :param close_key:对哪些列的数据执行统计
     :param enable_show_plot: 展示plot
@@ -57,7 +57,7 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
     :param kwargs:
     :return:
     """
-    columns = list(df.columns)
+    columns = list(md_df.columns)
     logger.info('data columns: %s', columns)
     ret_dic, each_col_dic, file_path_dic = {}, defaultdict(dict), {}
 
@@ -67,12 +67,12 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
     func_kwargs = func_kwargs_dic.setdefault("rr_quantile", None)
     if func_kwargs is not None:
         col_name_list = func_kwargs.setdefault('columns', columns)
-        quantile_df = df[col_name_list].to_returns().quantile(percentiles).rename(
+        quantile_df = md_df[col_name_list].to_returns().quantile(percentiles).rename(
             columns={_: _ + ' rr' for _ in col_name_list}).T
         ret_dic['rr_quantile'] = quantile_df
 
     # 获取统计数据
-    stats = df.calc_stats()
+    stats = md_df.calc_stats()
     stats.set_riskfree_rate(risk_free)
     ret_dic['stats'] = stats
     enable_kwargs = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot, "name": name}
@@ -81,38 +81,38 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
     # diagonal，必须且只能在{'hist', 'kde'}中选择1个，
     # 'hist'表示直方图(Histogram plot),'kde'表示核密度估计(Kernel Density Estimation)
     # 该参数是scatter_matrix函数的关键参数
-    file_path = plot_scatter_matrix(df, diagonal='kde', **enable_kwargs)
+    file_path = plot_scatter_matrix(md_df, diagonal='kde', **enable_kwargs)
     if enable_save_plot:
         file_path_dic['scatter_matrix'] = file_path
 
     # stats.plot_correlation()
-    file_path = plot_corr(df, **enable_kwargs)
+    file_path = plot_corr(md_df, **enable_kwargs)
     if enable_save_plot:
         file_path_dic['correlation'] = file_path
 
     # return rate plot 图
     func_kwargs = func_kwargs_dic.setdefault('rr', {})
-    file_path = plot_rr_df(df, **func_kwargs, **enable_kwargs)
+    file_path = plot_rr_df(md_df, **func_kwargs, **enable_kwargs)
     if enable_save_plot:
         file_path_dic['rr'] = file_path
 
     # histgram 分布图
     func_kwargs = func_kwargs_dic.setdefault('hist', {})
-    n_bins_dic, file_path = wave_hist(df, **func_kwargs, **enable_kwargs)
+    n_bins_dic, file_path = wave_hist(md_df, **func_kwargs, **enable_kwargs)
     ret_dic['hist'] = n_bins_dic
     if enable_save_plot:
         file_path_dic['hist'] = file_path
 
     # 回撤图
     func_kwargs = func_kwargs_dic.setdefault('drawdown', {})
-    drawdown_df, file_path = drawdown_plot(df, perf_stats=stats, **func_kwargs, **enable_kwargs)
+    drawdown_df, file_path = drawdown_plot(md_df, perf_stats=stats, **func_kwargs, **enable_kwargs)
     ret_dic['drawdown'] = drawdown_df
     if enable_save_plot:
         file_path_dic['drawdown'] = file_path
 
     # 未来N日收益率分布
     func_kwargs = func_kwargs_dic.setdefault('hist_future_n_rr', {})
-    tmp_dic, file_path = hist_n_rr(df, **func_kwargs, **enable_kwargs)
+    tmp_dic, file_path = hist_n_rr(md_df, **func_kwargs, **enable_kwargs)
     ret_dic['hist_future_n_rr'] = tmp_dic
     if enable_save_plot:
         file_path_dic['hist_future_n_rr'] = file_path
@@ -129,16 +129,16 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
             max_rr = quantile_df.iloc[0, n]
             min_rr = quantile_df.iloc[1, col_count - n - 1]
             distribution_rate_df, file_path = label_distribution(
-                df[close_key], min_rr=min_rr, max_rr=max_rr, max_future=n_day,
+                md_df[close_key], min_rr=min_rr, max_rr=max_rr, max_future=n_day,
                 name=f"{col_name}[{min_rr * 100:.2f}%~{max_rr * 100:.2f}%]", **noname_enable_kwargs)
             tmp_path_dic[(min_rr, max_rr)] = file_path
             distribution_dic[(min_rr, max_rr)] = distribution_rate_df
 
     # 单列分析
     stat_col_name_list = [close_key]
-    stat_df = (df if stat_col_name_list is None else df[stat_col_name_list])
+    stat_df = (md_df if stat_col_name_list is None else md_df[stat_col_name_list])
     for col_name, data in stat_df.items():
-        data_df = df[[col_name]].dropna()
+        data_df = md_df[[col_name]].dropna()
         data = data.dropna()
         data = data[~np.isinf(data)]
         logger.info("=" * 50 + ' %s ' + "=" * 50, col_name)
@@ -156,7 +156,7 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
         each_col_dic[col_name]['stats'] = stats
         # plot
         n_bins_dic, file_path = wave_hist(
-            df[[col_name]].dropna().to_returns().rename(columns={col_name: f'{col_name} rr'}),
+            md_df[[col_name]].dropna().to_returns().rename(columns={col_name: f'{col_name} rr'}),
             figure_4_each_col=True, name=col_name, **noname_enable_kwargs)
         each_col_dic[col_name]['hist'] = n_bins_dic
         if enable_save_plot:
@@ -565,7 +565,7 @@ def _test_summary_stg_2_docx(auto_open_file=True):
         open_file_with_system_app(file_path)
 
 
-def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
+def summary_md_2_docx(md_df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
                       risk_free=0.03,
                       close_key=None,
                       enable_show_plot=True,
@@ -578,7 +578,7 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
     汇总展示数据分析结果，同时以 dict 形式返回各项指标分析结果
     第一个返回值，df的各项分析结果
     第二个返回值，各个列的各项分析结果
-    :param df:
+    :param md_df:
     :param percentiles:分为数信息
     :param risk_free:无风险收益率
     :param close_key:对哪些列的数据执行统计
@@ -590,7 +590,7 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
     :return:
     """
     ret_dic, each_col_dic, file_path_dic = summary_md(
-        df, percentiles=percentiles, risk_free=risk_free, close_key=close_key,
+        md_df, percentiles=percentiles, risk_free=risk_free, close_key=close_key,
         enable_show_plot=enable_show_plot, enable_save_plot=enable_save_plot, name=name,
         func_kwargs_dic=func_kwargs_dic)
 
@@ -607,7 +607,7 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
             logger.debug("%d) %s -> %s", num, k, v)
 
     # 生成 docx 文档将所需变量
-    heading_title = f'数据分析报告 {date_2_str(min(df.index))} - {date_2_str(max(df.index))} ({df.shape[0]} days)'
+    heading_title = f'数据分析报告 {date_2_str(min(md_df.index))} - {date_2_str(max(md_df.index))} ({md_df.shape[0]} days)'
 
     # 生成 docx 文件
     document = docx.Document()
@@ -646,9 +646,9 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
 
     if 'rr_quantile' in ret_dic:
         document.add_heading(f'{heading_count}、分位数信息（Quantile）', 1)
-        df = ret_dic['rr_quantile']
-        format_by_col = {_: FORMAT_2_PERCENT for _ in df.columns}
-        df_2_table(document, df, format_by_col=format_by_col, max_col_count=5)
+        rr_quantile_df = ret_dic['rr_quantile']
+        format_by_col = {_: FORMAT_2_PERCENT for _ in rr_quantile_df.columns}
+        df_2_table(document, rr_quantile_df, format_by_col=format_by_col, max_col_count=5)
         heading_count += 1
         document.add_page_break()
 
@@ -723,7 +723,7 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
         document.add_page_break()
 
     # 保存文件
-    file_name = f"MD {date_2_str(min(df.index))} - {date_2_str(max(df.index))} ({df.shape[0]} days) " \
+    file_name = f"MD {date_2_str(min(md_df.index))} - {date_2_str(max(md_df.index))} ({md_df.shape[0]} days) " \
         f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
     file_path = os.path.join(get_report_folder_path(), file_name)
     document.save(file_path)
