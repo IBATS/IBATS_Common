@@ -11,23 +11,24 @@ import numpy as np
 from keras.utils import to_categorical
 
 
-def calc_label2(value_arr: np.ndarray, min_pct: float, max_pct: float, one_hot=True):
+def calc_label2(value_arr: np.ndarray, min_pct: float, max_pct: float, one_hot=True, dtype='float32'):
     """
-    根据时间序列数据 pct_arr 计算每一个时点目标标示 -1 0 1
+    根据时间序列数据 pct_arr 计算每一个时点目标标示 0 1 2
     计算方式：
-    当某一点未来波动首先 > 上届 min_pct，则标记为： [0, 1]
-    当某一点未来波动首先 < 下届 max_pct，则标记为： [1, 0]
+    当某一点未来波动首先 > 上届 min_pct，则标记为： [0, 1, 0]
+    当某一点未来波动首先 < 下届 max_pct，则标记为： [0, 0, 1]
     :param value_arr:
     :param min_pct:
     :param max_pct:
     :param one_hot:
+    :param dtype:
     :return:
     """
 
     value_arr[np.isnan(value_arr)] = 0
     arr_len = value_arr.shape[0]
     # target_arr = np.zeros((arr_len, 2))
-    label_arr = np.zeros(arr_len)
+    label_arr = np.zeros(arr_len, dtype=dtype)
     for i in range(arr_len):
         base = value_arr[i]
         for j in range(i + 1, arr_len):
@@ -40,7 +41,7 @@ def calc_label2(value_arr: np.ndarray, min_pct: float, max_pct: float, one_hot=T
                 break
     if one_hot:
         # target_arr = pd.get_dummies(label_arr)
-        target_arr = to_categorical(label_arr, num_classes=3)
+        target_arr = to_categorical(label_arr, num_classes=3, dtype=dtype)
     else:
         target_arr = label_arr
 
@@ -68,7 +69,7 @@ def _test_calc_label2(show_plt=True):
         plt.show()
 
 
-def calc_label3(value_arr: np.ndarray, min_pct: float, max_pct: float, max_future: int, one_hot=True):
+def calc_label3(value_arr: np.ndarray, min_pct: float, max_pct: float, max_future: int, one_hot=True, dtype='float32'):
     """
     根据时间序列数据 pct_arr 计算每一个时点目标标示 -1 0 1
     计算方式：
@@ -80,13 +81,14 @@ def calc_label3(value_arr: np.ndarray, min_pct: float, max_pct: float, max_futur
     :param max_pct:
     :param max_future:
     :param one_hot:
+    :param dtype:
     :return:
     """
 
     value_arr[np.isnan(value_arr)] = 0
     arr_len = value_arr.shape[0]
     # target_arr = np.zeros((arr_len, 2))
-    label_arr = np.zeros(arr_len)
+    label_arr = np.zeros(arr_len, dtype=dtype)
     for i in range(arr_len):
         base = value_arr[i]
         for j in range(i + 1, arr_len):
@@ -103,7 +105,7 @@ def calc_label3(value_arr: np.ndarray, min_pct: float, max_pct: float, max_futur
                 break
     if one_hot:
         # target_arr = pd.get_dummies(label_arr)
-        target_arr = to_categorical(label_arr, num_classes=3)
+        target_arr = to_categorical(label_arr, num_classes=3, dtype=dtype)
     else:
         target_arr = label_arr
 
@@ -132,5 +134,5 @@ def _test_calc_label3(show_plt=True):
 
 
 if __name__ == "__main__":
-    # _test_calc_label2()
-    _test_calc_label3()
+    _test_calc_label2()
+    # _test_calc_label3()
