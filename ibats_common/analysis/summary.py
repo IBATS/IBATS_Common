@@ -21,7 +21,7 @@ from scipy.stats import anderson, normaltest
 
 from ibats_common.analysis import get_report_folder_path
 from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix, plot_corr, \
-    clean_cache, hist_n_rr
+    clean_cache, hist_n_rr, label_distribution
 from ibats_common.analysis.plot_db import get_rr_with_md, show_trade, show_cash_and_margin
 from ibats_common.backend.mess import get_stg_run_info
 from ibats_common.common import RunMode, CalcMode
@@ -116,6 +116,20 @@ def summary_md(df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
     ret_dic['hist_future_n_rr'] = tmp_dic
     if enable_save_plot:
         file_path_dic['hist_future_n_rr'] = file_path
+
+    file_path_dic['label_distribution'] = defaultdict(dict)
+    ret_dic['label_distribution'] = defaultdict(dict)
+    for (n_day, col_name), quantile_df in tmp_dic['quantile_dic'].items():
+        file_path_dic = file_path_dic['label_distribution'][(n_day, col_name)]
+        distribution_dic = ret_dic['label_distribution'][(n_day, col_name)]
+        col_count = quantile_df.shape[1]
+        for n in range(col_count):
+            min_pct = quantile_df.iloc[0, n]
+            max_pct = quantile_df.iloc[1, col_count - n - 1]
+            distribution_rate_df, file_path = label_distribution(
+                df[close_key], min_rr=min_pct, max_rr=max_pct, max_future=n_day, name=f"{col_name}[{min_pct}-{max_pct}")
+            file_path_dic[(min_pct, max_pct)] = file_path
+            distribution_dic[(min_pct, max_pct)] = distribution_rate_df
 
     # 单列分析
     stat_col_name_list = [close_key]
@@ -626,11 +640,24 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
         document.add_heading(f'{heading_count}、未来N日收益率最高最低值分布图', 1)
         quantile_dic = ret_dic['hist_future_n_rr']['quantile_dic']
         for num, ((n_day, col_name), file_path) in enumerate(file_path_dic['hist_future_n_rr'].items(), start=1):
-            document.add_heading(f'{num}) 未来 {n_day} 日 {col_name} 收益率最高最低值分布图', 2)
+            document.add_heading(f'{heading_count}.{num}) 未来 {n_day} 日 {col_name} 收益率最高最低值分布图', 2)
+            document.add_heading(f'{heading_count}.{num}.1) 未来 {n_day} 日 {col_name} 收益率最高最低值分布图', 3)
             document.add_picture(file_path)
-            document.add_paragraph(f'分位数信息')
-            data_df = quantile_dic[(n_day, col_name)].T
+            document.add_heading(f'{heading_count}.{num}.2) 分位数信息', 3)
+            data_df = quantile_dic[(n_day, col_name)]
             df_2_table(document, data_df, format_by_index={_: FORMAT_2_PERCENT for _ in data_df.index})
+            document.add_heading(f'{heading_count}.{num}.3) 三分类标签分布图', 3)
+            file_path2 = file_path_dic['label_distribution'][(n_day, col_name)]
+            document.add_picture(file_path2)
+            document.add_page_break()
+            document.add_heading(f'{heading_count}.{num}.4) 三分类标签分布比例', 3)
+            for min_pct, max_pct, distribution_rate_df in ret_dic['label_distribution'][(n_day, col_name)].items():
+                document.add_paragraph(f'{min_pct*100:.2f}% ~ {max_pct*100:.2f}%')
+                distribution_rate_df.rename(columns={1: f'1 under {min_pct*100:.2f}%', 2: f'2 over {max_pct*100:.2f}%'},
+                                            inplace=True)
+                df_2_table(document, distribution_rate_df,
+                           format_by_index={_: FORMAT_2_PERCENT for _ in distribution_rate_df.index})
+
             document.add_page_break()
 
         heading_count += 1
