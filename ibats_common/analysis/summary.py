@@ -649,11 +649,7 @@ def summary_md_2_docx(df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.8],
             document.add_heading(f'{heading_count}.{num}.2) 分位数信息', 3)
             data_df = quantile_dic[(n_day, col_name)]
             df_2_table(document, data_df, format_by_index={_: FORMAT_2_PERCENT for _ in data_df.index})
-            document.add_heading(f'{heading_count}.{num}.3) 三分类标签分布图', 3)
-            file_path2 = file_path_dic['label_distribution'][(n_day, col_name)]
-            document.add_picture(file_path2)
-            document.add_page_break()
-            document.add_heading(f'{heading_count}.{num}.4) 三分类标签分布比例', 3)
+            document.add_heading(f'{heading_count}.{num}.3) 三分类标签分布比例', 3)
             for min_pct, max_pct, distribution_rate_df in ret_dic['label_distribution'][(n_day, col_name)].items():
                 document.add_paragraph(f'{min_pct*100:.2f}% ~ {max_pct*100:.2f}%')
                 distribution_rate_df.rename(columns={1: f'1 under {min_pct*100:.2f}%', 2: f'2 over {max_pct*100:.2f}%'},
