@@ -7,13 +7,13 @@
 @contact : mmmaaaggg@163.com
 @desc    : 用来对时间序列数据建立因子
 """
-import pandas as pd
-import logging
 import datetime
-import numpy as np
-import ffn
-from ibats_common.example.data import get_delivery_date_series
+import logging
 
+import numpy as np
+import pandas as pd
+
+from ibats_common.example.data import get_delivery_date_series
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +64,13 @@ def add_factor_of_trade_date(df: pd.DataFrame, trade_date_series):
 
     # 距离下一次放假交易日数（超过2天以上的休息日）
     # 计算距离下一个交易日的日期
-    days_2_next_trade_date_s = (index_s.shift(-1) - index_s).fillna(pd.Timedelta(days=0))
+    days_2_next_trade_date_s = (trade_date_series.shift(-1) - trade_date_series).fillna(pd.Timedelta(days=0))
+    days_2_next_trade_date_s.index = pd.DatetimeIndex(trade_date_series)
     # 倒序循环，计算距离下一次放假的日期
-    days_count, trade_date_count, result_arr = np.nan, np.nan, []
-    for _, delta in days_2_next_trade_date_s.sort_index(ascending=False).items():
+    days_count, trade_date_count, result_dic, first_date = np.nan, np.nan, {}, index_s[0]
+    for trade_date, delta in days_2_next_trade_date_s.sort_index(ascending=False).items():
+        if trade_date < first_date:
+            break
         days = delta.days
         if days > 3:
             trade_date_count, days_count = 0, 0
@@ -77,11 +80,10 @@ def add_factor_of_trade_date(df: pd.DataFrame, trade_date_series):
         else:
             trade_date_count, days_count = np.nan, np.nan
 
-        result_arr.append([days_count, trade_date_count])
+        result_dic[trade_date] = [days_count, trade_date_count]
 
-    result_arr.reverse()
-    df['days_2_vacation'] = [_[0] for _ in result_arr]
-    df['td_2_vacation'] = [_[1] for _ in result_arr]
+    vacation_df = pd.DataFrame(result_dic).T.sort_index().rename(columns={0: 'days_2_vacation', 1: 'td_2_vacation'})
+    df = df.join(vacation_df, how='left')
 
     return df
 
@@ -131,7 +133,8 @@ def add_factor_of_price(df: pd.DataFrame, close_key='close'):
     return df
 
 
-def get_factor(df: pd.DataFrame, close_key='close', vol_key='volume', trade_date_series=None, delivery_date_series=None, dropna=True) -> pd.DataFrame:
+def get_factor(df: pd.DataFrame, close_key='close', vol_key='volume', trade_date_series=None, delivery_date_series=None,
+               dropna=True) -> pd.DataFrame:
     """
     在当期时间序列数据基础上增加相关因子
     目前已经支持的因子包括量价因子、时间序列因子、交割日期因子
@@ -176,5 +179,4 @@ def _test_get_factor():
 
 
 if __name__ == '__main__':
-    import ibats_common.config
     _test_get_factor()
