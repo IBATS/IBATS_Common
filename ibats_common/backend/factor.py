@@ -9,13 +9,14 @@
 """
 import datetime
 import logging
-
+import ffn
 import numpy as np
 import pandas as pd
 
 from ibats_common.example.data import get_delivery_date_series
 
 logger = logging.getLogger(__name__)
+logger.debug('引用ffn %s', ffn)
 
 
 def add_factor_of_trade_date(df: pd.DataFrame, trade_date_series):
