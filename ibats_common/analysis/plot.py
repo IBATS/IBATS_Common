@@ -141,7 +141,7 @@ def plot_rr_df(df: pd.DataFrame, col_name_list=None, enable_show_plot=True, enab
         data_df = df
 
     # """绘图函数"""
-    ax = data_df.plot()
+    ax = data_df.plot(grid=True)
     ax.set_title(
         f"Return Rate " if name is None else f"Return Rate [{name}] "
         f"{date_2_str(min(data_df.index))} - {date_2_str(max(data_df.index))} ({data_df.shape[0]} days)")
@@ -160,6 +160,15 @@ def plot_rr_df(df: pd.DataFrame, col_name_list=None, enable_show_plot=True, enab
     plt.clf()
 
     return file_path
+
+
+def _test_plot_rr_df():
+    from ibats_common.example.data import load_data
+    df = load_data('RB.csv').set_index('trade_date').drop('instrument_type', axis=1)
+    df.index = pd.DatetimeIndex(df.index)
+    file_path = plot_rr_df(df, col_name_list=['close'],
+                           enable_show_plot=True, enable_save_plot=True)
+    logger.info(file_path)
 
 
 def plot_scatter_matrix(df: pd.DataFrame, diagonal='hist', col_name_list=None, enable_show_plot=True,
@@ -453,6 +462,7 @@ def hist_n_rr(df: pd.DataFrame, n_days, columns=None, bins=50,
             labels.append(data_s.name)
             axis_list.extend(axis)
 
+        plt.grid(True)
         plt.legend(axis_list, labels, loc='upper right')
         if name is None:
             title = f'hist of max/min {col_name} rr in {n_day} days'
@@ -506,7 +516,7 @@ def label_distribution(close_df: pd.DataFrame, min_rr: float, max_rr: float, max
     else:
         target_arr = calc_label3(value_arr, min_rr, max_rr, max_future=max_future, one_hot=False, dtype='int')
 
-    ax = close_df.plot()
+    ax = close_df.plot(grid=True)
     plt.suptitle(f'label [{min_rr * 100:.2f}% ~ {max_rr * 100:.2f}%]')
     x_values = list(close_df.index)
     colors = [None, '#2ca02c', '#d62728']
@@ -583,13 +593,14 @@ def _test_n_days_rr_distribution():
             min_rr = quantile_df.iloc[1, col_count - n - 1]
             distribution_rate_df, file_path = label_distribution(
                 df['close'], min_rr=min_rr, max_rr=max_rr, max_future=n_day,
-                name=f"{col_name}[{min_rr*100:.2f}%-{max_rr*100:.2f}%]", **enable_kwargs)
+                name=f"{col_name}[{min_rr * 100:.2f}%-{max_rr * 100:.2f}%]", **enable_kwargs)
             path_dic[(min_rr, max_rr)] = file_path
             distribution_dic[(min_rr, max_rr)] = distribution_rate_df
 
 
 if __name__ == "__main__":
+    # _test_plot_rr_df()
     # _test_wave_hist()
-    # _test_hist_n_rr()
+    _test_hist_n_rr()
     # _test_label_distribution()
-    _test_n_days_rr_distribution()
+    # _test_n_days_rr_distribution()
