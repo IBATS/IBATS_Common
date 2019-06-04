@@ -25,6 +25,8 @@ from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plo
 from ibats_common.analysis.plot_db import get_rr_with_md, show_trade, show_cash_and_margin
 from ibats_common.backend.mess import get_stg_run_info
 from ibats_common.common import RunMode, CalcMode
+from docx.shared import Pt
+from docx.shared import RGBColor
 
 logger = logging.getLogger(__name__)
 STR_FORMAT_DATETIME_4_FILE_NAME = '%Y-%m-%d %H_%M_%S'
@@ -63,6 +65,18 @@ def summary_md(md_df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
 
     # logger.info('Description:')
     # df.describe(percentiles=percentiles)
+
+    # 检查数据
+    func_kwargs = func_kwargs_dic.setdefault("validation", {})
+    trade_date_max_gap = func_kwargs.setdefault('trade_date_max_gap', 15)
+    trade_date_s = pd.Series(md_df.index)
+    days_2_next_trade_date_s = (trade_date_s.shift(-1) - trade_date_s).fillna(pd.Timedelta(days=0))
+    days_2_next_trade_date_s.index = md_df.index
+    over_gap_s = days_2_next_trade_date_s[days_2_next_trade_date_s.apply(lambda x: x.days > trade_date_max_gap)]
+    warn_msg = [f"{date_2_str(trade_date)} 到下一个交易日间存在 {delta.days} 天没有行情数据，可能存在数据遗漏"
+                for trade_date, delta in over_gap_s.items()]
+    if len(warn_msg) > 0:
+        ret_dic['warning'] = warn_msg
 
     func_kwargs = func_kwargs_dic.setdefault("rr_quantile", None)
     if func_kwargs is not None:
@@ -631,6 +645,19 @@ def summary_md_2_docx(md_df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.
     document.add_paragraph('')
     document.add_paragraph('')
     heading_count = 1
+    if 'warning' in ret_dic:
+        document.add_heading(f'{heading_count}、警告信息（Warning）', 1)
+        warning_list = ret_dic['warning']
+        p = document.add_paragraph('')
+        for msg in warning_list:
+            r = p.add_run(msg)
+            # r.bold = True
+            r.font.color.rgb = RGBColor(0xaf, 0x26, 0x26)
+            p.add_run('\n')
+
+        heading_count += 1
+        document.add_page_break()
+
     if 'rr' in file_path_dic:
         document.add_heading(f'{heading_count}、行情曲线', 1)
         # 增加图片（此处使用相对位置）
@@ -722,8 +749,8 @@ def summary_md_2_docx(md_df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.
         document.add_page_break()
 
     # 保存文件
-    file_name = f"MD {date_2_str(min(md_df.index))} - {date_2_str(max(md_df.index))} ({md_df.shape[0]} days) " \
-        f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
+    file_name = f"MD{' ' if name is None else ' ' + name} {date_2_str(min(md_df.index))} - {date_2_str(max(md_df.index))} " \
+        f"({md_df.shape[0]} days) {datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
     file_path = os.path.join(get_report_folder_path(), file_name)
     document.save(file_path)
     if enable_clean_cache:
@@ -734,7 +761,7 @@ def summary_md_2_docx(md_df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.
 
 def _test_summary_md_2_docx(auto_open_file=True):
     from ibats_common.example.data import load_data
-    instrument_type = 'RB'
+    instrument_type = 'RB'  # 'RB' 'RU'
     file_name = f"{instrument_type}.csv"
 
     df = load_data(file_name).set_index('trade_date').drop('instrument_type', axis=1)
@@ -752,7 +779,7 @@ def _test_summary_md_2_docx(auto_open_file=True):
         'return': ['open', 'high', 'low', 'close', 'volume']
     }
     file_path = summary_md_2_docx(
-        df, enable_show_plot=False, enable_save_plot=True, close_key='close',
+        df, enable_show_plot=False, enable_save_plot=True, close_key='close', name=instrument_type,
         func_kwargs_dic={
             "hist": {
                 "figure_4_each_col": False,
@@ -770,6 +797,7 @@ def _test_summary_md_2_docx(auto_open_file=True):
                 "columns": ['close'],
             },
             "rr_quantile": {'columns': ['close']},
+            "validation": {'trade_date_max_gap': 10},
             # "": {},
         })
     if auto_open_file:
