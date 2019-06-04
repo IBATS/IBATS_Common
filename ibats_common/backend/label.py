@@ -9,6 +9,9 @@
 """
 import numpy as np
 from keras.utils import to_categorical
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def calc_label2(value_arr: np.ndarray, min_rr: float, max_rr: float, one_hot=True, dtype='float32'):
@@ -102,9 +105,13 @@ def calc_label3(value_arr: np.ndarray, min_rr: float, max_rr: float, max_future:
             elif max_future is not None and j-i >= max_future:
                 # 超过最大检测日期，则被认为是震荡势
                 # label_arr[i] = 0
-                break
-    if one_hot:
         # target_arr = pd.get_dummies(label_arr)
+                break
+    if all(label_arr == 0):
+        logger.warning("当期数组长度 %d, min_rr=%f, max_rr=%f, max_future=%f， 标记结果全部为0",
+                       arr_len, min_rr, max_rr, max_future)
+
+    if one_hot:
         target_arr = to_categorical(label_arr, num_classes=3, dtype=dtype)
     else:
         target_arr = label_arr
