@@ -5,9 +5,11 @@ Created on 2017/9/2
 @contact : mmmaaaggg@163.com
 @desc    : 策略基类，所有策略均集成此基类
 """
-import pandas as pd
 import logging
 from collections import defaultdict
+
+import pandas as pd
+
 from ibats_common.common import PeriodType, ExchangeName, ContextKey
 
 logger_stg_base = logging.getLogger(__name__)
@@ -108,47 +110,9 @@ class StgBase:
             self.logger.debug('%d) release trade_agent %s', num, name)
             trade_agent.release()
 
-    def _on_period_md_append(self, period, md, md_agent_key):
-        """
-        （仅供 on_period_md_handler 调用使用）
-        用于整理接收到的各个周期行情数据
-        :param period:
-        :param md:
-        :return:
-        """
-        # self._period_curr_md_dic[period] = md
-        md_df = pd.DataFrame([md])
-        if period in self._md_agent_key_period_df_dic[md_agent_key]:
-            col_name_list = self._md_agent_key_period_df_col_name_list_dic[md_agent_key][period]
-            md_df_his = self._md_agent_key_period_df_dic[md_agent_key][period].append(md_df[col_name_list])
-            self._md_agent_key_period_df_dic[md_agent_key][period] = md_df_his
-        else:
-            md_df_his = md_df
-            self._md_agent_key_period_df_dic[md_agent_key][period] = md_df_his
-            self._md_agent_key_period_df_col_name_list_dic[md_agent_key][period] = \
-                list(md_df.columns) if isinstance(md_df, pd.DataFrame) else None
-            # self.logger.debug('%s -> %s', period, md)
-        return md_df_his
-
-    def _on_period_md_event(self, period, md_df_his, md_agent_key):
-        """
-        （仅供 on_period_md_handler 调用使用）
-        用于将各个周期数据传入对应周期事件处理函数
-        :param period:
-        :param md_df_his:
-        :return:
-        """
-        # event_handler = self._on_period_md_event_dic[period]
-        event_handler = self._on_period_event_dic[period].md_event
-        context = self._md_agent_key_period_context_dic[md_agent_key][period]
-        # self._trade_agent.curr_md = md
-        event_handler(md_df_his, context)
-
     def on_period_md_handler(self, period, md, md_agent_key):
         """响应 period 数据"""
         # 本机测试，延时0.155秒，从分钟K线合成到交易策略端收到数据
-        # logger_stg_base.debug("%s %s -> %s", PeriodType(period), md_agent_key, md)
-        # self._on_period_md_event(period, md_df_his)
         period_event_relation = self._on_period_event_dic[period]
         event_handler = period_event_relation.md_event
         param_type = period_event_relation.param_type
@@ -157,7 +121,22 @@ class StgBase:
         if param_type is dict:
             param = md
         elif param_type is pd.DataFrame:
-            param = self._on_period_md_append(period, md, md_agent_key)
+            # 2019-06-05
+            # 移除 self._on_period_md_append 该函数调用，将函数内部代码复制到下面直接使用
+            # param = self._on_period_md_append(period, md, md_agent_key)
+
+            md_df = pd.DataFrame([md])
+            # self.logger.debug('%s -> %s', period, md)
+            if period in self._md_agent_key_period_df_dic[md_agent_key]:
+                col_name_list = self._md_agent_key_period_df_col_name_list_dic[md_agent_key][period]
+                md_df_his = self._md_agent_key_period_df_dic[md_agent_key][period].append(md_df[col_name_list])
+                self._md_agent_key_period_df_dic[md_agent_key][period] = md_df_his
+            else:
+                md_df_his = md_df
+                self._md_agent_key_period_df_dic[md_agent_key][period] = md_df_his
+                self._md_agent_key_period_df_col_name_list_dic[md_agent_key][period] = \
+                    list(md_df.columns) if isinstance(md_df, pd.DataFrame) else None
+            param = md_df_his
         else:
             raise ValueError("不支持 %s 类型作为 %s 的事件参数" % (param_type, period))
         event_handler(param, context)
