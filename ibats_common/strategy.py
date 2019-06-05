@@ -34,18 +34,18 @@ class StgBase:
         self.trade_agent_dic = {}
         self.logger = logging.getLogger(str(self.__class__))
         self._on_period_event_dic = {
-            PeriodType.Tick: EventHandlersRelation(PeriodType.Tick,
-                                                   self.on_prepare_tick, self.on_tick, pd.DataFrame),
-            PeriodType.Min1: EventHandlersRelation(PeriodType.Min1,
-                                                   self.on_prepare_min1, self.on_min1, pd.DataFrame),
-            PeriodType.Hour1: EventHandlersRelation(PeriodType.Hour1,
-                                                    self.on_prepare_hour1, self.on_hour1, pd.DataFrame),
-            PeriodType.Day1: EventHandlersRelation(PeriodType.Day1,
-                                                   self.on_prepare_day1, self.on_day1, pd.DataFrame),
-            PeriodType.Week1: EventHandlersRelation(PeriodType.Week1,
-                                                    self.on_prepare_week1, self.on_week1, pd.DataFrame),
-            PeriodType.Mon1: EventHandlersRelation(PeriodType.Mon1,
-                                                   self.on_prepare_month1, self.on_month1, pd.DataFrame),
+            PeriodType.Tick: EventHandlersRelation(
+                PeriodType.Tick, self.on_prepare_tick, self.on_tick, self.on_tick_release, pd.DataFrame),
+            PeriodType.Min1: EventHandlersRelation(
+                PeriodType.Min1, self.on_prepare_min1, self.on_min1, self.on_min1_release, pd.DataFrame),
+            PeriodType.Hour1: EventHandlersRelation(
+                PeriodType.Hour1, self.on_prepare_hour1, self.on_hour1, self.on_hour1_release, pd.DataFrame),
+            PeriodType.Day1: EventHandlersRelation(
+                PeriodType.Day1, self.on_prepare_day1, self.on_day1, self.on_day1_release, pd.DataFrame),
+            PeriodType.Week1: EventHandlersRelation(
+                PeriodType.Week1, self.on_prepare_week1, self.on_week1, self.on_week1_release, pd.DataFrame),
+            PeriodType.Mon1: EventHandlersRelation(
+                PeriodType.Mon1, self.on_prepare_month1, self.on_month1, self.on_month1_release, pd.DataFrame),
         }
         self.args = args
         self.kwargs = kwargs
@@ -101,7 +101,14 @@ class StgBase:
         释放资源
         :return:
         """
-        # self.trade_agent.release()
+        # 行情信息处理函数调用结束
+        # 调用各个 md_agent_key 的各个 period 的 汇总函数
+        # self._md_agent_key_period_df_dic[md_agent_key][period]
+        for md_agent_key, _ in self._md_agent_key_period_df_dic.items():
+            for period, md_df in _.items():
+                event_handler = self._on_period_event_dic[period].md_release_event
+                event_handler(md_df)
+
         for num, (name, trade_agent) in enumerate(self.trade_agent_dic.items()):
             # ExchangeName.Default 作为默认 trade_agent 在 trade_agent_dic 中存在重复实例，
             # 因此无需对该 key 进行操作
@@ -187,6 +194,30 @@ class StgBase:
 
     def on_month1(self, md_df, context):
         """1月线策略执行语句，需要相应策略实现具体的策略算法"""
+        pass
+
+    def on_tick_release(self, md_df):
+        """Tick行情结束执行语句，需要相应策略实现具体的策略算法"""
+        pass
+
+    def on_min1_release(self, md_df):
+        """1分钟线行情结束执行语句，需要相应策略实现具体的策略算法"""
+        pass
+
+    def on_hour1_release(self, md_df):
+        """1小时线行情结束执行语句，需要相应策略实现具体的策略算法"""
+        pass
+
+    def on_day1_release(self, md_df):
+        """1日线行情结束执行语句，需要相应策略实现具体的策略算法"""
+        pass
+
+    def on_week1_release(self, md_df):
+        """1周线行情结束执行语句，需要相应策略实现具体的策略算法"""
+        pass
+
+    def on_month1_release(self, md_df):
+        """1月线行情结束执行语句，需要相应策略实现具体的策略算法"""
         pass
 
     def open_long(self, instrument_id, price, vol, trade_agent_key=None, md_agent_key=None):
@@ -377,8 +408,9 @@ class EventHandlersRelation:
     用于记录事件类型与其对应的各种相关事件句柄之间的关系
     """
 
-    def __init__(self, period_type, prepare_event, md_event, param_type):
+    def __init__(self, period_type, prepare_event, md_event, md_release_event, param_type):
         self.period_type = period_type
         self.prepare_event = prepare_event
         self.md_event = md_event
+        self.md_release_event = md_release_event
         self.param_type = param_type

@@ -358,7 +358,6 @@ class StgHandlerBacktest(StgHandlerBase):
 
                 datetime_tag_last = datetime_tag
 
-            # 循环结束
             self.logger.info('执行回测任务【%s - %s】完成，处理数据 %d 条', self.date_from, self.date_to, data_count)
         finally:
             if config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 2:
@@ -368,8 +367,8 @@ class StgHandlerBacktest(StgHandlerBase):
                     if trade_agent is not None]
                 self._update_stg_run_status_detail(trade_agent_status_detail_list)
 
-            self.is_working = False
             self.stg_run_ending()
+            self.is_working = False
 
 
 def strategy_handler_factory(
