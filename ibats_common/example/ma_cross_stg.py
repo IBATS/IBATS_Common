@@ -73,7 +73,6 @@ def _test_use(is_plot):
         'datetime_key': 'trade_date',
         'init_md_date_from': '1995-1-1',  # 行情初始化加载历史数据，供策略分析预加载使用
         'init_md_date_to': '2010-1-1',
-        # 'C:\GitHub\IBATS_Common\ibats_common\example\ru_price2.csv'
         'file_path': os.path.abspath(os.path.join(module_root_path, 'example', 'data', 'RB.csv')),
         'symbol_key': 'instrument_type',
     }]
