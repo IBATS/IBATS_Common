@@ -9,6 +9,7 @@
 """
 import datetime
 import logging
+
 import ffn
 import numpy as np
 import pandas as pd
@@ -168,15 +169,15 @@ def get_factor(df: pd.DataFrame, close_key='close', vol_key='volume', trade_date
 
 def _test_get_factor():
     from ibats_common.example.data import load_data, get_trade_date_series
-    instrument_type = 'RB'
+    instrument_type = 'RU'
     file_name = f"{instrument_type}.csv"
-    df = load_data(file_name).set_index('trade_date').drop('instrument_type', axis=1)
-    df.index = pd.DatetimeIndex(df.index)
-    factor = get_factor(df,
-                        trade_date_series=get_trade_date_series(),
-                        delivery_date_series=get_delivery_date_series(instrument_type))
-    logger.info("\n%s\t%s \n%s\t%s", df.shape, list(df.columns), factor.shape, list(factor.columns))
-    print("\n%s\t%s \n%s\t%s" % (df.shape, list(df.columns), factor.shape, list(factor.columns)))
+    factor_df = load_data(file_name).set_index('trade_date').drop('instrument_type', axis=1)
+    factor_df.index = pd.DatetimeIndex(factor_df.index)
+    factor_df = get_factor(factor_df,
+                           trade_date_series=get_trade_date_series(),
+                           delivery_date_series=get_delivery_date_series(instrument_type))
+    logger.info("\n%s\t%s \n%s\t%s", factor_df.shape, list(factor_df.columns), factor_df.shape, list(factor_df.columns))
+    print("\n%s\t%s \n%s\t%s" % (factor_df.shape, list(factor_df.columns), factor_df.shape, list(factor_df.columns)))
 
 
 if __name__ == '__main__':
