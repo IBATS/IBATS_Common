@@ -16,6 +16,8 @@ from collections import defaultdict
 import docx
 import numpy as np
 import pandas as pd
+from docx.shared import Pt
+from docx.shared import RGBColor
 from ibats_utils.mess import open_file_with_system_app, date_2_str, datetime_2_str, split_chunk
 from scipy.stats import anderson, normaltest
 
@@ -25,8 +27,6 @@ from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plo
 from ibats_common.analysis.plot_db import get_rr_with_md, show_trade, show_cash_and_margin
 from ibats_common.backend.mess import get_stg_run_info
 from ibats_common.common import RunMode, CalcMode
-from docx.shared import Pt
-from docx.shared import RGBColor
 
 logger = logging.getLogger(__name__)
 STR_FORMAT_DATETIME_4_FILE_NAME = '%Y-%m-%d %H_%M_%S'
@@ -210,9 +210,12 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     :param kwargs:
     :return:
     """
+    ret_dic, each_col_dic, file_path_dic = {}, defaultdict(dict), {}
+    if df is None:
+        logger.error("传入数据为空")
+        return ret_dic, each_col_dic, file_path_dic
     columns = list(df.columns)
     logger.info('data columns: %s', columns)
-    ret_dic, each_col_dic, file_path_dic = {}, defaultdict(dict), {}
 
     # 获取统计数据
     stats = df.calc_stats()
@@ -749,7 +752,8 @@ def summary_md_2_docx(md_df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.
         document.add_page_break()
 
     # 保存文件
-    file_name = f"MD{' ' if name is None else ' ' + name} {date_2_str(min(md_df.index))} - {date_2_str(max(md_df.index))} " \
+    file_name = f"MD{' ' if name is None else ' ' + name} " \
+        f"{date_2_str(min(md_df.index))} - {date_2_str(max(md_df.index))} " \
         f"({md_df.shape[0]} days) {datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
     file_path = os.path.join(get_report_folder_path(), file_name)
     document.save(file_path)
@@ -761,25 +765,25 @@ def summary_md_2_docx(md_df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.
 
 def _test_summary_md_2_docx(auto_open_file=True):
     from ibats_common.example.data import load_data
-    instrument_type = 'RB'  # 'RB' 'RU'
+    instrument_type = 'RU'  # 'RB' 'RU'
     file_name = f"{instrument_type}.csv"
 
-    df = load_data(file_name).set_index('trade_date').drop('instrument_type', axis=1)
-    df.index = pd.DatetimeIndex(df.index)
-    column_list_oraginal = list(df.columns)
+    factor_df = load_data(file_name).set_index('trade_date').drop('instrument_type', axis=1)
+    factor_df.index = pd.DatetimeIndex(factor_df.index)
+    column_list_oraginal = list(factor_df.columns)
 
     from ibats_common.backend.factor import get_factor
     from ibats_common.example.data import get_trade_date_series
     from ibats_common.example.data import get_delivery_date_series
-    df = get_factor(df, close_key='close',
-                    trade_date_series=get_trade_date_series(),
-                    delivery_date_series=get_delivery_date_series(instrument_type))
+    factor_df = get_factor(factor_df, close_key='close',
+                           trade_date_series=get_trade_date_series(),
+                           delivery_date_series=get_delivery_date_series(instrument_type))
 
     col_transfer_dic = {
         'return': ['open', 'high', 'low', 'close', 'volume']
     }
     file_path = summary_md_2_docx(
-        df, enable_show_plot=False, enable_save_plot=True, close_key='close', name=instrument_type,
+        factor_df, enable_show_plot=False, enable_save_plot=True, close_key='close', name=instrument_type,
         func_kwargs_dic={
             "hist": {
                 "figure_4_each_col": False,
