@@ -132,7 +132,8 @@ def _test_use(is_plot):
         from ibats_common.analysis.summary import summary_stg_2_docx
         from ibats_utils.mess import open_file_with_system_app
         file_path = summary_stg_2_docx(stg_run_id)
-        open_file_with_system_app(file_path)
+        if file_path is not None:
+            open_file_with_system_app(file_path)
 
     return stg_run_id
 
