@@ -10,18 +10,25 @@
 import itertools
 import logging
 import os
+from datetime import datetime
+from functools import lru_cache
 
+from matplotlib.font_manager import FontProperties
 import matplotlib.pyplot as plt
+from pylab import mpl
+from pandas.plotting import register_matplotlib_converters
+
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from ibats_utils.mess import date_2_str
+from ibats_utils.mess import date_2_str, is_windows_os
 from scipy import stats
 
 from ibats_common.analysis import get_cache_folder_path
 from ibats_common.backend.label import calc_label2, calc_label3
 
 logger = logging.getLogger(__name__)
+register_matplotlib_converters()
 
 
 def get_file_name(header, name=None):
@@ -227,16 +234,8 @@ def hist_norm(data, bins=10, enable_show_plot=True, enable_save_plot=False, name
     # ax.set_ylabel('change rate')
     ax.set_title(f"{'Data' if name is None else name} Histogram (mean={mean:.4f} std={std:.4f})")
 
-    if enable_save_plot:
-        file_name = get_file_name(f'hist', name=name)
-        rr_plot_file_path = os.path.join(get_cache_folder_path(), file_name)
-        plt.savefig(rr_plot_file_path, dpi=75)
-
-    if enable_show_plot:
-        plt.show()
-
-    plt.cla()
-    plt.clf()
+    file_name = get_file_name(f'hist', name=name)
+    rr_plot_file_path = plot_or_show(enable_show_plot=enable_show_plot, enable_save_plot=enable_save_plot, file_name=file_name)
 
     return n, bins_v, rr_plot_file_path
 
@@ -532,11 +531,11 @@ def label_distribution(close_df: pd.DataFrame, min_rr: float, max_rr: float, max
         p = plt.axvspan(x_values[range_from], x_values[range_to], facecolor=color, alpha=0.5)
 
     file_name = get_file_name(f'label distribution', name=name)
-    file_path = _plot_or_show(file_name=file_name, **enable_kwargs)
+    file_path = plot_or_show(file_name=file_name, **enable_kwargs)
     return distribution_rate_df, file_path
 
 
-def _plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None):
+def plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None):
     if enable_save_plot:
         file_path = os.path.join(get_cache_folder_path(), file_name)
         plt.savefig(file_path, dpi=75)
@@ -545,9 +544,9 @@ def _plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None):
 
     if enable_show_plot:
         plt.show()
+        # plt.cla()
+        # plt.clf()
 
-    plt.cla()
-    plt.clf()
     return file_path
 
 
@@ -598,9 +597,97 @@ def _test_n_days_rr_distribution():
             distribution_dic[(min_rr, max_rr)] = distribution_rate_df
 
 
+def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
+                  enable_save_plot=True, enable_show_plot=True, name=None, base_line_list: (None, dict) = None):
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+    l1 = ax.plot(accuracy_df, color='r', label='accuracy')
+
+    ax2 = ax.twinx()
+    l2 = ax2.plot(close_df, label='md')
+    lns = l1 + l2
+    if base_line_list is not None:
+        acc = base_line_list[0]
+        if acc is not None and acc != 0:
+            accuracy_df['train_accuracy'] = acc
+            lns += ax.plot(accuracy_df['train_accuracy'], linestyle='--', color='b', label='train_accuracy')
+        acc = base_line_list[1]
+        if acc is not None and acc != 0:
+            accuracy_df['validation_accuracy'] = acc
+            lns += ax.plot(accuracy_df['validation_accuracy'], linestyle='--', color='r', label='validation_accuracy')
+
+    plt.legend(lns, [_.get_label() for _ in lns], loc=0)
+    plt.grid(True)
+    if name is not None:
+        # 解决中文字符无法显示问题，稍后将其范化
+        # font = get_font_properties()
+        # plt.suptitle(name, fontproperties=font)
+        plt.title(name)
+
+    # 分段着色
+    if split_point_list is not None and len(split_point_list) > 2:
+        x0, x1 = None, None
+        for num, point in enumerate(split_point_list):
+            if num % 2 == 0:
+                x0 = point
+            else:
+                x1 = point
+                if num >= 1:
+                    p = plt.axvspan(x0, x1, facecolor='#2ca02c', alpha=0.5)
+
+    datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S_%f')
+    file_name = f"{datetime_str}" if name is None else f"{name}_{datetime_str}"
+    plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, file_name=file_name)
+
+
+@lru_cache()
+def get_font_properties():
+    is_win = is_windows_os()
+    if is_win:
+        # 调用系统字体  C:\WINDOWS\Fonts
+        font = FontProperties(fname=r"C:\\WINDOWS\\Fonts\\FZSTK.TTF", size=14)
+    else:
+        # 可以通过 from ibats_utils.mess import get_chinese_font_iter 获取系统有效的中文字体
+        # 然后在 /usr/share/fonts/truetype 中查找，
+        # 例如：Droid Sans Fallback 字体，对应路径 droid/DroidSansFallbackFull.ttf
+        font = FontProperties(fname='/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf', size=14)
+
+    return font
+
+
+def _test_plot_accuracy():
+    """测试 plot_accuracy"""
+    date_arr = pd.date_range(pd.to_datetime('2018-01-01'),
+                             pd.to_datetime('2018-01-01') + pd.Timedelta(days=99))
+    date_index = pd.DatetimeIndex(date_arr)
+    close_df = pd.DataFrame({'close': np.sin(np.linspace(0, 10, 100))}, index=date_index)
+    accuracy_df = pd.DataFrame({'acc': np.cos(np.linspace(0, 10, 100))}, index=date_index)
+    split_point_list = np.random.randint(len(date_arr), size=10)
+    split_point_list.sort()
+    split_point_list = date_arr[split_point_list]
+    base_line_list = [0.3, 0.6]
+    single_figure = True
+    if single_figure:
+        import matplotlib.pyplot as plt
+        fig = plt.figure(figsize=(8, 12))
+        ax = fig.add_subplot(211)
+        plot_accuracy(accuracy_df, close_df, ax=ax, name='测试使用', split_point_list=split_point_list,
+                      base_line_list=base_line_list, enable_save_plot=False, enable_show_plot=False)
+        ax = fig.add_subplot(212)
+        plot_accuracy(accuracy_df, close_df, ax=ax, name='测试使用2', split_point_list=split_point_list,
+                      base_line_list=base_line_list, enable_save_plot=False, enable_show_plot=False)
+        plot_or_show(enable_show_plot=True, enable_save_plot=True, file_name='测试使用all in one')
+    else:
+        plot_accuracy(accuracy_df, close_df, name='测试使用2', split_point_list=split_point_list,
+                      base_line_list=base_line_list)
+
+
 if __name__ == "__main__":
     # _test_plot_rr_df()
     # _test_wave_hist()
-    _test_hist_n_rr()
+    # _test_hist_n_rr()
     # _test_label_distribution()
     # _test_n_days_rr_distribution()
+    _test_plot_accuracy()
