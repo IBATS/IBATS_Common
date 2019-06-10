@@ -61,27 +61,27 @@ def show_cash_and_margin(stg_run_id, enable_show_plot=True, enable_save_plot=Fal
         )
 
     df = pd.read_sql(sql_str, engine_ibats, params=[stg_run_id], index_col=['trade_dt'])
+    if df.shape[0] == 0:
+        file_path = None
+        return df, file_path
 
-    def plot_func():
-        ax = df[['cash', 'margin']].plot.area()
-        if run_mode != RunMode.Backtest_FixPercent:
-            df[['cash_and_margin', 'no commission', 'cash + commission']].plot(ax=ax)
+    ax = df[['cash', 'margin']].plot.area()
+    if run_mode != RunMode.Backtest_FixPercent:
+        df[['cash_and_margin', 'no commission', 'cash + commission']].plot(ax=ax)
 
-        ax.set_title(
-            f"Cash + Margin [{stg_run_id}] "
-            f"{date_2_str(min(df.index))} - {date_2_str(max(df.index))} ({df.shape[0]} days)")
-
-    if enable_show_plot:
-        plot_func()
-        plt.show()
+    ax.set_title(
+        f"Cash + Margin [{stg_run_id}] "
+        f"{date_2_str(min(df.index))} - {date_2_str(max(df.index))} ({df.shape[0]} days)")
 
     if enable_save_plot:
-        plot_func()
         file_name = get_file_name(f'cash_and_margin', name=stg_run_id)
         file_path = os.path.join(get_cache_folder_path(), file_name)
         plt.savefig(file_path, dpi=75)
     else:
         file_path = None
+
+    if enable_show_plot:
+        plt.show()
 
     return df, file_path
 
