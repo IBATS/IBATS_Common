@@ -268,6 +268,7 @@ def plot_norm(data: pd.Series, bins=10, ax=None, is_show_plot=None):
     # y = mlab.normpdf(bins, mu, sigma)
     y = stats.norm.pdf(bins_v, loc=mu, scale=sigma)
     ax.plot(bins_v, y, '--')
+    plt.grid(True)
     if is_show_plot:
         plt.show()
 
@@ -282,6 +283,7 @@ def hist_norm_sns(data, bins=10):
         fit=stats.norm,
         kde_kws={"color": "darkorange", "lw": 1, "label": "KDE", "linestyle": "--"},
         hist_kws={"color": "darkblue"})
+    plt.grid(True)
     plt.show()
 
 
@@ -380,6 +382,7 @@ def wave_hist(df: pd.DataFrame, columns=None, bins=50, figure_4_each_col=True,
             # ax_sub.set_title(f"{col_name}\n(mean={mean:.4f} std={std:.4f})")
             n_bins_dic[col_name] = (n, bins_v)
 
+        plt.grid(True)
         if enable_save_plot:
             file_name = get_file_name(f'hist', name=name)
             file_path = os.path.join(get_cache_folder_path(), file_name)

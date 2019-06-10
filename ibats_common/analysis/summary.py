@@ -472,6 +472,7 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
         sum_df, symbol_rr_dic = get_rr_with_md(stg_run_id, compound_rr=False)
 
     if sum_df is None or sum_df.shape[0] == 0:
+        logger.warning('stg_run_id=%d 没有获取到 sum_df', stg_run_id)
         file_path = None
         return file_path
 
@@ -584,7 +585,7 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
 def _test_summary_stg_2_docx(auto_open_file=True):
     stg_run_id = 1
     file_path = summary_stg_2_docx(stg_run_id, enable_clean_cache=True)
-    if auto_open_file:
+    if auto_open_file and file_path is not None:
         open_file_with_system_app(file_path)
 
 
