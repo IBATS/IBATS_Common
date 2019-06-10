@@ -12,6 +12,7 @@ import json
 import logging
 import os
 from collections import defaultdict
+import ffn
 
 import docx
 import numpy as np
@@ -29,6 +30,7 @@ from ibats_common.backend.mess import get_stg_run_info
 from ibats_common.common import RunMode, CalcMode
 
 logger = logging.getLogger(__name__)
+logger.debug('import %s', ffn)
 STR_FORMAT_DATETIME_4_FILE_NAME = '%Y-%m-%d %H_%M_%S'
 FORMAT_2_PERCENT = lambda x: f"{x * 100: .2f}%"
 FORMAT_2_FLOAT2 = r"{0:.2f}"
@@ -468,6 +470,10 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
         sum_df, symbol_rr_dic = get_rr_with_md(stg_run_id, compound_rr=True)
     else:
         sum_df, symbol_rr_dic = get_rr_with_md(stg_run_id, compound_rr=False)
+
+    if sum_df is None or sum_df.shape[0] == 0:
+        file_path = None
+        return file_path
 
     ret_dic, each_col_dic, file_path_dic = summary_rr(sum_df, **kwargs)
 
