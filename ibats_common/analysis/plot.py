@@ -621,6 +621,9 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
             accuracy_df['validation_accuracy'] = acc
             lns += ax.plot(accuracy_df['validation_accuracy'], linestyle='--', color='r', label='validation_accuracy')
 
+    accuracy_df['50%'] = 0.5
+    lns += ax.plot(accuracy_df['50%'], color='b', label='train_accuracy')
+
     plt.legend(lns, [_.get_label() for _ in lns], loc=0)
     plt.grid(True)
     if name is not None:
@@ -660,7 +663,7 @@ def get_font_properties():
     return font
 
 
-def _test_plot_accuracy():
+def _test_plot_accuracy(single_figure=True):
     """测试 plot_accuracy"""
     date_arr = pd.date_range(pd.to_datetime('2018-01-01'),
                              pd.to_datetime('2018-01-01') + pd.Timedelta(days=99))
@@ -671,7 +674,6 @@ def _test_plot_accuracy():
     split_point_list.sort()
     split_point_list = date_arr[split_point_list]
     base_line_list = [0.3, 0.6]
-    single_figure = True
     if single_figure:
         import matplotlib.pyplot as plt
         fig = plt.figure(figsize=(8, 12))
