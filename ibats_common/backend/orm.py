@@ -1423,6 +1423,7 @@ def strat_heart_beat_thread():
 
     import threading
     _HEART_BEAT_THREAD = threading.Thread(target=timer_heart_beat)
+    _HEART_BEAT_THREAD.daemon = True
     _HEART_BEAT_THREAD.start()
 
 
