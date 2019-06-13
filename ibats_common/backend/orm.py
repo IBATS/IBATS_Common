@@ -21,10 +21,12 @@ from ibats_common.common import Action, Direction, CalcMode, ExchangeName, RunMo
 from ibats_common.common import PositionDateType
 from ibats_common.config import config
 
+logger = logging.getLogger(__name__)
 engine_ibats = engines.engine_ibats
 BaseModel = declarative_base()
 _key_idx = defaultdict(lambda: defaultdict(int))
 MAX_RATE = 9.99  # 相当于 999%
+_HEART_BEAT_THREAD = None
 
 
 def idx_generator(key1, key2):
@@ -1369,13 +1371,72 @@ class StgRunStatusDetail(BaseModel):
         return detail
 
 
+class HeartBeat(BaseModel):
+    """心跳信息表"""
+
+    __tablename__ = 'heart_beat'
+    update_dt = Column(DateTime, primary_key=True)
+
+
+def init_data():
+    from sqlalchemy.sql import func
+    with with_db_session(engine_ibats) as session:
+        count = session.query(func.count(HeartBeat.update_dt)).scalar()
+        if count == 0:
+            logger.debug('初始化 HeartBeat 数据')
+            session.add(HeartBeat(update_dt=datetime.now()))
+            session.commit()
+        else:
+            session.query(HeartBeat).update({HeartBeat.update_dt: datetime.now()})
+            session.commit()
+
+
+def strat_heart_beat_thread():
+    import time
+    global _HEART_BEAT_THREAD
+    if _HEART_BEAT_THREAD is not None and _HEART_BEAT_THREAD.is_alive():
+        logger.info('timer_heart_beat thread is running')
+        return
+
+    def timer_heart_beat():
+        logging.debug('timer_heart_beat thread start')
+        is_debug, n = False, 10
+        while True:
+            if is_debug:
+                if n <= 0:
+                    break
+                else:
+                    n -= 1
+
+            time.sleep(300)
+            try:
+                with with_db_session(engine_ibats) as session:
+                    update_dt = datetime.now()
+                    session.query(HeartBeat).update({HeartBeat.update_dt: update_dt})
+                    session.commit()
+                logger.debug('heart beat at %s', update_dt)
+            except:
+                logger.exception('heart beat exception')
+                break
+
+        logging.debug('timer_heart_beat thread finished')
+
+    import threading
+    _HEART_BEAT_THREAD = threading.Thread(target=timer_heart_beat)
+    _HEART_BEAT_THREAD.start()
+
+
 def init():
     from ibats_utils.db import alter_table_2_myisam
     global engine_ibats
     engine_ibats = engines.engine_ibats
     BaseModel.metadata.create_all(engine_ibats)
     alter_table_2_myisam(engine_ibats)
-    print("所有表结构建立完成")
+    logger.info("所有表结构建立完成")
+    # init_data()
+
+
+strat_heart_beat_thread()
 
 
 if __name__ == "__main__":
