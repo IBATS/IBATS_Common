@@ -1434,7 +1434,7 @@ def init():
     BaseModel.metadata.create_all(engine_ibats)
     alter_table_2_myisam(engine_ibats)
     logger.info("所有表结构建立完成")
-    # init_data()
+    init_data()
 
 
 strat_heart_beat_thread()
