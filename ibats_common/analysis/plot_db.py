@@ -18,7 +18,7 @@ from ibats_utils.mess import date_2_str
 from sqlalchemy.sql import func
 
 from ibats_common.analysis import get_cache_folder_path
-from ibats_common.analysis.plot import get_file_name
+from ibats_common.analysis.plot import get_file_name, plot_or_show
 from ibats_common.backend import engines
 from ibats_common.backend.mess import get_stg_run_id_latest
 from ibats_common.backend.orm import StgRunStatusDetail, OrderDetail, TradeDetail, StgRunInfo
@@ -310,7 +310,8 @@ def show_order(stg_run_id, **kwargs) -> (defaultdict(lambda: defaultdict(list)),
                 )
 
     # show
-    file_path = show_plot_data_dic(data_dict, title=f"MD and Order figure [{stg_run_id}]", **kwargs)
+    file_path = show_plot_data_dic(data_dict, title=f"MD and Order figure [{stg_run_id}]",
+                                   stg_run_id=stg_run_id, **kwargs)
     return data_dict, file_path
 
 
@@ -389,58 +390,51 @@ def show_trade(stg_run_id, **kwargs) -> (defaultdict(lambda: defaultdict(list)),
                 )
 
     # show
-    file_path = show_plot_data_dic(data_dict, title=f"MD and Trade figure [{stg_run_id}]", **kwargs)
+    file_path = show_plot_data_dic(data_dict, title=f"MD and Trade figure [{stg_run_id}]",
+                                   stg_run_id=stg_run_id, **kwargs)
     return data_dict, file_path
 
 
-def show_plot_data_dic(data_dict: dict, title=None, enable_show_plot=True, enable_save_plot=False, **kwargs):
+def show_plot_data_dic(data_dict: dict, title=None, enable_show_plot=True, enable_save_plot=False, stg_run_id=None, **kwargs):
     """
     将数据plot展示出来
     :param data_dict:
     :param title:
     :param enable_show_plot:
     :param enable_save_plot:
+    :param stg_run_id:
     :param kwargs:
     :return:
     """
     data_len = len(data_dict)
 
-    def func():
-        fig, axs = plt.subplots(
-            data_len, 1,
-            # constrained_layout=True,
-            figsize=(20, 4.8 * data_len))
-        name = '' if title is None else title
+    fig, axs = plt.subplots(
+        data_len, 1,
+        # constrained_layout=True,
+        figsize=(20, 4.8 * data_len))
+    name = '' if title is None else title
 
-        # 容易与 ax title 重叠
-        # if title is not None:
-        #     fig.suptitle(title, fontsize=16)
-        for num, ((md_agent_key, period, symbol), plot_data_dic) in enumerate(data_dict.items()):
-            # ax = fig.add_subplot(num, 1, 1)
-            ax = axs[num] if data_len > 1 else axs
-            ax.set_title(f"{name} - md_agent_key={md_agent_key} - period={period} - symbol={symbol}")
-            for md in plot_data_dic['md']:
-                md.plot(ax=ax, colormap='jet')
-            for x, y in plot_data_dic['long_open_or_short_close']:
-                ax.scatter(x, y, c='r', marker='^')
-            for x, y in plot_data_dic['short_open_or_long_close']:
-                ax.scatter(x, y, c='g', marker='v')
-            for x, y in plot_data_dic['buy_sell_point_pair']:
-                ax.plot(x, y, c='r')
-            for x, y in plot_data_dic['sell_buy_point_pair']:
-                ax.plot(x, y, c='g')
+    # 容易与 ax title 重叠
+    # if title is not None:
+    #     fig.suptitle(title, fontsize=16)
+    for num, ((md_agent_key, period, symbol), plot_data_dic) in enumerate(data_dict.items()):
+        # ax = fig.add_subplot(num, 1, 1)
+        ax = axs[num] if data_len > 1 else axs
+        ax.set_title(f"{name} - md_agent_key={md_agent_key} - period={period} - symbol={symbol}")
+        for md in plot_data_dic['md']:
+            md.plot(ax=ax, colormap='jet')
+        for x, y in plot_data_dic['long_open_or_short_close']:
+            ax.scatter(x, y, c='r', marker='^')
+        for x, y in plot_data_dic['short_open_or_long_close']:
+            ax.scatter(x, y, c='g', marker='v')
+        for x, y in plot_data_dic['buy_sell_point_pair']:
+            ax.plot(x, y, c='r')
+        for x, y in plot_data_dic['sell_buy_point_pair']:
+            ax.plot(x, y, c='g')
 
-    if enable_show_plot:
-        func()
-        plt.show()
-
-    if enable_save_plot:
-        func()
-        file_name = get_file_name(f'title', name=title)
-        file_path = os.path.join(get_cache_folder_path(), file_name)
-        plt.savefig(file_path, dpi=75)
-    else:
-        file_path = None
+    file_name = get_file_name(f'title', name=title)
+    file_path = plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot,
+                             file_name=file_name, stg_run_id=stg_run_id)
 
     return file_path
 
