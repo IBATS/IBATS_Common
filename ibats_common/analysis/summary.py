@@ -91,7 +91,8 @@ def summary_md(md_df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
     stats = md_df.calc_stats()
     stats.set_riskfree_rate(risk_free)
     ret_dic['stats'] = stats
-    enable_kwargs = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot, "name": name}
+    enable_kwargs = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot,
+                     "name": name}
 
     # scatter_matrix
     # diagonal，必须且只能在{'hist', 'kde'}中选择1个，
@@ -193,6 +194,7 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
                enable_show_plot=True,
                enable_save_plot=False,
                name=None,
+               stg_run_id=None,
                **kwargs
                ):
     """
@@ -209,6 +211,7 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     :param enable_show_plot: 展示plot
     :param enable_save_plot: 保存文件
     :param name:
+    :param stg_run_id:
     :param kwargs:
     :return:
     """
@@ -223,7 +226,8 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     stats = df.calc_stats()
     stats.set_riskfree_rate(risk_free)
     ret_dic['stats'] = stats
-    enable_kwargs = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot, "name": name}
+    enable_kwargs = {"enable_save_plot": enable_save_plot, "enable_show_plot": enable_show_plot,
+                     "name": name, "stg_run_id": stg_run_id}
 
     # scatter_matrix
     # diagonal，必须且只能在{'hist', 'kde'}中选择1个，
@@ -465,7 +469,8 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
     info = get_stg_run_info(stg_run_id)
     stg_run_id = info.stg_run_id
     run_mode = RunMode(info.run_mode)
-    kwargs = {"enable_show_plot": enable_show_plot, "enable_save_plot": enable_save_plot, "run_mode": run_mode}
+    kwargs = {"enable_show_plot": enable_show_plot, "enable_save_plot": enable_save_plot,
+              "run_mode": run_mode, "stg_run_id": stg_run_id}
     if run_mode == RunMode.Backtest_FixPercent:
         sum_df, symbol_rr_dic = get_rr_with_md(stg_run_id, compound_rr=True)
     else:
@@ -478,14 +483,14 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
 
     ret_dic, each_col_dic, file_path_dic = summary_rr(sum_df, **kwargs)
 
-    _, file_path = show_trade(stg_run_id, **kwargs)
+    _, file_path = show_trade(**kwargs)
     file_path_dic['trade'] = file_path
-    df, file_path = show_cash_and_margin(stg_run_id, **kwargs)
+    df, file_path = show_cash_and_margin(**kwargs)
     file_path_dic['cash_and_margin'] = file_path
 
     # 生成 docx 文档将所需变量
     heading_title = f'策略分析报告[{stg_run_id}] ' \
-        f'{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days)'
+                    f'{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days)'
 
     # 生成 docx 文件
     document = docx.Document()
@@ -569,8 +574,8 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
 
         run_mode_str = run_mode.name + " "
         file_name = f"{stg_run_id} {run_mode_str}{calc_mode_str}" \
-            f"{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days) " \
-            f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
+                    f"{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days) " \
+                    f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
         file_path = os.path.join(folder_path, file_name)
     else:
         file_path = doc_file_path
@@ -583,7 +588,7 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
 
 
 def _test_summary_stg_2_docx(auto_open_file=True):
-    stg_run_id = 1
+    stg_run_id = None
     file_path = summary_stg_2_docx(stg_run_id, enable_clean_cache=True)
     if auto_open_file and file_path is not None:
         open_file_with_system_app(file_path)
@@ -760,8 +765,8 @@ def summary_md_2_docx(md_df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.
 
     # 保存文件
     file_name = f"MD{' ' if name is None else ' ' + name} " \
-        f"{date_2_str(min(md_df.index))} - {date_2_str(max(md_df.index))} " \
-        f"({md_df.shape[0]} days) {datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
+                f"{date_2_str(min(md_df.index))} - {date_2_str(max(md_df.index))} " \
+                f"({md_df.shape[0]} days) {datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
     file_path = os.path.join(get_report_folder_path(), file_name)
     document.save(file_path)
     if enable_clean_cache:
@@ -816,7 +821,8 @@ def _test_summary_md_2_docx(auto_open_file=True):
 
 
 if __name__ == "__main__":
+    pass
     # _test_summary_md()
     # _test_summary_stg()
-    # _test_summary_stg_2_docx()
-    _test_summary_md_2_docx()
+    _test_summary_stg_2_docx()
+    # _test_summary_md_2_docx()
