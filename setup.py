@@ -37,6 +37,7 @@ setup(name='IBATS_Common',
           "Topic :: Software Development",
       ),
       install_requires=[
+          'numpy>=1.16.2',
           'pandas>=0.23.0',
           'redis>=2.10.6',
           'SQLAlchemy>=1.2.8',
