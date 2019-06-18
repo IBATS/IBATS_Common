@@ -39,6 +39,8 @@ class MACrossStg(StgBase):
             no_holding_target_position = True
             if position_date_pos_info_dic is not None:
                 for position_date, pos_info in position_date_pos_info_dic.items():
+                    if pos_info.position == 0:
+                        continue
                     direction = pos_info.direction
                     if direction == Direction.Short:
                         self.close_short(instrument_id, close, pos_info.position)
@@ -51,6 +53,8 @@ class MACrossStg(StgBase):
             no_holding_target_position = True
             if position_date_pos_info_dic is not None:
                 for position_date, pos_info in position_date_pos_info_dic.items():
+                    if pos_info.position == 0:
+                        continue
                     direction = pos_info.direction
                     if direction == Direction.Long:
                         self.close_long(instrument_id, close, pos_info.position)
