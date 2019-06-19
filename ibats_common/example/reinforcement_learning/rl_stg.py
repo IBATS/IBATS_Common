@@ -45,10 +45,52 @@ class RLStg(StgBase):
         state, _ = self.rl_handler.get_state_reward(md_df)
         _ = self.rl_handler.choose_action(state)
 
+    def long_position(self, close, instrument_id):
+        position_date_pos_info_dic = self.get_position(instrument_id)
+        no_holding_target_position = True
+        if position_date_pos_info_dic is not None:
+            for position_date, pos_info in position_date_pos_info_dic.items():
+                if pos_info.position == 0:
+                    continue
+                direction = pos_info.direction
+                if direction == Direction.Short:
+                    self.close_short(instrument_id, close, pos_info.position)
+                elif direction == Direction.Long:
+                    no_holding_target_position = False
+        if no_holding_target_position:
+            self.open_long(instrument_id, close, self.unit)
+
+    def short_position(self, close, instrument_id):
+        position_date_pos_info_dic = self.get_position(instrument_id)
+        no_holding_target_position = True
+        if position_date_pos_info_dic is not None:
+            for position_date, pos_info in position_date_pos_info_dic.items():
+                if pos_info.position == 0:
+                    continue
+                direction = pos_info.direction
+                if direction == Direction.Long:
+                    self.close_long(instrument_id, close, pos_info.position)
+                elif direction == Direction.Short:
+                    no_holding_target_position = False
+        if no_holding_target_position:
+            self.open_short(instrument_id, close, self.unit)
+
+    def empty_position(self, close, instrument_id):
+        position_date_pos_info_dic = self.get_position(instrument_id)
+        if position_date_pos_info_dic is not None:
+            for position_date, pos_info in position_date_pos_info_dic.items():
+                if pos_info.position == 0:
+                    continue
+                direction = pos_info.direction
+                if direction == Direction.Long:
+                    self.close_long(instrument_id, close, pos_info.position)
+                elif direction == Direction.Short:
+                    self.close_short(instrument_id, close, pos_info.position)
+
     def on_min1(self, md_df, context):
         trade_date_s = md_df['trade_date']
         trade_date_to = trade_date_s.iloc[-1]
-        if not self.for_train and trade_date_to > (self.train_date_latest + self.retrain_period):
+        if (not self.for_train) and trade_date_to > (self.train_date_latest + self.retrain_period):
             # for_train == False 当期为策略运行使用，在 on_prepare 阶段以及 on_period 定期进行重新训练
             train(self.rl_handler_class, self.train_date_from, trade_date_to, episode_count=3)
 
@@ -60,46 +102,13 @@ class RLStg(StgBase):
         instrument_id = context[ContextKey.instrument_id_list][0]
         if action == 1:
             # 做多
-            position_date_pos_info_dic = self.get_position(instrument_id)
-            no_holding_target_position = True
-            if position_date_pos_info_dic is not None:
-                for position_date, pos_info in position_date_pos_info_dic.items():
-                    if pos_info.position == 0:
-                        continue
-                    direction = pos_info.direction
-                    if direction == Direction.Short:
-                        self.close_short(instrument_id, close, pos_info.position)
-                    elif direction == Direction.Long:
-                        no_holding_target_position = False
-            if no_holding_target_position:
-                self.open_long(instrument_id, close, self.unit)
+            self.long_position(close, instrument_id)
         elif action == 2:
             # 做空
-            position_date_pos_info_dic = self.get_position(instrument_id)
-            no_holding_target_position = True
-            if position_date_pos_info_dic is not None:
-                for position_date, pos_info in position_date_pos_info_dic.items():
-                    if pos_info.position == 0:
-                        continue
-                    direction = pos_info.direction
-                    if direction == Direction.Long:
-                        self.close_long(instrument_id, close, pos_info.position)
-                    elif direction == Direction.Short:
-                        no_holding_target_position = False
-            if no_holding_target_position:
-                self.open_short(instrument_id, close, self.unit)
+            self.short_position(close, instrument_id)
         elif action == 0:
             # 空仓
-            position_date_pos_info_dic = self.get_position(instrument_id)
-            if position_date_pos_info_dic is not None:
-                for position_date, pos_info in position_date_pos_info_dic.items():
-                    if pos_info.position == 0:
-                        continue
-                    direction = pos_info.direction
-                    if direction == Direction.Long:
-                        self.close_long(instrument_id, close, pos_info.position)
-                    elif direction == Direction.Short:
-                        self.close_short(instrument_id, close, pos_info.position)
+            self.empty_position(close, instrument_id)
 
 
 def train(rl_handler_class, trade_date_from, trade_date_to, episode_count):
