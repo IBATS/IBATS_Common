@@ -109,7 +109,7 @@ class QLearningTable:
     def _get_file_path(self, key):
         from ibats_common import module_root_path
         # ibats_common/example/module_data
-        folder_path = os.path.join(module_root_path, 'example', 'module_data')
+        folder_path = os.path.join(module_root_path, 'example', 'module_data', 'v1')
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
         file_name = f"q_table_{key}_{len(self.actions)}.csv"
@@ -236,7 +236,7 @@ class RLHandler4Train(RLHandler):
 
     def train(self, trade_date_to):
         """
-        具体功能参见 ibats_common.example.reinforcement_learning.q_learn import main
+        具体功能参见 ibats_common.example.reinforcement_learning.v1.q_learn import main
         :param trade_date_to:
         :return:
         """
@@ -263,25 +263,6 @@ class RLHandler4Train(RLHandler):
             self.ql_table.save()
         # 设置最新训练日期
         self.train_date_latest = pd.to_datetime(trade_date_to)
-
-    def get_state_reward(self, md_df: pd.DataFrame):
-        close_s = md_df['close']
-        close_log_arr = np.log(close_s.iloc[-6:])
-        close_latest = close_log_arr.iloc[-1]
-        state = int((close_latest - close_log_arr.iloc[0]) * 1000)
-        if self.last_action is not None:
-            if self.last_action == 0:
-                reward = 0
-            elif self.last_action == 1:
-                reward = int((close_latest - close_log_arr.iloc[-2]) * 1000)
-            elif self.last_action == 2:
-                reward = - int((close_latest - close_log_arr.iloc[-2]) * 1000)
-            else:
-                raise ValueError(f'last_action = {self.last_action} 值不合法')
-        else:
-            reward = 0
-
-        return state, reward
 
     def choose_action(self, md_df: pd.DataFrame):
         trade_date_to = pd.to_datetime(md_df['trade_date'].iloc[-1])
@@ -350,11 +331,11 @@ class Env:
 
 
 def _test_env(trade_date_from='2010-1-1', trade_date_to='2018-10-18'):
-    from ibats_common.example.reinforcement_learning.rl_stg import get_stg_handler
+    from ibats_common.example.reinforcement_learning.v1.rl_stg import get_stg_handler
     env = Env(trade_date_from, trade_date_to, get_stg_handler, q_table_key=trade_date_to)
     action_space = ['empty', 'hold_long', 'hold_short']
     actions = list(range(len(action_space)))
-    q_learn_class = load_class(module_name='ibats_common.example.reinforcement_learning.q_learn',
+    q_learn_class = load_class(module_name='ibats_common.example.reinforcement_learning.v1.q_learn',
                                class_name='QLearningTable')
     q_learn = q_learn_class(actions=actions, key=trade_date_to)
     for episode in range(2):
@@ -398,7 +379,7 @@ def _test_rl_handler(trade_date_from='2010-1-1', trade_date_to='2018-10-18'):
 
 
 def _test_rl_handler_4_train(trade_date_from='2010-1-1', trade_date_to='2018-10-18'):
-    from ibats_common.example.reinforcement_learning.rl_stg import get_stg_handler
+    from ibats_common.example.reinforcement_learning.v1.rl_stg import get_stg_handler
     from ibats_common.example.data import load_data
     trade_date_from_ = str_2_date(trade_date_from)
     trade_date_to_ = str_2_date(trade_date_to)
@@ -416,7 +397,7 @@ def _test_rl_handler_4_train(trade_date_from='2010-1-1', trade_date_to='2018-10-
     action_df = pd.DataFrame([trade_date_action_dic]).T
     print("action_df = \n", action_df)
     # ql_table = QLearningTable(rl_handler.actions, key=trade_date_to)
-    ql_table_class = load_class(module_name='ibats_common.example.reinforcement_learning.q_learn',
+    ql_table_class = load_class(module_name='ibats_common.example.reinforcement_learning.v1.q_learn',
                                 class_name='QLearningTable')
     ql_table = ql_table_class(actions=rl_handler.actions, key=trade_date_to)
     assert ql_table.q_table.shape[0] > 0

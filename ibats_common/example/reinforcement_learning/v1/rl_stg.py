@@ -5,7 +5,7 @@
 @Time    : 2018/11/7 10:42
 @File    : ma_cross_stg.py
 @contact : mmmaaaggg@163.com
-@desc    : 简单的 MA5、MA10金叉、死叉多空策略，仅供测试及演示使用（回测模式：固定仓位比例）
+@desc    : 通过Q-Learn 算法。state：前5日收益率为 reward：次日收益率，每5个交易日进行一次重新训练
 """
 from ibats_utils.mess import load_class
 
@@ -113,12 +113,12 @@ def get_stg_handler(retrain_period, q_table_key=None):
     calc_mode = CalcMode.Normal
     if retrain_period == 0:
         strategy_params = {'unit': 1,
-                           'module_name': 'ibats_common.example.reinforcement_learning.q_learn',
+                           'module_name': 'ibats_common.example.reinforcement_learning.v1.q_learn',
                            'class_name': 'RLHandler',
                            'q_table_key': q_table_key}
     else:
         strategy_params = {'unit': 1,
-                           'module_name': 'ibats_common.example.reinforcement_learning.q_learn',
+                           'module_name': 'ibats_common.example.reinforcement_learning.v1.q_learn',
                            'class_name': 'RLHandler4Train',
                            'q_table_key': q_table_key,
                            'retrain_period': retrain_period
