@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class RLStg(StgBase):
 
-    def __init__(self, module_name, class_name, retrain_period, unit=1):
+    def __init__(self, module_name, class_name, retrain_period=0, unit=1, q_table_key=None):
         """
 
         :param module_name:
@@ -33,7 +33,15 @@ class RLStg(StgBase):
         self.state = None
         self.module_name, self.class_name = module_name, class_name
         self.rl_handler_class = load_class(module_name, class_name)
-        self.rl_handler = self.rl_handler_class(retrain_period=retrain_period, get_stg_handler=get_stg_handler)
+        # RLHandler4Train 作为 RLHandler 的子类，完全支持 RLHandler 所有功能，这里将其区分开来
+        # 主要是为了防止视觉上混淆，以及理解上的偏差
+        if retrain_period == 0:
+            # 无训练功能，仅进行买入卖出动作判断，供 Env 环境下训练时被调用
+            self.rl_handler = self.rl_handler_class(q_table_key=q_table_key)
+        else:
+            # 有训练功能，将定期调用 RLHandler4Train 启动 Env 环境进行训练
+            self.rl_handler = self.rl_handler_class(
+                retrain_period=retrain_period, get_stg_handler=get_stg_handler, q_table_key=q_table_key)
 
     def on_prepare_min1(self, md_df, context):
         self.rl_handler.init_state(md_df)
@@ -96,17 +104,26 @@ class RLStg(StgBase):
             self.empty_position(close, instrument_id)
 
 
-def get_stg_handler(retrain_period):
+def get_stg_handler(retrain_period, q_table_key=None):
     from ibats_common import module_root_path
     import os
     # 参数设置
     instrument_type = 'RB'
     run_mode = RunMode.Backtest_FixPercent
     calc_mode = CalcMode.Normal
-    strategy_params = {'unit': 1,
-                       'module_name': 'ibats_common.example.reinforcement_learning.q_learn',
-                       'class_name': 'RLHandler',
-                       'retrain_period': retrain_period}
+    if retrain_period == 0:
+        strategy_params = {'unit': 1,
+                           'module_name': 'ibats_common.example.reinforcement_learning.q_learn',
+                           'class_name': 'RLHandler',
+                           'q_table_key': q_table_key}
+    else:
+        strategy_params = {'unit': 1,
+                           'module_name': 'ibats_common.example.reinforcement_learning.q_learn',
+                           'class_name': 'RLHandler4Train',
+                           'q_table_key': q_table_key,
+                           'retrain_period': retrain_period
+                           }
+
     md_agent_params_list = [{
         'md_period': PeriodType.Min1,
         'instrument_id_list': [instrument_type],
@@ -157,7 +174,7 @@ def get_stg_handler(retrain_period):
 
 
 def _test_use(is_plot):
-    stghandler = get_stg_handler(retrain_period=30)
+    stghandler = get_stg_handler(retrain_period=7)
     stghandler.start()
     time.sleep(10)
     stghandler.keep_running = False
