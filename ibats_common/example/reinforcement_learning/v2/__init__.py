@@ -7,6 +7,8 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
+module_version = 'v2'
+
 
 if __name__ == "__main__":
     pass

@@ -11,6 +11,7 @@ from ibats_utils.mess import load_class, date_2_str
 import numpy as np
 from ibats_common.common import BacktestTradeMode, ContextKey, Direction, CalcMode
 from ibats_common.example.reinforcement_learning.v2.q_learn import QLearningTable, Env
+from ibats_common.example.reinforcement_learning.v2 import module_version
 from ibats_common.strategy import StgBase
 from ibats_common.strategy_handler import strategy_handler_factory
 from ibats_local_trader.agent.md_agent import *
@@ -114,12 +115,12 @@ def get_stg_handler(retrain_period, q_table_key=None):
     calc_mode = CalcMode.Normal
     if retrain_period == 0:
         strategy_params = {'unit': 1,
-                           'module_name': 'ibats_common.example.reinforcement_learning.v2.rl_stg',
+                           'module_name': f'ibats_common.example.reinforcement_learning.{module_version}.rl_stg',
                            'class_name': 'RLHandler',
                            'q_table_key': q_table_key}
     else:
         strategy_params = {'unit': 1,
-                           'module_name': 'ibats_common.example.reinforcement_learning.v2.rl_stg',
+                           'module_name': f'ibats_common.example.reinforcement_learning.{module_version}.rl_stg',
                            'class_name': 'RLHandler4Train',
                            'q_table_key': q_table_key,
                            'retrain_period': retrain_period
@@ -369,7 +370,7 @@ def _test_rl_handler_4_train(trade_date_from='2010-1-1', trade_date_to='2018-10-
     action_df = pd.DataFrame([trade_date_action_dic]).T
     print("action_df = \n", action_df)
     # ql_table = QLearningTable(rl_handler.actions, key=trade_date_to)
-    ql_table_class = load_class(module_name='ibats_common.example.reinforcement_learning.v2.q_learn',
+    ql_table_class = load_class(module_name=f'ibats_common.example.reinforcement_learning.{module_version}.q_learn',
                                 class_name='QLearningTable')
     ql_table = ql_table_class(actions=rl_handler.actions, key=trade_date_to)
     assert ql_table.q_table.shape[0] > 0

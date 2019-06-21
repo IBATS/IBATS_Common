@@ -15,6 +15,7 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 from ibats_utils.mess import date_2_str, load_class
+from ibats_common.example.reinforcement_learning.v2 import module_version
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ class QLearningTable:
     def _get_file_path(self, key):
         from ibats_common import module_root_path
         # ibats_common/example/module_data
-        folder_path = os.path.join(module_root_path, 'example', 'module_data', 'v2')
+        folder_path = os.path.join(module_root_path, 'example', 'module_data', module_version)
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
         file_name = f"q_table_{key}_{len(self.actions)}.csv"
@@ -187,7 +188,7 @@ def _test_env(trade_date_from='2010-1-1', trade_date_to='2018-10-18'):
     env = Env(trade_date_from, trade_date_to, get_stg_handler, q_table_key=trade_date_to)
     action_space = ['empty', 'hold_long', 'hold_short']
     actions = list(range(len(action_space)))
-    q_learn_class = load_class(module_name='ibats_common.example.reinforcement_learning.v2.q_learn',
+    q_learn_class = load_class(module_name=f'ibats_common.example.reinforcement_learning.{module_version}.q_learn',
                                class_name='QLearningTable')
     q_learn = q_learn_class(actions=actions, key=trade_date_to)
     for episode in range(2):
