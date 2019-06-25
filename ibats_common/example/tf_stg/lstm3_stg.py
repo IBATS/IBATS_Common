@@ -83,7 +83,7 @@ class AIStg(StgBase):
         self.max_future = 3
         self.predict_test_random_state = None
         self.n_epoch = 512
-        self.retrain_period = 0  # 60 每隔60天重新训练一次，0 则为不进行重新训练
+        self.retrain_period = 360  # 60 每隔60天重新训练一次，0 则为不进行重新训练
         self.validation_accuracy_base_line = 0.55  # 0.6    # 如果为 None，则不进行 validation 成功率检查
         self.over_fitting_train_acc = 0.9  # 过拟合训练集成功率，如果为None则不进行判断
         # 其他辅助信息
@@ -232,7 +232,7 @@ class AIStg(StgBase):
         with sess.as_default():
             # with tf.Graph().as_default():
             # logger.debug('sess.graph:%s tf.get_default_graph():%s', sess.graph, tf.get_default_graph())
-            logger.debug('random_state=%d, xs_train %s, ys_train %s, xs_validation %s, ys_validation %s, [%s, %s]',
+            logger.debug('[%d], xs_train %s, ys_train %s, xs_validation %s, ys_validation %s, [%s, %s]',
                          random_state, xs_train.shape, ys_train.shape, xs_validation.shape, ys_validation.shape,
                          trade_date_from_str, trade_date_to_str)
             max_loop = 20
@@ -241,8 +241,8 @@ class AIStg(StgBase):
                     n_epoch = self.n_epoch
                 else:
                     n_epoch = self.n_epoch // max_loop
-                logger.info('第 %d/%d 轮训练开始 [%s, %s] random_state=%d n_epoch=%d', num + 1, max_loop,
-                            trade_date_from_str, trade_date_to_str, random_state, n_epoch)
+                logger.info('[%d]第 %d/%d 轮训练，开始 [%s, %s] n_epoch=%d', num + 1, max_loop,
+                            random_state, trade_date_from_str, trade_date_to_str, n_epoch)
                 run_id = f'{trade_date_to_str}_{xs_train.shape[0]}[{predict_test_random_state}]' \
                          f'_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
                 tflearn.is_training(True)
@@ -257,21 +257,21 @@ class AIStg(StgBase):
                 train_acc = result[0]
                 result = self.model.evaluate(xs_validation, ys_validation, batch_size=self.batch_size)
                 val_acc = result[0]
-                logger.info("[%s - %s] random_state=%d, 训练集准确率(train_acc)：%.2f%%， 样本外准确率(val_acc): %.2f%%",
-                            trade_date_from_str, trade_date_to_str, predict_test_random_state,
+                logger.info("[%d]第 %d/%d 轮训练，[%s - %s]，训练集准确率(train_acc)：%.2f%%， 样本外准确率(val_acc): %.2f%%",
+                            random_state, num + 1, max_loop, trade_date_from_str, trade_date_to_str,
                             train_acc * 100, val_acc * 100)
                 if self.over_fitting_train_acc is not None and train_acc > self.over_fitting_train_acc:
-                    logger.warning('第 %d/%d 轮训练，训练集精度超过 %.2f%% 可能存在过拟合 [%s, %s]',
-                                   num + 1, max_loop, self.over_fitting_train_acc * 100,
+                    logger.warning('[%d]第 %d/%d 轮训练，训练集精度超过 %.2f%% 可能存在过拟合 [%s, %s]',
+                                   random_state, num + 1, max_loop, self.over_fitting_train_acc * 100,
                                    trade_date_from_str, trade_date_to_str)
                     break
                 if self.validation_accuracy_base_line is not None:
                     if result[0] > self.validation_accuracy_base_line:
                         break
-                    elif num < 5:
-                        logger.warning('第 %d/%d 轮训练，样本外训练准确率不足 %.0f %%，继续训练 [%s, %s]',
-                                       num + 1, max_loop, self.validation_accuracy_base_line * 100,
-                                       trade_date_from_str, trade_date_to_str)
+                    elif num < max_loop - 1:
+                        logger.warning('[%d]第 %d/%d 轮训练，[%s - %s]，样本外训练准确率 %.2f%% < %.0f%%，继续训练',
+                                       random_state, num + 1, max_loop, trade_date_from_str, trade_date_to_str,
+                                       val_acc * 100, self.validation_accuracy_base_line * 100)
                 else:
                     break
 
@@ -343,6 +343,7 @@ class AIStg(StgBase):
         if self.enable_load_model_if_exist or enable_load_model_if_exist:
             # 获取小于等于当期交易日的最大的一个交易日对应的文件名
             min_available_date = str_2_date(trade_date) - timedelta(days=self.retrain_period)
+            self.logger.debug('尝试加载现有模型，[%s - %s] %d 天', min_available_date, trade_date, self.retrain_period)
             date_file_path_pair_list = [_ for _ in self.get_date_file_path_pair_list() if _[0] >= min_available_date]
             if len(date_file_path_pair_list) > 0:
                 # 按日期排序
@@ -610,7 +611,7 @@ class AIStg(StgBase):
             close_df = indexed_df.loc[trade_date_list_sub, 'close']
 
             # 加载模型
-            is_load = self.load_model_if_exist(trade_date_last_train)
+            is_load = self.load_model_if_exist(trade_date_last_train, enable_load_model_if_exist=True)
             if not is_load:
                 logger.error('%s 模型加载失败：%s', trade_date_last_train, file_path)
                 continue
