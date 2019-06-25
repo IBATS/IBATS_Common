@@ -505,7 +505,7 @@ def label_distribution(close_df: pd.DataFrame, min_rr: float, max_rr: float, max
     return distribution_rate_df, file_path
 
 
-def plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None, stg_run_id=None):
+def plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None, stg_run_id=None, do_clr=True):
     if enable_save_plot:
         if stg_run_id is None:
             folder_path = get_cache_folder_path()
@@ -522,8 +522,11 @@ def plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None, s
 
     if enable_show_plot:
         plt.show()
+
+    if do_clr:
         plt.cla()
         plt.clf()
+        plt.close()
 
     return file_path
 

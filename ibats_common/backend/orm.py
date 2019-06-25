@@ -400,6 +400,11 @@ class PosStatusDetail(BaseModel):
         avg_price_last = self.avg_price
         margin_last = self.margin
 
+        detail.cur_price = trade_price
+        detail.trade_dt = trade_detail.trade_dt
+        detail.trade_date = trade_detail.trade_date
+        detail.trade_time = trade_detail.trade_time
+        detail.trade_millisec = trade_detail.trade_millisec
         if position_last == 0:
             # 如果前一状态仓位为 0 则本次方向与当前订单方向相同
             detail.direction = trade_detail.direction
@@ -495,8 +500,13 @@ class PosStatusDetail(BaseModel):
             detail.cashflow_cum += cashflow
             detail.commission = commission
             detail.commission_tot += commission
-            detail.rr = detail.floating_pl_cum / (
-                detail.margin if detail.margin > 0 else margin_last)
+            margin_4_rr = detail.margin if detail.margin > 0 else margin_last
+            if margin_4_rr == 0:
+                logger.error('%s detail.margin=%f, margin_last=%f',
+                             detail.trade_dt, detail.margin, margin_last)
+                detail.rr = 0
+            else:
+                detail.rr = detail.floating_pl_cum / margin_4_rr
             detail.position_date_type = PositionDateType.Today.value
 
         elif self.calc_mode == CalcMode.Margin.value:
@@ -599,12 +609,6 @@ class PosStatusDetail(BaseModel):
         else:
             ValueError('calc_mode 不是有效的值 %s', self.calc_mode)
 
-        detail.cur_price = trade_price
-        detail.trade_dt = trade_detail.trade_dt
-        detail.trade_date = trade_detail.trade_date
-        detail.trade_time = trade_detail.trade_time
-        detail.trade_millisec = trade_detail.trade_millisec
-
         # self.logger.debug("%s", pos_status_detail)
 
         if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
@@ -706,8 +710,10 @@ class PosStatusDetail(BaseModel):
         detail.cashflow_cum += cashflow
         detail.commission = commission
         detail.commission_tot += commission
-        # 如果无法计算收益率则暂时记 np.nan
-        detail.rr = (detail.floating_pl_cum / detail.margin) if detail.margin > 0 else np.nan
+        # 如果无法计算收益率则暂时记 0
+        # 2019-06-18 np.nan 的情况将会在 session.commit() 时导致如下异常，因此，替换为0
+        # sqlalchemy.exc.ProgrammingError: (MySQLdb._exceptions.ProgrammingError) nan can not be used with MySQL
+        detail.rr = (detail.floating_pl_cum / detail.margin) if detail.margin > 0 else 0
 
         if config.ORM_UPDATE_OR_INSERT_PER_ACTION:
             # 更新最新持仓纪录
