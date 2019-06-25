@@ -107,7 +107,10 @@ class StgBase:
         for md_agent_key, _ in self._md_agent_key_period_df_dic.items():
             for period, md_df in _.items():
                 event_handler = self._on_period_event_dic[period].md_release_event
-                event_handler(md_df)
+                try:
+                    event_handler(md_df)
+                except:
+                    self.logger.exception('period=%s %s invoked exception', period, event_handler)
 
         for num, (name, trade_agent) in enumerate(self.trade_agent_dic.items()):
             # ExchangeName.Default 作为默认 trade_agent 在 trade_agent_dic 中存在重复实例，
