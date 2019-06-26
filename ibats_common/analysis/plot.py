@@ -23,7 +23,7 @@ from pandas.plotting import register_matplotlib_converters
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from ibats_utils.mess import date_2_str, is_windows_os
+from ibats_utils.mess import date_2_str, is_windows_os, open_file_with_system_app
 from scipy import stats
 
 from ibats_common.analysis import get_cache_folder_path
@@ -505,6 +505,73 @@ def label_distribution(close_df: pd.DataFrame, min_rr: float, max_rr: float, max
     return distribution_rate_df, file_path
 
 
+def show_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=None,
+                  base_line_list: (None, dict) = None):
+    """
+    将实际标记与预测标记进行对比并结合行情close_df显示在plot图上
+    :param real_ys:
+    :param pred_ys:
+    :param close_df:
+    :param split_point_list:
+    :param base_line_list:
+    :return:
+    """
+    trade_date_index = close_df.index
+    date_from_str, date_to_str = date_2_str(trade_date_index[0]), date_2_str(trade_date_index[-1])
+    # 检查长度是否一致
+    if len(real_ys) != len(pred_ys) or len(real_ys) == 0:
+        logger.error("[%s - %s] len(real_ys)=%d, len(pred_ys)=%d 不一致",
+                     date_from_str, date_to_str, len(real_ys), len(pred_ys))
+        return
+    # 分析成功率
+    # 累计平均成功率
+    accuracy = sum(pred_ys == real_ys) / len(pred_ys) * 100
+    logger.info("模型准确率 [%s - %s] accuracy: %.2f%%", date_from_str, date_to_str, accuracy)
+    is_fit_arr = pred_ys == real_ys
+    accuracy_list, fit_sum = [], 0
+    for tot_count, (is_fit, trade_date) in enumerate(zip(is_fit_arr, trade_date_index), start=1):
+        if is_fit:
+            fit_sum += 1
+        accuracy_list.append(fit_sum / tot_count)
+
+    accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=trade_date_index)
+    enable_kwargs = dict(enable_save_plot=False, enable_show_plot=False, do_clr=False)
+
+    fig = plt.figure(figsize=(8, 12))
+    ax = fig.add_subplot(211)
+    plot_accuracy(accuracy_df, close_df, ax=ax, base_line_list=base_line_list,
+                  name=f'Accumulation Avg Accuracy [{date_from_str}{date_to_str}]',
+                  split_point_list=split_point_list, **enable_kwargs)
+    # 移动平均成功率
+    accuracy_list, win_size = [], 60
+    for idx in range(win_size, len(is_fit_arr)):
+        accuracy_list.append(sum(is_fit_arr[idx - win_size:idx] / win_size))
+
+    close2_df = close_df.iloc[win_size:]
+    ax2 = fig.add_subplot(212)
+    accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=close2_df.index)
+    plot_accuracy(accuracy_df, close2_df, ax=ax2, base_line_list=base_line_list,
+                  name=f'{win_size} Moving Avg Accuracy [{date_from_str}{date_to_str}]',
+                  split_point_list=split_point_list, **enable_kwargs)
+    file_name = f"accuracy [{date_from_str}-{date_to_str}]"
+    plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=file_name)
+
+
+def _test_show_accuracy():
+    real_ys, pred_ys = np.random.randint(1, 3, size=100), np.random.randint(1, 3, size=100)
+    date_arr = pd.date_range(pd.to_datetime('2018-01-01'),
+                             pd.to_datetime('2018-01-01') + pd.Timedelta(days=99))
+    date_index = pd.DatetimeIndex(date_arr)
+    close_df = pd.DataFrame({'close': np.sin(np.linspace(0, 10, 100))}, index=date_index)
+
+    split_point_list = np.random.randint(len(date_arr), size=10)
+    split_point_list.sort()
+    split_point_list = date_arr[split_point_list]
+    base_line_list = [0.3, 0.6]
+
+    show_accuracy(real_ys, pred_ys, close_df, split_point_list, base_line_list)
+
+
 def plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None, stg_run_id=None, do_clr=True):
     if enable_save_plot:
         if stg_run_id is None:
@@ -521,7 +588,10 @@ def plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None, s
         file_path = None
 
     if enable_show_plot:
-        plt.show()
+        if file_path is not None and is_windows_os():
+            open_file_with_system_app(file_path)
+        else:
+            plt.show()
 
     if do_clr:
         plt.cla()
@@ -580,8 +650,7 @@ def _test_n_days_rr_distribution():
 
 
 def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
-                  enable_save_plot=True, enable_show_plot=True, name=None, base_line_list: (None, dict) = None,
-                  stg_run_id=None):
+                  name=None, base_line_list: (None, dict) = None, **enable_kwargs):
     if ax is None:
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -625,8 +694,7 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
 
     datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S_%f')
     file_name = f"{datetime_str}" if name is None else f"{name}_{datetime_str}"
-    plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, file_name=file_name,
-                 stg_run_id=stg_run_id)
+    plot_or_show(file_name=file_name, **enable_kwargs)
 
 
 @lru_cache()
@@ -659,11 +727,12 @@ def _test_plot_accuracy(single_figure=True):
         import matplotlib.pyplot as plt
         fig = plt.figure(figsize=(8, 12))
         ax = fig.add_subplot(211)
+        enable_kwargs = dict(enable_save_plot=False, enable_show_plot=False, do_clr=False, stg_run_id=6)
         plot_accuracy(accuracy_df, close_df, ax=ax, name='测试使用', split_point_list=split_point_list,
-                      base_line_list=base_line_list, enable_save_plot=False, enable_show_plot=False)
+                      base_line_list=base_line_list, **enable_kwargs)
         ax = fig.add_subplot(212)
         plot_accuracy(accuracy_df, close_df, ax=ax, name='测试使用2', split_point_list=split_point_list,
-                      base_line_list=base_line_list, enable_save_plot=False, enable_show_plot=False, stg_run_id=6)
+                      base_line_list=base_line_list, **enable_kwargs)
         plot_or_show(enable_show_plot=True, enable_save_plot=True, file_name='测试使用all in one', stg_run_id=6)
     else:
         plot_accuracy(accuracy_df, close_df, name='测试使用2', split_point_list=split_point_list,
@@ -676,4 +745,5 @@ if __name__ == "__main__":
     # _test_hist_n_rr()
     # _test_label_distribution()
     # _test_n_days_rr_distribution()
-    _test_plot_accuracy()
+    # _test_plot_accuracy()
+    _test_show_accuracy()
