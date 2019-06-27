@@ -506,7 +506,7 @@ def label_distribution(close_df: pd.DataFrame, min_rr: float, max_rr: float, max
 
 
 def show_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=None,
-                  base_line_list: (None, dict) = None):
+                  base_line_list: (None, dict) = None, show_moving_avg=False):
     """
     将实际标记与预测标记进行对比并结合行情close_df显示在plot图上
     :param real_ys:
@@ -514,17 +514,26 @@ def show_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=Non
     :param close_df:
     :param split_point_list:
     :param base_line_list:
+    :param show_moving_avg: 展示滚动平均收益率，如果展示，则会显示 三张图，否则两张
     :return:
     """
     trade_date_index = close_df.index
     date_from_str, date_to_str = date_2_str(trade_date_index[0]), date_2_str(trade_date_index[-1])
     # 检查长度是否一致
-    if len(real_ys) != len(pred_ys) or len(real_ys) == 0:
-        logger.error("[%s - %s] len(real_ys)=%d, len(pred_ys)=%d 不一致",
-                     date_from_str, date_to_str, len(real_ys), len(pred_ys))
+    if not(len(real_ys) == len(pred_ys) == close_df.shape[0]) or len(real_ys) == 0:
+        logger.error("[%s - %s] len(real_ys)=%d, len(pred_ys)=%d, close_df.shape[0]=%d 不一致",
+                     date_from_str, date_to_str, len(real_ys), len(pred_ys), close_df.shape[0])
         return
+    enable_kwargs = dict(enable_save_plot=False, enable_show_plot=False, do_clr=False)
+    if show_moving_avg:
+        fig = plt.figure(figsize=(8, 16))
+        fig_idx = 310
+    else:
+        fig = plt.figure(figsize=(8, 12))
+        fig_idx = 210
+
     # 分析成功率
-    # 累计平均成功率
+    # 第一章图：累计平均成功率
     accuracy = sum(pred_ys == real_ys) / len(pred_ys) * 100
     logger.info("模型准确率 [%s - %s] accuracy: %.2f%%", date_from_str, date_to_str, accuracy)
     is_fit_arr = pred_ys == real_ys
@@ -535,26 +544,36 @@ def show_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=Non
         accuracy_list.append(fit_sum / tot_count)
 
     accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=trade_date_index)
-    enable_kwargs = dict(enable_save_plot=False, enable_show_plot=False, do_clr=False)
-
-    fig = plt.figure(figsize=(8, 12))
-    ax = fig.add_subplot(211)
+    ax = fig.add_subplot(fig_idx + 1)
     plot_accuracy(accuracy_df, close_df, ax=ax, base_line_list=base_line_list,
                   name=f'Accumulation Avg Accuracy [{date_from_str}{date_to_str}]',
                   split_point_list=split_point_list, **enable_kwargs)
-    # 移动平均成功率
-    accuracy_list, win_size = [], 60
-    for idx in range(win_size, len(is_fit_arr)):
-        accuracy_list.append(sum(is_fit_arr[idx - win_size:idx] / win_size))
 
-    close2_df = close_df.iloc[win_size:]
-    ax2 = fig.add_subplot(212)
-    accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=close2_df.index)
-    plot_accuracy(accuracy_df, close2_df, ax=ax2, base_line_list=base_line_list,
-                  name=f'{win_size} Moving Avg Accuracy [{date_from_str}{date_to_str}]',
-                  split_point_list=split_point_list, **enable_kwargs)
+    # 第一章图：累计平均成功率
+    real_pred_df = pd.DataFrame({'pred': pred_ys, 'real': real_ys}, index=trade_date_index)
+    ax2 = fig.add_subplot(fig_idx + 2)
+    plot_accuracy(accuracy_df, close_df, ax=ax2, base_line_list=base_line_list,
+                  name=f'Accumulation Avg Accuracy [{date_from_str}{date_to_str}]',
+                  real_pred_df=real_pred_df, **enable_kwargs)
+    # 第三章图：移动平均成功率
+    if show_moving_avg:
+        accuracy_list, win_size = [], 30
+        is_fit_df = pd.DataFrame({'fit': is_fit_arr}, index=trade_date_index)
+        accuracy_df = is_fit_df.rolling(win_size, min_periods=1).apply(lambda x: sum(x)/len(x), raw=True)
+        for idx in range(win_size, len(is_fit_arr)):
+            accuracy_list.append(sum(is_fit_arr[idx - win_size:idx] / win_size))
+
+        # close2_df = close_df.iloc[win_size:]
+        # accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=close2_df.index)
+        ax3 = fig.add_subplot(fig_idx + 3)
+        plot_accuracy(accuracy_df, close_df, ax=ax3, base_line_list=base_line_list,
+                      name=f'{win_size} Moving Avg Accuracy [{date_from_str}{date_to_str}]',
+                      split_point_list=split_point_list, **enable_kwargs)
+
+    # 展示图片
     file_name = f"accuracy [{date_from_str}-{date_to_str}]"
-    plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=file_name)
+    file_path = plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=file_name)
+    return file_path
 
 
 def _test_show_accuracy():
@@ -569,7 +588,7 @@ def _test_show_accuracy():
     split_point_list = date_arr[split_point_list]
     base_line_list = [0.3, 0.6]
 
-    show_accuracy(real_ys, pred_ys, close_df, split_point_list, base_line_list)
+    show_accuracy(real_ys, pred_ys, close_df, split_point_list, base_line_list, show_moving_avg=True)
 
 
 def plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None, stg_run_id=None, do_clr=True):
@@ -650,12 +669,52 @@ def _test_n_days_rr_distribution():
 
 
 def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
-                  name=None, base_line_list: (None, dict) = None, **enable_kwargs):
+                  name=None, base_line_list: (None, dict) = None, real_pred_df=None, **enable_kwargs):
+    """
+    显示成功率与行情叠加走势，如果 real_pred_df is not None 则叠加预测与真实标记
+    :param accuracy_df:
+    :param close_df:
+    :param split_point_list:
+    :param ax:
+    :param name:
+    :param base_line_list:
+    :param real_pred_df:
+    :param enable_kwargs:
+    :return:
+    """
     if ax is None:
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
+    accuracy_df = accuracy_df.copy()
     l1 = ax.plot(accuracy_df, color='r', label='accuracy')
+    if real_pred_df is not None:
+        for x0, x1, data in get_data_range_iter(real_pred_df['pred'], extent_left=True):
+            if data == 0:
+                p = plt.axvspan(x0, x1, ymin=0.66, ymax=1, facecolor='cornflowerblue', alpha=0.5)
+            elif data == 1:
+                p = plt.axvspan(x0, x1, ymin=0.66, ymax=1, facecolor='lightcoral', alpha=0.5)
+            elif data == 2:
+                p = plt.axvspan(x0, x1, ymin=0.66, ymax=1, facecolor='lightseagreen', alpha=0.5)
+
+        for x0, x1, data in get_data_range_iter(real_pred_df['real'], extent_left=True):
+            if data == 0:
+                p = plt.axvspan(x0, x1, ymin=0, ymax=0.33, facecolor='cornflowerblue', alpha=0.5)
+            elif data == 1:
+                p = plt.axvspan(x0, x1, ymin=0, ymax=0.33, facecolor='lightcoral', alpha=0.5)
+            elif data == 2:
+                p = plt.axvspan(x0, x1, ymin=0, ymax=0.33, facecolor='lightseagreen', alpha=0.5)
+
+        is_fit_s = real_pred_df.apply(lambda x: x['real'] if x['real'] == x['pred'] else -2, axis=1)
+        for x0, x1, data in get_data_range_iter(is_fit_s, extent_left=True):
+            if data == 0:
+                p = plt.axvspan(x0, x1, ymin=0.33, ymax=0.66, facecolor='cornflowerblue', alpha=0.5)
+            elif data == 1:
+                p = plt.axvspan(x0, x1, ymin=0.33, ymax=0.66, facecolor='lightcoral', alpha=0.5)
+            elif data == 2:
+                p = plt.axvspan(x0, x1, ymin=0.33, ymax=0.66, facecolor='lightseagreen', alpha=0.5)
+            else:
+                p = plt.axvspan(x0, x1, ymin=0.33, ymax=0.66, facecolor='red', alpha=0.5)
 
     ax2 = ax.twinx()
     l2 = ax2.plot(close_df, label='md')
@@ -719,24 +778,50 @@ def _test_plot_accuracy(single_figure=True):
     date_index = pd.DatetimeIndex(date_arr)
     close_df = pd.DataFrame({'close': np.sin(np.linspace(0, 10, 100))}, index=date_index)
     accuracy_df = pd.DataFrame({'acc': np.cos(np.linspace(0, 10, 100))}, index=date_index)
+    real_pred_df = pd.DataFrame({
+        'pred': close_df.apply(lambda x: 1 if x.iloc[0] > 0.3 else 2 if x.iloc[0] < -0.3 else 0, axis=1),
+        'real': accuracy_df.apply(lambda x: 1 if x.iloc[0] > 0.3 else 2 if x.iloc[0] < -0.3 else 0, axis=1),
+    })
     split_point_list = np.random.randint(len(date_arr), size=10)
     split_point_list.sort()
     split_point_list = date_arr[split_point_list]
     base_line_list = [0.3, 0.6]
     if single_figure:
+        enable_kwargs = dict(enable_save_plot=False, enable_show_plot=False, do_clr=False, stg_run_id=6)
         import matplotlib.pyplot as plt
         fig = plt.figure(figsize=(8, 12))
         ax = fig.add_subplot(211)
-        enable_kwargs = dict(enable_save_plot=False, enable_show_plot=False, do_clr=False, stg_run_id=6)
-        plot_accuracy(accuracy_df, close_df, ax=ax, name='测试使用', split_point_list=split_point_list,
+        plot_accuracy(accuracy_df, close_df, ax=ax, name='测试使用',  split_point_list=split_point_list,
                       base_line_list=base_line_list, **enable_kwargs)
         ax = fig.add_subplot(212)
-        plot_accuracy(accuracy_df, close_df, ax=ax, name='测试使用2', split_point_list=split_point_list,
-                      base_line_list=base_line_list, **enable_kwargs)
+        plot_accuracy(accuracy_df, close_df, ax=ax, name='测试使用',
+                      base_line_list=base_line_list, real_pred_df=real_pred_df, **enable_kwargs)
         plot_or_show(enable_show_plot=True, enable_save_plot=True, file_name='测试使用all in one', stg_run_id=6)
     else:
         plot_accuracy(accuracy_df, close_df, name='测试使用2', split_point_list=split_point_list,
                       base_line_list=base_line_list, stg_run_id=6)
+
+
+def get_data_range_iter(s: pd.Series, extent_left=False):
+    """
+    从序列数据中迭代输出每一段相同数据的index范围
+    :param s:
+    :param extent_left: 左边界与上一个迭代的右边界使用同一个值
+    :return:
+    """
+    is_new_range, idx_from, idx_to, data = True, s.index[0], None, None
+    for (idx_to, data), (_, d2) in zip(s.items(), s.shift(-1).items()):
+        if is_new_range and not extent_left:
+            idx_from = idx_to
+            is_new_range = False
+        if data != d2 and not(np.isnan(data) and np.isnan(d2)):
+            yield idx_from, idx_to, data
+            if extent_left:
+                idx_from = idx_to
+            is_new_range = True
+    else:
+        if not is_new_range:
+            yield idx_from, idx_to, data
 
 
 if __name__ == "__main__":
