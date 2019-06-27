@@ -184,8 +184,8 @@ checkpoint
 *.tfl.*
 
 # tmp files
+ibats_common/example/*.py
 ibats_common/example/module_data/*
-ibats_common/example/tflearn/*
 ibats_common/analysis/report/*
 config.py.bak
 *.docx
