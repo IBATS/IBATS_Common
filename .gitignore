@@ -61,6 +61,7 @@ coverage.xml
 
 # Django stuff:
 *.log
+*.log.?
 .static_storage/
 .media/
 local_settings.py
@@ -174,3 +175,17 @@ crashlytics.properties
 crashlytics-build.properties
 fabric.properties
 *.bat
+
+# TensorFlow Example Files
+*-ubyte.gz
+events.out.tfevents.*
+*.ckpt.*
+checkpoint
+*.tfl.*
+
+# tmp files
+ibats_common/example/*.py
+ibats_common/example/module_data/*
+ibats_common/analysis/report/*
+config.py.bak
+*.docx

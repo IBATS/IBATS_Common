@@ -5,7 +5,7 @@ Created on 2017/10/3
 """
 import logging
 from ibats_common.common import RunMode, ExchangeName
-from ibats_common.trade import trader_agent, BacktestTraderAgentBase
+from ibats_common.trade import trader_agent, BacktestTraderAgentBase, FixPercentBacktestTraderAgentBase
 from enum import Enum
 
 logger = logging.getLogger()
@@ -25,6 +25,16 @@ class OrderType(Enum):
 
 @trader_agent(RunMode.Backtest, ExchangeName.LocalFile, is_default=False)
 class BacktestTraderAgent(BacktestTraderAgentBase):
+    """
+    供调用模拟交易接口使用
+    """
+
+    def __init__(self, stg_run_id, **kwargs):
+        super().__init__(stg_run_id, **kwargs)
+
+
+@trader_agent(RunMode.Backtest_FixPercent, ExchangeName.LocalFile, is_default=False)
+class FixPercentBacktestTraderAgent(FixPercentBacktestTraderAgentBase):
     """
     供调用模拟交易接口使用
     """

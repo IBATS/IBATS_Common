@@ -29,10 +29,10 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
 
     @classmethod
     def setUpClass(cls):
-        from ibats_common.config import update_db_config, ConfigBase
-        update_db_config({
-            ConfigBase.DB_SCHEMA_IBATS: 'mysql://mg:Dcba1234@localhost/' + ConfigBase.DB_SCHEMA_IBATS,
-        })
+        # from ibats_common.config import update_db_config, ConfigBase
+        # update_db_config({
+        #     ConfigBase.DB_SCHEMA_IBATS: 'mysql://mg:Dcba1234@localhost/' + ConfigBase.DB_SCHEMA_IBATS,
+        # })
         # 必须使用@classmethod 装饰器,所有test运行前运行一次
         init()
         global engine_ibats
@@ -67,7 +67,7 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
         order = OrderDetail(stg_run_id, trade_agent_key=ExchangeName.DataIntegration,
                             order_dt=datetime.now(), order_date=date.today(), order_time=datetime.now().time(),
                             order_millisec=99, direction=int(Direction.Long), action=int(Action.Open), symbol='RB1801',
-                            order_price=1000.0, order_vol=20
+                            order_price=1000.0, order_vol=20, calc_mode=CalcMode.Margin,
                             )
         with with_db_session(engine_ibats, expire_on_commit=False) as session:
             session.add(order)
@@ -227,7 +227,7 @@ class InitTest(unittest.TestCase):  # 继承unittest.TestCase
             close_profit=status.close_profit, position_profit=status.position_profit,
             floating_pl_cum=status.floating_pl_cum,
             commission_tot=status.commission_tot, cash_init=status.cash_init,
-            cashflow=status.cashflow,
+            cashflow_daily=status.cashflow_daily,
             cashflow_cum=status.cashflow_cum,
             rr=status.rr,
         )

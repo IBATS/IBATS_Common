@@ -18,6 +18,7 @@ class ConfigBase:
     }
 
     BACKTEST_UPDATE_OR_INSERT_PER_ACTION = False
+    ORM_UPDATE_OR_INSERT_PER_ACTION = True
     UPDATE_STG_RUN_STATUS_DETAIL_PERIOD = 1  # 1 每一个最小行情周期，2 每天
 
     # evn configuration

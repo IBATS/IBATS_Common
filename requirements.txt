@@ -1,9 +1,15 @@
 wheel>=0.31.1
 twine>=1.13.0
-pandas>=0.23.0
+numpy>=1.16.2
+pandas>=0.24.0
 redis>=2.10.6
 SQLAlchemy>=1.2.8
 mysqlclient
 xlrd>=1.1.0
 pytest>=4.3.0
-IBATS-Utils
+ibats_utils>=1.1.16
+matplotlib>=3.0.1
+seaborn>=0.9
+ffn>=0.3.4
+python-docx>=0.8.10
+keras>=2.2.4

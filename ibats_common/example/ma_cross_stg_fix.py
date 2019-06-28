@@ -5,7 +5,7 @@
 @Time    : 2018/11/7 10:42
 @File    : ma_cross_stg.py
 @contact : mmmaaaggg@163.com
-@desc    : 简单的 MA5、MA10金叉、死叉多空策略，仅供测试及演示使用
+@desc    : 简单的 MA5、MA10金叉、死叉多空策略，仅供测试及演示使用（回测模式：固定仓位比例）
 """
 from ibats_common.common import BacktestTradeMode, ContextKey, Direction, CalcMode
 from ibats_common.strategy import StgBase
@@ -68,28 +68,27 @@ def _test_use(is_plot):
     from ibats_common import module_root_path
     import os
     # 参数设置
-    run_mode = RunMode.Backtest
-    trade_mode = BacktestTradeMode.Order_2_Deal
+    run_mode = RunMode.Backtest_FixPercent
     calc_mode = CalcMode.Normal
+    strategy_params = {'unit': 1}
     md_agent_params_list = [{
         'md_period': PeriodType.Min1,
         'instrument_id_list': ['RB'],
         'datetime_key': 'trade_date',
         'init_md_date_from': '1995-1-1',  # 行情初始化加载历史数据，供策略分析预加载使用
         'init_md_date_to': '2010-1-1',
+        # 'C:\GitHub\IBATS_Common\ibats_common\example\ru_price2.csv'
         'file_path': os.path.abspath(os.path.join(module_root_path, 'example', 'data', 'RB.csv')),
         'symbol_key': 'instrument_type',
     }]
     if run_mode == RunMode.Realtime:
-        strategy_params = {'unit': 100}
         trade_agent_params = {
         }
         strategy_handler_param = {
         }
     elif run_mode == RunMode.Backtest:
-        strategy_params = {'unit': 100}
         trade_agent_params = {
-            'trade_mode': trade_mode,
+            'trade_mode': BacktestTradeMode.Order_2_Deal,
             'init_cash': 1000000,
             "calc_mode": calc_mode,
         }
@@ -99,9 +98,8 @@ def _test_use(is_plot):
         }
     else:
         # RunMode.Backtest_FixPercent
-        strategy_params = {'unit': 1}
         trade_agent_params = {
-            'trade_mode': trade_mode,
+            'trade_mode': BacktestTradeMode.Order_2_Deal,
             "calc_mode": calc_mode,
         }
         strategy_handler_param = {

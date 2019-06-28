@@ -9,25 +9,26 @@
 """
 import json
 import logging
-from collections import defaultdict
-from threading import Thread
-import warnings
-from queue import Empty
 import time
-from datetime import date, datetime
+import warnings
 from abc import ABC
+from collections import defaultdict
+from datetime import date, datetime
+from functools import lru_cache
+from queue import Empty
+from threading import Thread
 
+from ibats_utils.db import with_db_session
+from ibats_utils.mess import try_2_date, load_class, get_module_path
 from sqlalchemy.exc import SQLAlchemyError
 
 from ibats_common.backend import engines
 from ibats_common.backend.orm import StgRunInfo, StgRunStatusDetail
-from ibats_common.common import ExchangeName, RunMode, ContextKey
+from ibats_common.common import ExchangeName, RunMode, ContextKey, CalcMode
+from ibats_common.config import config
 from ibats_common.md import md_agent_factory
 from ibats_common.strategy import StgBase
-from ibats_utils.db import with_db_session
-from ibats_utils.mess import try_2_date
 from ibats_common.trade import trader_agent_factory
-from ibats_common.config import config
 
 engine_ibats = engines.engine_ibats
 logger = logging.getLogger(__name__)
@@ -179,9 +180,9 @@ class StgHandlerRealtime(StgHandlerBase):
 
 class StgHandlerBacktest(StgHandlerBase):
 
-    def __init__(self, stg_run_id, stg_base: StgBase, md_key_period_agent_dic, date_from, date_to,
+    def __init__(self, stg_run_id, stg_base: StgBase, run_mode, md_key_period_agent_dic, date_from, date_to,
                  md_td_agent_key_list_map=None, **kwargs):
-        super().__init__(stg_run_id=stg_run_id, stg_base=stg_base, run_mode=RunMode.Backtest,
+        super().__init__(stg_run_id=stg_run_id, stg_base=stg_base, run_mode=run_mode,
                          md_key_period_agent_dic=md_key_period_agent_dic)
         # 设置回测时间区间
         self.date_from = try_2_date(date_from)
@@ -218,6 +219,24 @@ class StgHandlerBacktest(StgHandlerBase):
                     self.stg_base.trade_agent_dic[trade_agent_key].set_close_key(md_agent.close_key)
 
                 break
+
+    def get_periods_history_iterator(self) -> dict:
+        """
+        获取各个周期的 历史数据的迭代器
+        :return:
+        """
+        md_agent_key_cor_func_dic = {}
+        # 每一个 md_agent 抓取第一条记录，放入 md_list_sorted_by_datetime_tag 并按 datetime_tag 排序
+        for md_agent_key, period_agent_dic in self.md_key_period_agent_dic.items():
+            for period, md_agent in period_agent_dic.items():
+                cor_func = md_agent.cor_load_history_record(self.date_from, self.date_to, load_md_count=0)
+                meta_dic = {
+                    'symbol_key': md_agent.symbol_key,
+                    'close_key': md_agent.close_key,
+                    'timestamp_key': md_agent.timestamp_key
+                }
+                md_agent_key_cor_func_dic[(md_agent_key, period)] = (cor_func, meta_dic)
+        return md_agent_key_cor_func_dic
 
     def load_history_record(self):
         """
@@ -262,6 +281,19 @@ class StgHandlerBacktest(StgHandlerBase):
 
         self.logger.info('全部数据推送完成， 累计推送 %d 条数据', data_count)
 
+    def _update_stg_run_status_detail(self, trade_agent_status_detail_list):
+        if trade_agent_status_detail_list is not None and len(trade_agent_status_detail_list) > 0:
+            if len(self.stg_run_status_detail_list) == 0:
+                detail_last = StgRunStatusDetail.create_t_1(
+                    self.stg_run_id, trade_agent_status_detail_list)
+                self.stg_run_status_detail_list.append(detail_last)
+            else:
+                detail_last = self.stg_run_status_detail_list[-1]
+
+            detail = detail_last.update_by_trade_agent_status_detail_list(
+                trade_agent_status_detail_list)
+            self.stg_run_status_detail_list.append(detail)
+
     def run(self):
         """
         执行回测
@@ -286,33 +318,57 @@ class StgHandlerBacktest(StgHandlerBase):
             for data_count, (datetime_tag, md_agent_key, period, num, md_s) in enumerate(
                     self.load_history_record(), start=1):
                 md = md_s.to_dict()
+                # self.logger.debug("md: %s", md)
                 # 在回测阶段，需要对 trade_agent 设置最新的md数据，一遍交易接口确认相应的k线日期
                 for trade_agent_key in self.md_td_agent_key_list_map[md_agent_key]:
+                    if trade_agent_key == ExchangeName.Default:
+                        continue
                     self.stg_base.trade_agent_dic[trade_agent_key].set_curr_md(period, md)
 
                 # 执行策略相应的事件响应函数
                 self.stg_base.on_period_md_handler(period, md, md_agent_key)
                 # 根据最新的 md 及 持仓信息 更新 账户信息
                 for trade_agent_key in self.md_td_agent_key_list_map[md_agent_key]:
+                    if trade_agent_key == ExchangeName.Default:
+                        continue
                     self.stg_base.trade_agent_dic[trade_agent_key].update_trade_agent_status_detail()
 
-                if config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 1 or (
-                        config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 2 and datetime_tag_last is not None and
-                        datetime_tag_last.date() != datetime_tag.date()):
-                    trade_agent_status_detail_list = [trade_agent.trade_agent_status_detail_latest
-                                                      for trade_agent in self.stg_base.trade_agent_dic.values()
-                                                      if trade_agent.trade_agent_status_detail_latest is not None]
-                    detail = StgRunStatusDetail.create_by_trade_agent_status_detail_list(
-                        self.stg_run_id, trade_agent_status_detail_list)
-                    self.stg_run_status_detail_list.append(detail)
+                # 以下两种情况开始计算 StgRunStatusDetail：
+                # 1）config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 1 时，每一次状态更新均重新计算
+                # 2）每一个自然日开始
+                # 首次运行的时候，回触发一次初始化，先生成一条 T-1日的状态记录
+                if config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 1:
+                    trade_agent_status_detail_list = [
+                        trade_agent.trade_agent_status_detail_latest
+                        for key, trade_agent in self.stg_base.trade_agent_dic.items()
+                        if key != ExchangeName.Default and trade_agent.trade_agent_status_detail_latest is not None]
+
+                elif (config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 2
+                      and datetime_tag_last is not None
+                      and datetime_tag_last.date() != datetime_tag.date()):
+                    # TODO: 这里应该是找前一交易日的最后一个 trade_agent_status_detail
+                    trade_agent_status_detail_list = [
+                        trade_agent.trade_agent_status_detail_latest
+                        for key, trade_agent in self.stg_base.trade_agent_dic.items()
+                        if key != ExchangeName.Default and trade_agent.trade_agent_status_detail_latest is not None]
+                else:
+                    trade_agent_status_detail_list = None
+
+                self._update_stg_run_status_detail(trade_agent_status_detail_list)
 
                 datetime_tag_last = datetime_tag
 
-            # 循环结束
             self.logger.info('执行回测任务【%s - %s】完成，处理数据 %d 条', self.date_from, self.date_to, data_count)
         finally:
-            self.is_working = False
+            if config.UPDATE_STG_RUN_STATUS_DETAIL_PERIOD == 2:
+                trade_agent_status_detail_list = [
+                    trade_agent.trade_agent_status_detail_latest
+                    for trade_agent in self.stg_base.trade_agent_dic.values()
+                    if trade_agent is not None]
+                self._update_stg_run_status_detail(trade_agent_status_detail_list)
+
             self.stg_run_ending()
+            self.is_working = False
 
 
 def strategy_handler_factory(
@@ -348,7 +404,8 @@ def strategy_handler_factory(
 
 def strategy_handler_factory_multi_exchange(
         stg_class: type(StgBase), strategy_params, md_agent_params_list, run_mode: RunMode,
-        trade_agent_params_list: list, strategy_handler_param: dict) -> StgHandlerBase:
+        trade_agent_params_list: list, strategy_handler_param: dict, add_2_db=True, stg_run_id=None,
+        is_4_shown=False) -> StgHandlerBase:
     """
     多交易所策略处理具备
     建立策略对象
@@ -361,9 +418,14 @@ def strategy_handler_factory_multi_exchange(
     :param run_mode: 运行模式 RunMode.Realtime  或 RunMode.Backtest
     :param trade_agent_params_list: 运行参数，回测模式下：运行起止时间，实时行情下：加载定时器等设置
     :param strategy_handler_param: strategy_handler 运行参数
+    :param add_2_db: 默认情况下，自动将 stg_run_info 添加到数据库
+    :param stg_run_id: 仅在 add_2_db == False 时需要添加 stg_run_id
+    :param is_4_shown: 仅供回溯展示需要，不加载 strategy_class 实例及其相关方法
     :return: 策略执行对象实力
     """
-    stg_run_info = StgRunInfo(stg_name=stg_class.__name__,  # '{.__name__}'.format(stg_class)
+    stg_module = get_module_path(stg_class)
+    stg_run_info = StgRunInfo(stg_name=stg_class.__name__,  # 例如："MACrossStg"
+                              stg_module=stg_module,  # 例如："ibats_common.example.ma_cross_stg"
                               dt_from=datetime.now(),
                               # dt_to=None,
                               stg_params=json.dumps(strategy_params),
@@ -372,18 +434,27 @@ def strategy_handler_factory_multi_exchange(
                               trade_agent_params_list=json.dumps(trade_agent_params_list),
                               strategy_handler_param=json.dumps(strategy_handler_param),
                               )
-    with with_db_session(engine_ibats) as session:
-        session.add(stg_run_info)
-        session.commit()
-        stg_run_id = stg_run_info.stg_run_id
+    if add_2_db:
+        with with_db_session(engine_ibats) as session:
+            session.add(stg_run_info)
+            session.commit()
+            stg_run_id = stg_run_info.stg_run_id
+
     # 初始化策略实体，传入参数
-    stg_base = stg_class(**strategy_params)
+    if is_4_shown:
+        stg_base = StgBase(**strategy_params)
+    else:
+        stg_base = stg_class(**strategy_params)
+    # 设置相关属性
     stg_base.stg_run_id = stg_run_id
     logger.debug('strategy_params: %s', strategy_params)
     # 设置策略交易接口 trade_agent，这里不适用参数传递的方式而使用属性赋值，
     # 因为stg_base子类被继承后，参数主要用于设置策略所需各种参数使用
     for num, params in enumerate(trade_agent_params_list, start=1):
         logger.debug('%d) run_mode=%s, stg_run_id=%d, trade_agent_params: %s', num, run_mode.name, stg_run_id, params)
+        if run_mode == RunMode.Backtest_FixPercent and params['calc_mode'] == CalcMode.Margin:
+            raise ValueError(f'{num}) {RunMode.Backtest_FixPercent.name} 模式下，trade_agent 不支持 CalcMode.Margin 模式，'
+                             f'请切换到 CalcMode.Normal 模式')
         # 默认使用交易所名称，若同一交易所，多个账户交易，则可以单独指定名称
         agent_name = params.setdefault('agent_name', params['exchange_name'])
         trade_agent = trader_agent_factory(run_mode, stg_run_id, **params)
@@ -424,7 +495,8 @@ def strategy_handler_factory_multi_exchange(
         stg_base.load_md_period_df(period, md_df, context)
         logger.debug('加载 %s 历史数据 %s 条', period, 'None' if md_df is None else str(md_df.shape[0]))
 
-    # 设置 md_td_agent_key_list_map
+    # 设置 md_td_agent_key_list_map 用于标识 md_agent_key 与 trade_agent_key 之间的对应关系
+    # md_agent_key 与 trade_agent_key 是 1对多 关系
     if 'md_td_agent_key_list_map' in strategy_handler_param:
         md_td_agent_key_list_map = strategy_handler_param['md_td_agent_key_list_map']
     else:
@@ -442,23 +514,64 @@ def strategy_handler_factory_multi_exchange(
             td_agent_key_list = list(set(md_td_agent_key_list_map[md_agent_key]))
             md_td_agent_key_list_map[md_agent_key] = td_agent_key_list
         strategy_handler_param['md_td_agent_key_list_map'] = md_td_agent_key_list_map
+    # TODO: 可以增加一个合法性检查，检查是否 md_agent_key 与 trade_agent_key 是 1对多 关系
     logger.debug('md_td_agent_key_list_map: %s', md_td_agent_key_list_map)
 
     # 为 stg_base 设置 md_td_agent_key_list_map
     stg_base.set_md_td_agent_key_list_map(md_td_agent_key_list_map)
 
     # 初始化 StgHandlerBase 实例
-    logger.debug("stg_run_id=%d, strategy_handler_param: %s", stg_run_id, strategy_handler_param)
+    logger.debug("stg_run_id=%d,\n\tstrategy_handler_param: %s", stg_run_id, strategy_handler_param)
     if run_mode == RunMode.Realtime:
         stg_handler = StgHandlerRealtime(
             stg_run_id=stg_run_id, stg_base=stg_base, md_key_period_agent_dic=md_key_period_agent_dic,
             **strategy_handler_param)
-    elif run_mode == RunMode.Backtest:
+    elif run_mode in (RunMode.Backtest, RunMode.Backtest_FixPercent):
         stg_handler = StgHandlerBacktest(
-            stg_run_id=stg_run_id, stg_base=stg_base, md_key_period_agent_dic=md_key_period_agent_dic,
+            stg_run_id=stg_run_id, stg_base=stg_base, run_mode=run_mode,
+            md_key_period_agent_dic=md_key_period_agent_dic,
             **strategy_handler_param)
     else:
         raise ValueError('run_mode %d error' % run_mode)
 
     logger.debug('初始化 %r 完成', stg_handler)
+    return stg_handler
+
+
+@lru_cache()
+def strategy_handler_loader(stg_run_id, is_4_shown=True) -> StgHandlerBase:
+    """
+    根据 stg_run_id 从数据库中加载相应参数，动态加载策略类，实例化 stg_handler 类
+    :param stg_run_id:
+    :param is_4_shown: 仅供回溯展示需要，不加载 strategy_class 实例及其相关方法
+    :return:
+    """
+    with with_db_session(engine_ibats) as session:
+        stg_run_info = session.query(StgRunInfo).filter(StgRunInfo.stg_run_id == stg_run_id).first()
+    if stg_run_info is None:
+        raise KeyError(f'stg_run_id={stg_run_id} 无效，数据库中没有相关数据')
+    # 2019-05-14 废弃参数 module_name_replacement_if_main
+    # 因版本升级该问题以及被解决，因此该参数已经无用
+    # if module_name_replacement_if_main is not None and stg_run_info.stg_module == '__main__':
+    #     # stg_run_info.stg_module = "ibats_common.example.ma_cross_stg"
+    #     stg_run_info.stg_module = module_name_replacement_if_main
+
+    stg_class = load_class(stg_run_info.stg_module, stg_run_info.stg_name)
+
+    strategy_params = json.loads(stg_run_info.stg_params)
+    md_agent_params_list = json.loads(stg_run_info.md_agent_params_list)
+    run_mode = RunMode(stg_run_info.run_mode)
+    trade_agent_params_list = json.loads(stg_run_info.trade_agent_params_list)
+    strategy_handler_param = json.loads(stg_run_info.strategy_handler_param)
+    stg_handler = strategy_handler_factory_multi_exchange(
+        stg_class=stg_class,
+        strategy_params=strategy_params,
+        md_agent_params_list=md_agent_params_list,
+        run_mode=run_mode,
+        trade_agent_params_list=trade_agent_params_list,
+        strategy_handler_param=strategy_handler_param,
+        add_2_db=False,
+        stg_run_id=stg_run_info.stg_run_id,
+        is_4_shown=is_4_shown,
+    )
     return stg_handler
