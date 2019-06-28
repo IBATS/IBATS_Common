@@ -571,7 +571,7 @@ def show_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=Non
                       split_point_list=split_point_list, **enable_kwargs)
 
     # 展示图片
-    file_name = f"accuracy [{date_from_str}-{date_to_str}]"
+    file_name = f"accuracy [{date_from_str}-{date_to_str}].png"
     file_path = plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=file_name)
     return file_path
 
@@ -753,7 +753,8 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
 
     datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S_%f')
     file_name = f"{datetime_str}" if name is None else f"{name}_{datetime_str}"
-    plot_or_show(file_name=file_name, **enable_kwargs)
+    file_path = plot_or_show(file_name=file_name, **enable_kwargs)
+    return file_path
 
 
 @lru_cache()

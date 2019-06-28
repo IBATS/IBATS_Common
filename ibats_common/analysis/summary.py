@@ -12,19 +12,19 @@ import json
 import logging
 import os
 from collections import defaultdict
-import ffn
 
 import docx
+import ffn
 import numpy as np
 import pandas as pd
 from docx.shared import Pt
 from docx.shared import RGBColor
-from ibats_utils.mess import open_file_with_system_app, date_2_str, datetime_2_str, split_chunk
+from ibats_utils.mess import open_file_with_system_app, date_2_str, datetime_2_str, split_chunk, iter_2_range
 from scipy.stats import anderson, normaltest
 
 from ibats_common.analysis import get_report_folder_path
 from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix, plot_corr, \
-    clean_cache, hist_n_rr, label_distribution
+    clean_cache, hist_n_rr, label_distribution, show_accuracy
 from ibats_common.analysis.plot_db import get_rr_with_md, show_trade, show_cash_and_margin
 from ibats_common.backend.mess import get_stg_run_info
 from ibats_common.common import RunMode, CalcMode
@@ -490,7 +490,7 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
 
     # 生成 docx 文档将所需变量
     heading_title = f'策略分析报告[{stg_run_id}] ' \
-                    f'{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days)'
+        f'{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days)'
 
     # 生成 docx 文件
     document = docx.Document()
@@ -561,7 +561,7 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
         else:
             folder_path, file_name = os.path.split(doc_file_path)
     else:
-        folder_path, file_name = get_report_folder_path(), ''
+        folder_path, file_name = get_report_folder_path(stg_run_id), ''
 
     if folder_path != '' and not os.path.exists(folder_path):
         os.makedirs(folder_path)
@@ -574,8 +574,8 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
 
         run_mode_str = run_mode.name + " "
         file_name = f"{stg_run_id} {run_mode_str}{calc_mode_str}" \
-                    f"{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days) " \
-                    f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
+            f"{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days) " \
+            f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
         file_path = os.path.join(folder_path, file_name)
     else:
         file_path = doc_file_path
@@ -765,8 +765,8 @@ def summary_md_2_docx(md_df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.
 
     # 保存文件
     file_name = f"MD{' ' if name is None else ' ' + name} " \
-                f"{date_2_str(min(md_df.index))} - {date_2_str(max(md_df.index))} " \
-                f"({md_df.shape[0]} days) {datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
+        f"{date_2_str(min(md_df.index))} - {date_2_str(max(md_df.index))} " \
+        f"({md_df.shape[0]} days) {datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
     file_path = os.path.join(get_report_folder_path(), file_name)
     document.save(file_path)
     if enable_clean_cache:
@@ -820,9 +820,110 @@ def _test_summary_md_2_docx(auto_open_file=True):
         open_file_with_system_app(file_path)
 
 
+def summary_release_2_docx(title, img_meta_dic_list, stg_run_id=None, enable_clean_cache=True):
+    """
+    生成 预测成功率趋势报告
+    :param title:
+    :param img_meta_dic_list:
+    :param stg_run_id:
+    :param enable_clean_cache:
+    :return:
+    """
+    logger.debug('生成报告开始')
+    # 生成 docx 文件
+    document = docx.Document()
+    # 设置默认字体
+    document.styles['Normal'].font.name = '微软雅黑'
+    document.styles['Normal']._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
+    # 创建自定义段落样式(第一个参数为样式名, 第二个参数为样式类型, 1为段落样式, 2为字符样式, 3为表格样式)
+    UserStyle1 = document.styles.add_style('UserStyle1', 1)
+    # 设置字体尺寸
+    UserStyle1.font.size = docx.shared.Pt(40)
+    # 设置字体颜色
+    UserStyle1.font.color.rgb = docx.shared.RGBColor(0xff, 0xde, 0x00)
+    # 居中文本
+    UserStyle1.paragraph_format.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+    # 设置中文字体
+    UserStyle1.font.name = '微软雅黑'
+    UserStyle1._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
+
+    # 文件内容
+    document.add_heading(title, 0).alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+    document.add_paragraph('')
+    document.add_paragraph('')
+    heading_size = 1
+    for num, info_dic in enumerate(img_meta_dic_list, start=1):
+        trade_date_last_train = info_dic['trade_date_last_train']
+        trade_date_end = info_dic['trade_date_end']
+        document.add_heading(
+            f"{num}、{date_2_str(trade_date_last_train)} - {date_2_str(trade_date_end)}", heading_size)
+        split_point_list = info_dic['split_point_list']
+        if split_point_list is None:
+            p = document.add_paragraph(f"{num}.1） 日期区间段1个:\n")
+            p.add_run(f'\t1) {date_2_str(trade_date_last_train)} ~ {date_2_str(trade_date_end)}\n')
+        else:
+            p = document.add_paragraph(f"{num}.1） 日期区间段{len(split_point_list) - 1}个:\n")
+            for num2, (point1, point2) in enumerate(
+                    iter_2_range(split_point_list, has_left_outer=False, has_right_outer=False), start=1):
+                p.add_run(f'\t{num2}) {date_2_str(point1)} ~ {date_2_str(point2)}\n')
+
+        document.add_paragraph(f"{num}.2） 模型路径：\n\t{info_dic['module_file_path']}")
+        document.add_paragraph(f"{num}.3） 取样状态(random_state)：\n\t{info_dic['predict_test_random_state']}")
+        document.add_paragraph(f"{num}.4） 展示数据长度：\n\t{info_dic['in_range_count']}")
+        document.add_paragraph(f"{num}.5） 预测准确率趋势图：")
+        document.add_picture(info_dic['img_file_path'])
+
+    file_name = f"{title}.docx"
+    file_path = os.path.join(get_report_folder_path(stg_run_id), file_name)
+    document.save(file_path)
+    if enable_clean_cache:
+        clean_cache()
+    logger.debug('生成报告结束')
+    return file_path
+
+
+def _test_summary_release_2_docx():
+    real_ys, pred_ys = np.random.randint(1, 3, size=100), np.random.randint(1, 3, size=100)
+    date_arr = pd.date_range(pd.to_datetime('2018-01-01'),
+                             pd.to_datetime('2018-01-01') + pd.Timedelta(days=99))
+    date_index = pd.DatetimeIndex(date_arr)
+    close_df = pd.DataFrame({'close': np.sin(np.linspace(0, 10, 100))}, index=date_index)
+
+    split_point_list = np.concatenate((np.random.randint(1, len(date_arr) - 1, size=10), [1, len(date_arr) - 1]))
+    split_point_list.sort()
+    split_point_list = date_arr[split_point_list]
+    base_line_list = [0.3, 0.6]
+    img_meta_dic_list = []
+    img_file_path = show_accuracy(real_ys, pred_ys, close_df, split_point_list, base_line_list, show_moving_avg=True)
+    img_meta_dic_list.append({
+        'img_file_path': img_file_path,
+        'trade_date_last_train': pd.to_datetime('2018-01-01'),
+        'module_file_path':
+            "/home/mg/github/IBATS_Common/ibats_common/tf_saves_2019-06-25_08_13_36/model_tfls/2012-12-31",
+        'predict_test_random_state': 1,
+        'split_point_list': split_point_list,
+        'in_range_count': close_df.shape[0],
+        'trade_date_end': pd.to_datetime('2018-01-01') + pd.Timedelta(days=99),
+    })
+    img_file_path = show_accuracy(real_ys, pred_ys, close_df, split_point_list, base_line_list, show_moving_avg=False)
+    img_meta_dic_list.append({
+        'img_file_path': img_file_path,
+        'trade_date_last_train': pd.to_datetime('2018-01-01'),
+        'module_file_path':
+            "/home/mg/github/IBATS_Common/ibats_common/tf_saves_2019-06-25_08_13_36/model_tfls/2012-12-31",
+        'predict_test_random_state': 1,
+        'split_point_list': split_point_list,
+        'in_range_count': close_df.shape[0],
+        'trade_date_end': pd.to_datetime('2018-01-01') + pd.Timedelta(days=99),
+    })
+    file_path = summary_release_2_docx('test_only', img_meta_dic_list)
+    open_file_with_system_app(file_path)
+
+
 if __name__ == "__main__":
     pass
     # _test_summary_md()
     # _test_summary_stg()
-    _test_summary_stg_2_docx()
+    # _test_summary_stg_2_docx()
     # _test_summary_md_2_docx()
+    _test_summary_release_2_docx()
