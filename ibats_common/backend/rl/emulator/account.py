@@ -9,12 +9,12 @@
 """
 import numpy as np
 import pandas as pd
-from ibats_common.backend.rl import QuotesMarket
+from ibats_common.backend.rl.emulator.market import QuotesMarket
 
 
 class Account(object):
-    def __init__(self):
-        self.A = QuotesMarket()
+    def __init__(self, md_df, data_factors):
+        self.A = QuotesMarket(md_df, data_factors)
 
     def reset(self):
         self.buffer_reward = []
@@ -38,6 +38,11 @@ class Account(object):
         df.index = self.A.data_close.index[:length]
         df.columns = ["value", "reward", "cash", "action"]
         return df
+
+
+def _test_account():
+    env = Account(data_quotes, data_fac)
+
 
 if __name__ == "__main__":
     pass

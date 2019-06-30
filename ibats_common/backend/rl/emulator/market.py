@@ -7,22 +7,20 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
-import numpy as np
-import pandas as pd
-from ibats_common.backend.rl.emulator.env import high2low, fix_data, get_factors
 
 
 class QuotesMarket(object):
-    def __init__(self, md_df):
+    def __init__(self, md_df, data_factors):
         self.data_close = md_df['close']
         self.data_open = md_df['open']
-        self.data_observation = DATA_FAC
+        self.data_observation = data_factors
         self.action_space = ['long', 'short', 'close']
-        self.free = 1e-4
+        self.free = 3e-3  # 千三手续费
+        self.max_step_count = md_df.shape[0] - 1
 
     def reset(self):
         self.step_counter = 0
-        self.cash = 1e5
+        self.cash = 1e7
         self.position = 0
         self.total_value = self.cash + self.position
         self.flags = 0
@@ -89,16 +87,17 @@ class QuotesMarket(object):
         else:
             raise ValueError("action should be elements of ['long', 'short', 'close']")
 
-        position = self.data_close[self.step_counter] * 10 * self.flags
+        price = self.data_close[self.step_counter]
+        position = price * 10 * self.flags
         reward = self.cash + position - self.total_value
         self.step_counter += 1
         self.total_value = position + self.cash
         next_observation = self.data_observation[self.step_counter]
 
         done = False
-        if self.total_value < 4000:
+        if self.total_value < price:
             done = True
-        if self.step_counter > 1203:
+        if self.step_counter >= self.max_step_count:
             done = True
 
         return next_observation, reward, done
