@@ -189,3 +189,4 @@ ibats_common/example/module_data/*
 ibats_common/analysis/report/*
 config.py.bak
 *.docx
+ibats_common/tf_saves_*
