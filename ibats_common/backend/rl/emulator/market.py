@@ -130,11 +130,12 @@ def _test_quote_market():
     factors_df = get_factor(md_df, dropna=True)
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
     md_df = md_df.loc[df_index, :]
+    # 建立 QuotesMarket
     qm = QuotesMarket(md_df=md_df[['close', 'open']], data_factors=data_arr_batch)
-    next_observation, reward, done = qm.reset()
+    next_observation = qm.reset()
     assert next_observation.shape[0] == n_step
-    assert done == False
     next_observation, reward, done = qm.step(0)
+    assert not done
     next_observation, reward, done = qm.step(1)
     next_observation, reward, done = qm.step(2)
     try:

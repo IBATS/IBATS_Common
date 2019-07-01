@@ -15,6 +15,10 @@ from ibats_common.backend.rl.emulator.market import QuotesMarket
 class Account(object):
     def __init__(self, md_df, data_factors):
         self.A = QuotesMarket(md_df, data_factors)
+        self.buffer_reward = []
+        self.buffer_value = []
+        self.buffer_action = []
+        self.buffer_cash = []
 
     def reset(self):
         self.buffer_reward = []
@@ -41,8 +45,25 @@ class Account(object):
 
 
 def _test_account():
-    env = Account(data_quotes, data_fac)
+    n_step = 60
+    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
+    from ibats_common.example.data import load_data
+    md_df = load_data('RB.csv').set_index('trade_date')[ohlcav_col_name_list]
+    md_df.index = pd.DatetimeIndex(md_df.index)
+    from ibats_common.backend.factor import get_factor, transfer_2_batch
+    factors_df = get_factor(md_df, dropna=True)
+    df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
+    md_df = md_df.loc[df_index, :]
+    # 建立 Account
+    env = Account(md_df, data_arr_batch)
+    next_observation = env.reset()
+    assert next_observation.shape[0] == 1
+    assert next_observation.shape[1] == n_step
+    next_state, reward, done = env.step(1)
+    assert next_observation.shape[0] == 1
+    assert next_observation.shape[1] == n_step
+    assert not done
 
 
 if __name__ == "__main__":
-    pass
+    _test_account()
