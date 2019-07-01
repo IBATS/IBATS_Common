@@ -7,16 +7,23 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
+import pandas as pd
 
 
 class QuotesMarket(object):
-    def __init__(self, md_df, data_factors):
+    def __init__(self, md_df: pd.DataFrame, data_factors):
         self.data_close = md_df['close']
         self.data_open = md_df['open']
         self.data_observation = data_factors
         self.action_space = ['long', 'short', 'close']
         self.free = 3e-3  # 千三手续费
         self.max_step_count = md_df.shape[0] - 1
+        # reset use
+        self.step_counter = 0
+        self.cash = 1e7
+        self.position = 0
+        self.total_value = self.cash + self.position
+        self.flags = 0
 
     def reset(self):
         self.step_counter = 0
@@ -113,5 +120,28 @@ class QuotesMarket(object):
             raise ValueError("action should be one of [0,1,2]")
 
 
+def _test_quote_market():
+    n_step = 60
+    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
+    from ibats_common.example.data import load_data
+    md_df = load_data('RB.csv').set_index('trade_date')[ohlcav_col_name_list]
+    md_df.index = pd.DatetimeIndex(md_df.index)
+    from ibats_common.backend.factor import get_factor, transfer_2_batch
+    factors_df = get_factor(md_df, dropna=True)
+    df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
+    md_df = md_df.loc[df_index, :]
+    qm = QuotesMarket(md_df=md_df[['close', 'open']], data_factors=data_arr_batch)
+    next_observation, reward, done = qm.reset()
+    assert next_observation.shape[0] == n_step
+    assert done == False
+    next_observation, reward, done = qm.step(0)
+    next_observation, reward, done = qm.step(1)
+    next_observation, reward, done = qm.step(2)
+    try:
+        qm.step(3)
+    except ValueError:
+        print('is ok for not supporting action=3')
+
+
 if __name__ == "__main__":
-    pass
+    _test_quote_market()
