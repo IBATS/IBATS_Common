@@ -321,7 +321,7 @@ def get_factor(df: pd.DataFrame, close_key='close', trade_date_series=None, deli
                 train_df_tmp = ret_df_tmp.copy()
                 # 将 O,H,L,C,A 前五项进行因子扩充
                 train_df_tmp.loc[:, ohlcav_col_name_list[:5]] *= adj_factor
-                train_df_dic[adj_factor] = add_factor_of_price(train_df_tmp, close_key)
+                train_df_dic[adj_factor] = add_factor_of_price(train_df_tmp, ohlcav_col_name_list=ohlcav_col_name_list)
 
     if ohlcav_col_name_list is None:
         return ret_df
