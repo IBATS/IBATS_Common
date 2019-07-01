@@ -284,17 +284,18 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list, drop=False):
     return df
 
 
-def get_factor(df: pd.DataFrame, close_key='close', trade_date_series=None, delivery_date_series=None,
-               dropna=True, ohlcav_col_name_list=None) -> (pd.DataFrame, dict):
+def get_factor(df: pd.DataFrame, trade_date_series=None, delivery_date_series=None,
+               dropna=True, ohlcav_col_name_list=["open", "high", "low", "close", "amount", "volume"],
+               do_multiple_factors=False) -> (pd.DataFrame, dict):
     """
     在当期时间序列数据基础上增加相关因子
     目前已经支持的因子包括量价因子、时间序列因子、交割日期因子
     :param df: 时间序列数据索引为日期
-    :param close_key:
     :param trade_date_series: 交易日序列
     :param delivery_date_series:交割日序列
     :param dropna: 是否 dropna
-    :param ohlcav_col_name_list: 对数据进行倍增处理，将指定列乘以因子，如果 ！= None 则，返回dict{adj_factor: DataFrame}
+    :param ohlcav_col_name_list: 量价因子相关列名称，默认["open", "high", "low", "close", "amount", "volume"]
+    :param do_multiple_factors: 对数据进行倍增处理，将指定列乘以因子，如果 ！= None 则，返回dict{adj_factor: DataFrame}
     :return:
     """
     ret_df = df.copy()
@@ -312,10 +313,10 @@ def get_factor(df: pd.DataFrame, close_key='close', trade_date_series=None, deli
 
     # 增加量价因子
     train_df_dic = {}
-    if close_key is not None:
+    if ohlcav_col_name_list is not None:
         ret_df_tmp = ret_df.copy()
         ret_df = add_factor_of_price(ret_df, ohlcav_col_name_list)
-        if ohlcav_col_name_list is not None:
+        if do_multiple_factors:
             train_df_dic[1] = ret_df
             for adj_factor in [0.5, 0.75, 1.25, 1.5, 1.75, 2]:
                 train_df_tmp = ret_df_tmp.copy()
@@ -323,10 +324,10 @@ def get_factor(df: pd.DataFrame, close_key='close', trade_date_series=None, deli
                 train_df_tmp.loc[:, ohlcav_col_name_list[:5]] *= adj_factor
                 train_df_dic[adj_factor] = add_factor_of_price(train_df_tmp, ohlcav_col_name_list=ohlcav_col_name_list)
 
-    if ohlcav_col_name_list is None:
-        return ret_df
-    else:
+    if do_multiple_factors:
         return train_df_dic
+    else:
+        return ret_df
 
 
 def _test_get_factor():
@@ -335,18 +336,18 @@ def _test_get_factor():
     file_name = f"{instrument_type}.csv"
     indexed_df = load_data(file_name).set_index('trade_date').drop('instrument_type', axis=1)
     indexed_df.index = pd.DatetimeIndex(indexed_df.index)
-    # col_num_of_ohlca_list is None
+    # ohlcav_col_name_list is None
     factor_df = get_factor(indexed_df,
                            trade_date_series=get_trade_date_series(),
                            delivery_date_series=get_delivery_date_series(instrument_type))
     logger.info("data_multiplication_column_indexes=None\n%s\t%s", factor_df.shape, list(factor_df.columns))
 
-    # col_num_of_ohlca_list is not None
-    col_num_of_ohlcav_list = ["open", "high", "low", "close", "amount", "volume"]
-    train_df_dic = get_factor(indexed_df, ohlcav_col_name_list=col_num_of_ohlcav_list,
+    # ohlcav_col_name_list is not None
+    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
+    train_df_dic = get_factor(indexed_df, ohlcav_col_name_list=ohlcav_col_name_list,
                               trade_date_series=get_trade_date_series(),
                               delivery_date_series=get_delivery_date_series(instrument_type))
-    logger.info("data_multiplication_column_indexes=%s", col_num_of_ohlcav_list)
+    logger.info("ohlcav_col_name_list=%s", ohlcav_col_name_list)
     for adj_factor, train_df in train_df_dic.items():
         logger.info("adj_factor=%f, train_df: first close=%f\n%s\t%s",
                     adj_factor, train_df['close'].iloc[0], train_df.shape, list(train_df.columns))

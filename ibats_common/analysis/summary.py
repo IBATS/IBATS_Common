@@ -783,11 +783,12 @@ def _test_summary_md_2_docx(auto_open_file=True):
     factor_df = load_data(file_name).set_index('trade_date').drop('instrument_type', axis=1)
     factor_df.index = pd.DatetimeIndex(factor_df.index)
     column_list_oraginal = list(factor_df.columns)
+    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
 
     from ibats_common.backend.factor import get_factor
     from ibats_common.example.data import get_trade_date_series
     from ibats_common.example.data import get_delivery_date_series
-    factor_df = get_factor(factor_df, close_key='close',
+    factor_df = get_factor(factor_df, ohlcav_col_name_list=ohlcav_col_name_list,
                            trade_date_series=get_trade_date_series(),
                            delivery_date_series=get_delivery_date_series(instrument_type))
 
