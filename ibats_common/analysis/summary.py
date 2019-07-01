@@ -878,7 +878,7 @@ def summary_release_2_docx(title, img_meta_dic_list, stg_run_id=None, enable_cle
     document.save(file_path)
     if enable_clean_cache:
         clean_cache()
-    logger.debug('生成报告结束')
+    logger.debug('生成报告结束。%s', file_path)
     return file_path
 
 

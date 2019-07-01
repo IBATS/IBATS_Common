@@ -447,7 +447,7 @@ def strategy_handler_factory_multi_exchange(
         stg_base = stg_class(**strategy_params)
     # 设置相关属性
     stg_base.stg_run_id = stg_run_id
-    logger.debug('strategy_params: %s', strategy_params)
+    logger.debug('stg_run_id=%d, strategy_params: %s', stg_run_id, strategy_params)
     # 设置策略交易接口 trade_agent，这里不适用参数传递的方式而使用属性赋值，
     # 因为stg_base子类被继承后，参数主要用于设置策略所需各种参数使用
     for num, params in enumerate(trade_agent_params_list, start=1):
