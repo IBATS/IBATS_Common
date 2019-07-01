@@ -15,8 +15,6 @@ import numpy as np
 import pandas as pd
 import talib
 
-from ibats_common.example.data import get_delivery_date_series
-
 logger = logging.getLogger(__name__)
 logger.debug('引用ffn %s', ffn)
 
@@ -336,7 +334,7 @@ def get_factor(df: pd.DataFrame, trade_date_series=None, delivery_date_series=No
 
 
 def _test_get_factor():
-    from ibats_common.example.data import load_data, get_trade_date_series
+    from ibats_common.example.data import load_data, get_trade_date_series, get_delivery_date_series
     instrument_type = 'RU'
     file_name = f"{instrument_type}.csv"
     indexed_df = load_data(file_name).set_index('trade_date').drop('instrument_type', axis=1)
