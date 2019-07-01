@@ -45,6 +45,7 @@ class Account(object):
 
 
 def _test_account():
+    # 建立相关数据
     n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
