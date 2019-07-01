@@ -353,5 +353,72 @@ def _test_get_factor():
                     adj_factor, train_df['close'].iloc[0], train_df.shape, list(train_df.columns))
 
 
+def transfer_2_batch(df: pd.DataFrame, n_step, labels=None):
+    """
+    [num, factor_count] -> [num - n_step + 1, n_step, factor_count]
+    将 df 转化成 n_step 长度的一段一段的数据
+    labels 为与 df对应的数据，处理方式与index相同，如果labels不为空，则返回数据最后增加以下 new_ys
+    :param df:
+    :param n_step:
+    :param labels:
+    :return:
+    """
+    df_len = df.shape[0]
+    if labels is not None and df_len == len(labels):
+        raise ValueError("ys 长度 %d 必须与 df 长度 %d 保持一致", len(labels), df_len)
+    new_shape = [df_len - n_step + 1, n_step]
+    new_shape.extend(df.shape[1:])
+    df_index, df_columns = df.index[(n_step - 1):], df.columns
+    data_arr_batch, factor_arr = np.zeros(new_shape), df.to_numpy()
+
+    for idx_from, idx_to in enumerate(range(n_step, factor_arr.shape[0] + 1)):
+        data_arr_batch[idx_from] = factor_arr[idx_from: idx_to]
+
+    if labels is not None:
+        new_ys = labels[(n_step - 1):]
+        return df_index, df_columns, data_arr_batch, new_ys
+    else:
+        return df_index, df_columns, data_arr_batch
+
+
+def _test_get_batch_factor():
+    data_len = 8
+    date_arr = pd.date_range(pd.to_datetime('2018-01-01'),
+                             pd.to_datetime('2018-01-01') + pd.Timedelta(days=data_len * 2 - 1),
+                             freq=pd.Timedelta(days=2))
+    date_index = pd.DatetimeIndex(date_arr)
+    df = pd.DataFrame(
+        {'a': list(range(data_len)),
+         'b': list(range(data_len*2, data_len * 3)),
+         'c': list(range(data_len * 10, data_len * 11))},
+        index=date_index,
+    )
+    print("df\n", df)
+    n_step = 5
+    df_index, df_columns, data_arr_batch = transfer_2_batch(df, n_step)
+
+    print("new df_index", df_index)
+    print("new factor_columns", df_columns)
+    print('new reshaped data_arr_batch')
+    print(data_arr_batch)
+    print("df.shape: ", df.shape)
+    print("new_shape:", data_arr_batch.shape)
+
+
+def get_batch_factor(md_df: pd.DataFrame, n_step, labels=None, **factor_kwargs):
+    """
+    get_factor(...) -> transfer_2_batch(...)
+    :param md_df:
+    :param n_step:
+    :param labels:
+    :param factor_kwargs:
+    :return:
+    """
+    factor_df = get_factor(md_df, **factor_kwargs)
+    df_index, df_columns, data_arr_batch = transfer_2_batch(factor_df, n_step=n_step, labels=labels)
+    return df_index, df_columns, data_arr_batch
+
+
 if __name__ == '__main__':
-    _test_get_factor()
+    # _test_get_factor()
+    _test_get_batch_factor()
