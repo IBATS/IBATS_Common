@@ -112,7 +112,7 @@ def add_factor_of_delivery_date(df, delivery_date_series):
     return df
 
 
-def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list, drop=False):
+def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list, drop=False, log_av=True):
     open_key = ohlcav_col_name_list[0]
     high_key = ohlcav_col_name_list[1]
     low_key = ohlcav_col_name_list[2]
@@ -277,6 +277,11 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list, drop=False):
 
     # 威廉指标
     df['WILLR'] = talib.WILLR(high_s, low_s, close_s, timeperiod=14)
+
+    # 对 volume amount 取 log
+    if log_av:
+        df[volume_key] = np.log(volume_s.fillna(0) + 1)
+        df[amount_key] = np.log(amount_s.fillna(0) + 1)
 
     if drop:
         df.dropna(inplace=True)
