@@ -190,3 +190,4 @@ ibats_common/analysis/report/*
 config.py.bak
 *.docx
 ibats_common/tf_saves_*
+ibats_common/example/drl/*
