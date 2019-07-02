@@ -32,7 +32,7 @@ from ibats_common.backend.label import calc_label2, calc_label3
 logger = logging.getLogger(__name__)
 logger.debug("matplotlib.get_backend() => %s", matplotlib.get_backend())
 register_matplotlib_converters()
-logger.debug('load %s', ffn)
+logger.debug('import %s', ffn)
 
 
 def get_file_name(header, name=None):

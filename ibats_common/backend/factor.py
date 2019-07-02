@@ -16,7 +16,7 @@ import pandas as pd
 import talib
 
 logger = logging.getLogger(__name__)
-logger.debug('引用ffn %s', ffn)
+logger.debug('引用 %s', ffn)
 
 
 def add_factor_of_trade_date(df: pd.DataFrame, trade_date_series):
