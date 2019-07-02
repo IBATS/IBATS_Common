@@ -294,9 +294,9 @@ def show_order(stg_run_id, **kwargs) -> (defaultdict(lambda: defaultdict(list)),
         order_detail_list_symbol = [_ for _ in detail_list if _.symbol == symbol]
         for point1, point2 in zip(order_detail_list_symbol[:-1], order_detail_list_symbol[1:]):
             if point1.order_dt == point2.order_dt:
-                # logger.debug("%s %f %s ignore", point2.order_dt, point2.order_price, point2.action)
+                # self.logger.debug("%s %f %s ignore", point2.order_dt, point2.order_price, point2.action)
                 continue
-            # logger.debug("%s %f -> %s %f %d",
+            # self.logger.debug("%s %f -> %s %f %d",
             #              point1.order_dt, point1.order_price, point2.order_dt, point2.order_price, point2.action)
             # ax.plot([point1.order_dt, point2.order_dt], [point1.order_price, point2.order_price],
             #         c='r' if point2.direction != Direction.Long.value else 'g')
@@ -374,9 +374,9 @@ def show_trade(stg_run_id, **kwargs) -> (defaultdict(lambda: defaultdict(list)),
         detail_list_symbol = [_ for _ in detail_list if _.symbol == symbol]
         for point1, point2 in zip(detail_list_symbol[:-1], detail_list_symbol[1:]):
             if point1.trade_dt == point2.trade_dt:
-                # logger.debug("%s %f %s ignore", point2.order_dt, point2.order_price, point2.action)
+                # self.logger.debug("%s %f %s ignore", point2.order_dt, point2.order_price, point2.action)
                 continue
-            # logger.debug("%s %f -> %s %f %d",
+            # self.logger.debug("%s %f -> %s %f %d",
             #              point1.order_dt, point1.order_price, point2.order_dt, point2.order_price, point2.action)
             # ax.plot([point1.order_dt, point2.order_dt], [point1.order_price, point2.order_price],
             #         c='r' if point2.direction != Direction.Long.value else 'g')

@@ -186,6 +186,7 @@ class RLHandler:
         """
         :param q_table_key:
         """
+        import logging
         action_space = ['empty', 'hold_long', 'hold_short']
         self.actions = list(range(len(action_space)))
         self.q_table_key = q_table_key
@@ -193,6 +194,7 @@ class RLHandler:
         self.last_state = None
         self.last_action = None
         self.enable_load_if_exist = True
+        self.logger = logging.getLogger(str(self.__class__))
 
     def init_state(self, md_df: pd.DataFrame):
         # 每一次新 episode 需要重置 state, action
@@ -292,7 +294,7 @@ class RLHandler4Train(RLHandler):
             self.init_ql_table(trade_date_to)
 
         if not is_loaded:
-            logger.info('开始训练：[%s, %s]', self.train_date_from, trade_date_to)
+            self.logger.info('开始训练：[%s, %s]', self.train_date_from, trade_date_to)
             env = Env(self.train_date_from, trade_date_to, self.get_stg_handler, q_table_key=self.ql_table.key)
             for episode in range(self.episode_count):
                 # fresh env
@@ -301,7 +303,7 @@ class RLHandler4Train(RLHandler):
 
             # end of game
             env.destroy()
-            logger.info('RL Over')
+            self.logger.info('RL Over')
             self.ql_table.save()
         # 设置最新训练日期
         self.train_date_latest = pd.to_datetime(trade_date_to)

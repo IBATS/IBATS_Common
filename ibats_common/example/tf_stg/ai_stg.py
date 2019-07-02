@@ -175,8 +175,8 @@ class AIStg(StgBase):
         if self.input_size is None or self.input_size != factors.shape[1]:
             self.input_size = factors.shape[1]
             self.n_hidden_units = self.input_size * 2
-            logger.info("set input_size: %d", self.input_size)
-            logger.info("set n_hidden_units: %d", self.n_hidden_units)
+            self.logger.info("set input_size: %d", self.input_size)
+            self.logger.info("set n_hidden_units: %d", self.n_hidden_units)
 
         # if self.normalization_model:
         #     factors = (factors - np.mean(factors, 0)) / np.std(factors, 0)
@@ -454,7 +454,7 @@ class AIStg(StgBase):
             if no_target_position:
                 self.open_long(instrument_id, close, self.unit)
             else:
-                logger.debug("%s %s     %.2f holding", self.trade_agent.curr_timestamp, instrument_id, close)
+                self.logger.debug("%s %s     %.2f holding", self.trade_agent.curr_timestamp, instrument_id, close)
 
         if is_sell:  # is_sell
             position_date_pos_info_dic = self.get_position(instrument_id)
@@ -469,7 +469,7 @@ class AIStg(StgBase):
             if no_holding_target_position:
                 self.open_short(instrument_id, close, self.unit)
             else:
-                logger.debug("%s %s     %.2f holding", self.trade_agent.curr_timestamp, instrument_id, close)
+                self.logger.debug("%s %s     %.2f holding", self.trade_agent.curr_timestamp, instrument_id, close)
 
     def separate_train_validation(self, factors, labels):
         """
