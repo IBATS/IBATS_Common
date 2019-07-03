@@ -55,14 +55,16 @@ def _test_account():
     factors_df = get_factor(md_df, dropna=True)
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
     md_df = md_df.loc[df_index, :]
+    shape = [data_arr_batch.shape[0], 5, int(n_step/5), data_arr_batch.shape[2]]
+    data_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
+    print(data_arr_batch.shape, '->', shape, '->', data_factors.shape)
     # 建立 Account
-    env = Account(md_df, data_arr_batch)
+    env = Account(md_df, data_factors)
     next_observation = env.reset()
-    assert next_observation.shape[0] == 1
-    assert next_observation.shape[1] == n_step
+    print('next_observation.shape:', next_observation.shape)
+    assert next_observation.shape == (1, 12, 78, 5)
     next_state, reward, done = env.step(1)
-    assert next_observation.shape[0] == 1
-    assert next_observation.shape[1] == n_step
+    assert next_observation.shape == (1, 12, 78, 5)
     assert not done
 
 
