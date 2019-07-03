@@ -311,25 +311,30 @@ def get_factor(df: pd.DataFrame, trade_date_series=None, delivery_date_series=No
     if delivery_date_series is not None:
         ret_df = add_factor_of_delivery_date(ret_df, delivery_date_series)
 
-    if dropna:
-        ret_df.dropna(inplace=True)
-
     # 增加量价因子
     train_df_dic = {}
     if ohlcav_col_name_list is not None:
         ret_df_tmp = ret_df.copy()
         ret_df = add_factor_of_price(ret_df, ohlcav_col_name_list)
         if do_multiple_factors:
+            if dropna:
+                ret_df.dropna(inplace=True)
             train_df_dic[1] = ret_df
             for adj_factor in [0.5, 0.75, 1.25, 1.5, 1.75, 2]:
                 train_df_tmp = ret_df_tmp.copy()
                 # 将 O,H,L,C,A 前五项进行因子扩充
                 train_df_tmp.loc[:, ohlcav_col_name_list[:5]] *= adj_factor
-                train_df_dic[adj_factor] = add_factor_of_price(train_df_tmp, ohlcav_col_name_list=ohlcav_col_name_list)
+                factor_df = add_factor_of_price(train_df_tmp, ohlcav_col_name_list=ohlcav_col_name_list)
+                if dropna:
+                    factor_df.dropna(inplace=True)
+                train_df_dic[adj_factor] = factor_df
 
     if do_multiple_factors:
         return train_df_dic
     else:
+        if dropna:
+            ret_df.dropna(inplace=True)
+
         return ret_df
 
 
