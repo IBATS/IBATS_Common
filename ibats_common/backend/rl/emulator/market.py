@@ -17,7 +17,7 @@ class QuotesMarket(object):
         self.data_observation = data_factors
         self.action_space = ['long', 'short', 'close']
         self.free = 3e-3  # 千三手续费
-        self.max_step_count = md_df.shape[0] - 1
+        self.max_step_count = self.data_observation.shape[0] - 1
         # reset use
         self.step_counter = 0
         self.cash = 1e7
