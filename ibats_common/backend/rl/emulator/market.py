@@ -18,20 +18,24 @@ class QuotesMarket(object):
         self.action_space = ['long', 'short', 'close']
         self.free = 3e-3  # 千三手续费
         self.max_step_count = self.data_observation.shape[0] - 1
+        self.init_cash = 1e5
         # reset use
         self.step_counter = 0
-        self.cash = 1e7
+        self.cash = self.init_cash
         self.position = 0
         self.total_value = self.cash + self.position
         self.flags = 0
 
     def reset(self):
         self.step_counter = 0
-        self.cash = 1e7
+        self.cash = self.init_cash
         self.position = 0
         self.total_value = self.cash + self.position
         self.flags = 0
         return self.data_observation[0]
+
+    def latest_state(self):
+        return self.data_observation[-1]
 
     def get_action_space(self):
         return self.action_space

@@ -27,6 +27,9 @@ class Account(object):
         self.buffer_cash = []
         return np.expand_dims(self.A.reset(), 0)
 
+    def latest_state(self):
+        return np.expand_dims(self.A.latest_state(), 0)
+
     def step(self, action):
         next_state, reward, done = self.A.step(action)
 
