@@ -107,10 +107,21 @@ class AIStgBase(StgBase):
         return self._session
 
     @property
-    def model(self) -> tflearn.models.DNN:
+    def model(self):
+        """
+        获取模型对象
+        2019-07-05 去除  -> tflearn.models.DNN hint 该语句将会导致动态加载 class 时抛出错误
+        :return:
+        """
         return self.get_model()
 
-    def get_model(self, rebuild_model=False) -> tflearn.models.DNN:
+    def get_model(self, rebuild_model=False):
+        """
+        获取模型对象，默认不重新构造
+        2019-07-05 去除  -> tflearn.models.DNN hint 该语句将会导致动态加载 class 时抛出错误
+        :param rebuild_model:
+        :return:
+        """
         if self._model is None or rebuild_model:
             self.logger.info('重新构建模型')
             tf.reset_default_graph()
@@ -165,7 +176,7 @@ class AIStgBase(StgBase):
 
         return batch_xs
 
-    def _build_model(self) -> tflearn.models.DNN:
+    def _build_model(self):
         # Network building
         # net = tflearn.input_data([None, self.n_step, self.input_size])
         # ...
