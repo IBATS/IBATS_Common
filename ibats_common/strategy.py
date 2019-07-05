@@ -10,7 +10,7 @@ from collections import defaultdict
 
 import pandas as pd
 
-from ibats_common.common import PeriodType, ExchangeName, ContextKey
+from ibats_common.common import PeriodType, ExchangeName, ContextKey, Direction
 
 logger_stg_base = logging.getLogger(__name__)
 
@@ -404,6 +404,64 @@ class StgBase:
             return None
         else:
             return key_list[0]
+
+    def keep_long(self, instrument_id, price, position):
+        """
+        保持多头持仓，如果没有仓位则买入，如果有仓位则继续持有
+        :return:
+        """
+        position_date_pos_info_dic = self.get_position(instrument_id)
+        no_target_position = True
+        if position_date_pos_info_dic is not None:
+            for position_date, pos_info in position_date_pos_info_dic.items():
+                if pos_info.position == 0:
+                    continue
+                direction = pos_info.direction
+                if direction == Direction.Short:
+                    self.close_short(instrument_id, price, pos_info.position)
+                elif direction == Direction.Long:
+                    no_target_position = False
+        if no_target_position:
+            self.open_long(instrument_id, price, position)
+        else:
+            self.logger.debug("%s %s *   %.2f holding", self.trade_agent.curr_timestamp, instrument_id, price)
+
+    def keep_short(self, instrument_id, price, position):
+        """
+        保持空头持仓，如果没有仓位则卖出，如果有仓位则继续持有
+        :return:
+        """
+        position_date_pos_info_dic = self.get_position(instrument_id)
+        no_holding_target_position = True
+        if position_date_pos_info_dic is not None:
+            for position_date, pos_info in position_date_pos_info_dic.items():
+                if pos_info.position == 0:
+                    continue
+                direction = pos_info.direction
+                if direction == Direction.Long:
+                    self.close_long(instrument_id, price, pos_info.position)
+                elif direction == Direction.Short:
+                    no_holding_target_position = False
+        if no_holding_target_position:
+            self.open_short(instrument_id, price, position)
+        else:
+            self.logger.debug("%s %s   * %.2f holding", self.trade_agent.curr_timestamp, instrument_id, price)
+
+    def keep_empty(self, instrument_id, price):
+        """
+        保持空头持仓，如果没有仓位则卖出，如果有仓位则继续持有
+        :return:
+        """
+        position_date_pos_info_dic = self.get_position(instrument_id)
+        if position_date_pos_info_dic is not None:
+            for position_date, pos_info in position_date_pos_info_dic.items():
+                if pos_info.position == 0:
+                    continue
+                direction = pos_info.direction
+                if direction == Direction.Long:
+                    self.close_long(instrument_id, price, pos_info.position)
+                elif direction == Direction.Short:
+                    self.close_short(instrument_id, price, pos_info.position)
 
 
 class EventHandlersRelation:
