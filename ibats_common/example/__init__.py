@@ -382,15 +382,15 @@ class AIStgBase(StgBase):
                              self.trade_date_last_train, sum(pred_ys == real_ys) / len(pred_ys) * 100)
             # self.logger.info("pred: \n%s\n%s", pred_ys, real_ys)
 
-    def predict_latest(self, md_df):
+    def predict_latest(self, factor_df):
         """
         计算最新一个 X，返回分类结果
         二分类，返回 0 未知 / 1 下跌 / 2 上涨
         三分类，返回 0 震荡 / 1 下跌 / 2 上涨
-        :param md_df:
+        :param factor_df:
         :return:
         """
-        factors, _ = self.get_factor_array(md_df, tail_n=self.n_step)
+        factors, _ = self.get_factor_array(factor_df, tail_n=self.n_step)
         x = self.get_batch_xs(factors)
         pred_y = np.argmax(self.model.predict(x), axis=1)[-1]
         # is_buy, is_sell = pred_mark == 1, pred_mark == 0
