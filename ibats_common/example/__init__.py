@@ -22,7 +22,7 @@ from ibats_utils.mess import copy_module_file_to, date_2_str, str_2_date, get_la
 from sklearn.model_selection import train_test_split
 
 from ibats_common import module_root_path
-from ibats_common.analysis.plot import show_accuracy
+from ibats_common.analysis.plot import show_dl_accuracy
 from ibats_common.analysis.summary import summary_release_2_docx
 from ibats_common.backend.factor import get_factor
 from ibats_common.backend.label import calc_label3
@@ -615,8 +615,8 @@ class AIStgBase(StgBase):
             else:
                 split_point_list = [close_df.index[0], trade_date_next, close_df.index[-1]]
             base_line_list = self.trade_date_acc_list[trade_date_last_train]
-            img_file_path = show_accuracy(real_ys, pred_ys, close_df, split_point_list,
-                                          base_line_list=base_line_list)
+            img_file_path = show_dl_accuracy(real_ys, pred_ys, close_df, split_point_list,
+                                             base_line_list=base_line_list)
             img_meta_dic_list.append({
                 'img_file_path': img_file_path,
                 'trade_date_last_train': trade_date_last_train,
@@ -634,7 +634,7 @@ class AIStgBase(StgBase):
         # 获取 real_ys
         real_ys = ys[trade_date_index >= trade_date_last_train_first]
         close_df = indexed_df.loc[trade_date_index[trade_date_index >= trade_date_last_train_first], 'close']
-        img_file_path = show_accuracy(real_ys, pred_ys_tot, close_df, split_point_list)
+        img_file_path = show_dl_accuracy(real_ys, pred_ys_tot, close_df, split_point_list)
 
         img_meta_dic_list.append({
             'img_file_path': img_file_path,
