@@ -39,12 +39,15 @@ class Account(object):
         self.buffer_cash.append(self.A.cash)
         return np.expand_dims(next_state, 0), reward, done
 
-    def plot_data(self):
-        df = pd.DataFrame([self.buffer_value, self.buffer_reward, self.buffer_cash, self.buffer_action]).T
-        length = df.shape[0]
-        df.index = self.A.data_close.index[:length]
-        df.columns = ["value", "reward", "cash", "action"]
-        return df
+    def plot_data(self)->pd.DataFrame:
+        reward_df = pd.DataFrame(
+            {"value": self.buffer_value,
+             "reward": self.buffer_reward,
+             "cash": self.buffer_cash,
+             "action": self.buffer_action,
+             "close": self.A.data_close.iloc[:len(self.buffer_action)],
+             }, index=self.A.data_close.index[:len(self.buffer_action)])
+        return reward_df
 
 
 def _test_account():

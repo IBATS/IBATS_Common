@@ -15,8 +15,8 @@ class QuotesMarket(object):
         self.data_close = md_df['close']
         self.data_open = md_df['open']
         self.data_observation = data_factors
-        self.action_space = ['long', 'short', 'close']
-        self.free = 3e-3  # 千三手续费
+        self.action_space = ['close', 'long', 'short']
+        self.fee = 3e-3  # 千三手续费
         self.max_step_count = self.data_observation.shape[0] - 1
         self.init_cash = 1e5
         # reset use
@@ -43,13 +43,13 @@ class QuotesMarket(object):
     def long(self):
         self.flags = 1
         quotes = self.data_open[self.step_counter] * 10
-        self.cash -= quotes * (1 + self.free)
+        self.cash -= quotes * (1 + self.fee)
         self.position = quotes
 
     def short(self):
         self.flags = -1
         quotes = self.data_open[self.step_counter] * 10
-        self.cash += quotes * (1 - self.free)
+        self.cash += quotes * (1 - self.fee)
         self.position = - quotes
 
     def keep(self):
@@ -59,13 +59,13 @@ class QuotesMarket(object):
     def close_long(self):
         self.flags = 0
         quotes = self.data_open[self.step_counter] * 10
-        self.cash += quotes * (1 - self.free)
+        self.cash += quotes * (1 - self.fee)
         self.position = 0
 
     def close_short(self):
         self.flags = 0
         quotes = self.data_open[self.step_counter] * 10
-        self.cash -= quotes * (1 + self.free)
+        self.cash -= quotes * (1 + self.fee)
         self.position = 0
 
     def step_op(self, action):
@@ -114,11 +114,11 @@ class QuotesMarket(object):
         return next_observation, reward, done
 
     def step(self, action):
-        if action == 0:
+        if action == 1:
             return self.step_op('long')
-        elif action == 1:
-            return self.step_op('short')
         elif action == 2:
+            return self.step_op('short')
+        elif action == 0:
             return self.step_op('close')
         else:
             raise ValueError("action should be one of [0,1,2]")
