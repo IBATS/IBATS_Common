@@ -12,18 +12,17 @@ import logging
 import os
 from datetime import datetime
 from functools import lru_cache
+
 import ffn
 import matplotlib
-# matplotlib.use('Qt5Agg')  # windows 下無效
-from matplotlib.font_manager import FontProperties
 import matplotlib.pyplot as plt
-from pylab import mpl
-from pandas.plotting import register_matplotlib_converters
-
 import numpy as np
 import pandas as pd
 import seaborn as sns
 from ibats_utils.mess import date_2_str, is_windows_os, open_file_with_system_app
+# matplotlib.use('Qt5Agg')  # windows 下無效
+from matplotlib.font_manager import FontProperties
+from pandas.plotting import register_matplotlib_converters
 from scipy import stats
 
 from ibats_common.analysis import get_cache_folder_path
@@ -505,8 +504,8 @@ def label_distribution(close_df: pd.DataFrame, min_rr: float, max_rr: float, max
     return distribution_rate_df, file_path
 
 
-def show_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=None,
-                  base_line_list: (None, dict) = None, show_moving_avg=False):
+def show_dl_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=None,
+                     base_line_list: (None, dict) = None, show_moving_avg=False):
     """
     将实际标记与预测标记进行对比并结合行情close_df显示在plot图上
     :param real_ys:
@@ -520,7 +519,7 @@ def show_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=Non
     trade_date_index = close_df.index
     date_from_str, date_to_str = date_2_str(trade_date_index[0]), date_2_str(trade_date_index[-1])
     # 检查长度是否一致
-    if not(len(real_ys) == len(pred_ys) == close_df.shape[0]) or len(real_ys) == 0:
+    if not (len(real_ys) == len(pred_ys) == close_df.shape[0]) or len(real_ys) == 0:
         logger.error("[%s - %s] len(real_ys)=%d, len(pred_ys)=%d, close_df.shape[0]=%d 不一致",
                      date_from_str, date_to_str, len(real_ys), len(pred_ys), close_df.shape[0])
         return
@@ -559,7 +558,7 @@ def show_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=Non
     if show_moving_avg:
         accuracy_list, win_size = [], 30
         is_fit_df = pd.DataFrame({'fit': is_fit_arr}, index=trade_date_index)
-        accuracy_df = is_fit_df.rolling(win_size, min_periods=1).apply(lambda x: sum(x)/len(x), raw=True)
+        accuracy_df = is_fit_df.rolling(win_size, min_periods=1).apply(lambda x: sum(x) / len(x), raw=True)
         for idx in range(win_size, len(is_fit_arr)):
             accuracy_list.append(sum(is_fit_arr[idx - win_size:idx] / win_size))
 
@@ -576,7 +575,7 @@ def show_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=Non
     return file_path
 
 
-def _test_show_accuracy():
+def _test_show_dl_accuracy():
     real_ys, pred_ys = np.random.randint(1, 3, size=100), np.random.randint(1, 3, size=100)
     date_arr = pd.date_range(pd.to_datetime('2018-01-01'),
                              pd.to_datetime('2018-01-01') + pd.Timedelta(days=99))
@@ -588,7 +587,77 @@ def _test_show_accuracy():
     split_point_list = date_arr[split_point_list]
     base_line_list = [0.3, 0.6]
 
-    show_accuracy(real_ys, pred_ys, close_df, split_point_list, base_line_list, show_moving_avg=True)
+    show_dl_accuracy(real_ys, pred_ys, close_df, split_point_list, base_line_list, show_moving_avg=True)
+
+
+def show_drl_accuracy(real_label_s, action_s, close_df: pd.DataFrame, split_point_list=None,
+                      show_moving_avg=False):
+    """
+    将实际标记与预测标记进行对比并结合行情close_df显示在plot图上
+    :param real_label_s:
+    :param action_s:
+    :param close_df:
+    :param split_point_list:
+    :param show_moving_avg: 展示滚动平均收益率，如果展示，则会显示 三张图，否则两张
+    :return:
+    """
+    trade_date_index = close_df.index
+    date_from_str, date_to_str = date_2_str(trade_date_index[0]), date_2_str(trade_date_index[-1])
+    # 检查长度是否一致
+    if not (len(real_label_s) == len(action_s) == close_df.shape[0]) or len(real_label_s) == 0:
+        logger.error("[%s - %s] len(real_label_s)=%d, len(action_s)=%d, close_df.shape[0]=%d 不一致",
+                     date_from_str, date_to_str, len(real_label_s), len(action_s), close_df.shape[0])
+        return
+    enable_kwargs = dict(enable_save_plot=False, enable_show_plot=False, do_clr=False)
+    if show_moving_avg:
+        fig = plt.figure(figsize=(8, 16))
+        fig_idx = 310
+    else:
+        fig = plt.figure(figsize=(8, 12))
+        fig_idx = 210
+
+    # 分析成功率
+    # 第一章图：累计平均成功率
+    accuracy = sum(action_s == real_label_s) / len(action_s) * 100
+    logger.info("模型准确率 [%s - %s] accuracy: %.2f%%", date_from_str, date_to_str, accuracy)
+    is_fit_arr = action_s == real_label_s
+    accuracy_list, fit_sum = [], 0
+    for tot_count, (is_fit, trade_date) in enumerate(zip(is_fit_arr, trade_date_index), start=1):
+        if is_fit:
+            fit_sum += 1
+        accuracy_list.append(fit_sum / tot_count)
+
+    accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=trade_date_index)
+    ax = fig.add_subplot(fig_idx + 1)
+    plot_accuracy(accuracy_df, close_df, ax=ax,
+                  name=f'Accumulation Avg Accuracy [{date_from_str}{date_to_str}]',
+                  split_point_list=split_point_list, **enable_kwargs)
+
+    # 第一章图：累计平均成功率
+    real_pred_df = pd.DataFrame({'pred': action_s, 'real': real_label_s}, index=trade_date_index)
+    ax2 = fig.add_subplot(fig_idx + 2)
+    plot_accuracy(accuracy_df, close_df, ax=ax2,
+                  name=f'Accumulation Avg Accuracy [{date_from_str}{date_to_str}]',
+                  real_pred_df=real_pred_df, **enable_kwargs)
+    # 第三章图：移动平均成功率
+    if show_moving_avg:
+        accuracy_list, win_size = [], 30
+        is_fit_df = pd.DataFrame({'fit': is_fit_arr}, index=trade_date_index)
+        accuracy_df = is_fit_df.rolling(win_size, min_periods=1).apply(lambda x: sum(x) / len(x), raw=True)
+        for idx in range(win_size, len(is_fit_arr)):
+            accuracy_list.append(sum(is_fit_arr[idx - win_size:idx] / win_size))
+
+        # close2_df = close_df.iloc[win_size:]
+        # accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=close2_df.index)
+        ax3 = fig.add_subplot(fig_idx + 3)
+        plot_accuracy(accuracy_df, close_df, ax=ax3,
+                      name=f'{win_size} Moving Avg Accuracy [{date_from_str}{date_to_str}]',
+                      split_point_list=split_point_list, **enable_kwargs)
+
+    # 展示图片
+    file_name = f"accuracy [{date_from_str}-{date_to_str}].png"
+    file_path = plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=file_name)
+    return file_path
 
 
 def plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None, stg_run_id=None, do_clr=True):
@@ -792,7 +861,7 @@ def _test_plot_accuracy(single_figure=True):
         import matplotlib.pyplot as plt
         fig = plt.figure(figsize=(8, 12))
         ax = fig.add_subplot(211)
-        plot_accuracy(accuracy_df, close_df, ax=ax, name='测试使用',  split_point_list=split_point_list,
+        plot_accuracy(accuracy_df, close_df, ax=ax, name='测试使用', split_point_list=split_point_list,
                       base_line_list=base_line_list, **enable_kwargs)
         ax = fig.add_subplot(212)
         plot_accuracy(accuracy_df, close_df, ax=ax, name='测试使用',
@@ -815,7 +884,7 @@ def get_data_range_iter(s: pd.Series, extent_left=False):
         if is_new_range and not extent_left:
             idx_from = idx_to
             is_new_range = False
-        if data != d2 and not(np.isnan(data) and np.isnan(d2)):
+        if data != d2 and not (np.isnan(data) and np.isnan(d2)):
             yield idx_from, idx_to, data
             if extent_left:
                 idx_from = idx_to
@@ -832,4 +901,4 @@ if __name__ == "__main__":
     # _test_label_distribution()
     # _test_n_days_rr_distribution()
     # _test_plot_accuracy()
-    _test_show_accuracy()
+    _test_show_dl_accuracy()

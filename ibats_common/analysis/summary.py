@@ -24,7 +24,7 @@ from scipy.stats import anderson, normaltest
 
 from ibats_common.analysis import get_report_folder_path
 from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix, plot_corr, \
-    clean_cache, hist_n_rr, label_distribution, show_accuracy
+    clean_cache, hist_n_rr, label_distribution, show_dl_accuracy
 from ibats_common.analysis.plot_db import get_rr_with_md, show_trade, show_cash_and_margin
 from ibats_common.backend.mess import get_stg_run_info
 from ibats_common.common import RunMode, CalcMode
@@ -895,7 +895,7 @@ def _test_summary_release_2_docx():
     split_point_list = date_arr[split_point_list]
     base_line_list = [0.3, 0.6]
     img_meta_dic_list = []
-    img_file_path = show_accuracy(real_ys, pred_ys, close_df, split_point_list, base_line_list, show_moving_avg=True)
+    img_file_path = show_dl_accuracy(real_ys, pred_ys, close_df, split_point_list, base_line_list, show_moving_avg=True)
     img_meta_dic_list.append({
         'img_file_path': img_file_path,
         'trade_date_last_train': pd.to_datetime('2018-01-01'),
@@ -906,7 +906,7 @@ def _test_summary_release_2_docx():
         'in_range_count': close_df.shape[0],
         'trade_date_end': pd.to_datetime('2018-01-01') + pd.Timedelta(days=99),
     })
-    img_file_path = show_accuracy(real_ys, pred_ys, close_df, split_point_list, base_line_list, show_moving_avg=False)
+    img_file_path = show_dl_accuracy(real_ys, pred_ys, close_df, split_point_list, base_line_list, show_moving_avg=False)
     img_meta_dic_list.append({
         'img_file_path': img_file_path,
         'trade_date_last_train': pd.to_datetime('2018-01-01'),
