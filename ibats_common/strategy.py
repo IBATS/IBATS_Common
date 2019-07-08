@@ -424,7 +424,7 @@ class StgBase:
         if no_target_position:
             self.open_long(instrument_id, price, position)
         else:
-            self.logger.debug("%s %s *   %.2f holding", self.trade_agent.curr_timestamp, instrument_id, price)
+            self.logger.debug("  %s %s *   %.2f holding", self.trade_agent.curr_timestamp, instrument_id, price)
 
     def keep_short(self, instrument_id, price, position):
         """
@@ -445,7 +445,7 @@ class StgBase:
         if no_holding_target_position:
             self.open_short(instrument_id, price, position)
         else:
-            self.logger.debug("%s %s   * %.2f holding", self.trade_agent.curr_timestamp, instrument_id, price)
+            self.logger.debug(" %s %s   * %.2f holding", self.trade_agent.curr_timestamp, instrument_id, price)
 
     def keep_empty(self, instrument_id, price):
         """
