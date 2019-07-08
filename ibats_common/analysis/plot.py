@@ -533,9 +533,9 @@ def show_dl_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=
 
     # 分析成功率
     # 第一章图：累计平均成功率
-    accuracy = sum(pred_ys == real_ys) / len(pred_ys) * 100
-    logger.info("模型准确率 [%s - %s] accuracy: %.2f%%", date_from_str, date_to_str, accuracy)
     is_fit_arr = pred_ys == real_ys
+    accuracy = sum(is_fit_arr) / len(pred_ys) * 100
+    logger.info("模型准确率 [%s - %s] accuracy: %.2f%%", date_from_str, date_to_str, accuracy)
     accuracy_list, fit_sum = [], 0
     for tot_count, (is_fit, trade_date) in enumerate(zip(is_fit_arr, trade_date_index), start=1):
         if is_fit:
@@ -618,9 +618,9 @@ def show_drl_accuracy(real_label_s, action_s, close_df: pd.DataFrame, split_poin
 
     # 分析成功率
     # 第一章图：累计平均成功率
-    accuracy = sum(action_s == real_label_s) / len(action_s) * 100
-    logger.info("模型准确率 [%s - %s] accuracy: %.2f%%", date_from_str, date_to_str, accuracy)
     is_fit_arr = action_s == real_label_s
+    accuracy = sum(is_fit_arr) / len(action_s) * 100
+    logger.info("模型准确率 [%s - %s] accuracy: %.2f%%", date_from_str, date_to_str, accuracy)
     accuracy_list, fit_sum = [], 0
     for tot_count, (is_fit, trade_date) in enumerate(zip(is_fit_arr, trade_date_index), start=1):
         if is_fit:
