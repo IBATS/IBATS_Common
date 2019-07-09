@@ -138,9 +138,10 @@ def _test_quote_market():
     qm = QuotesMarket(md_df=md_df[['close', 'open']], data_factors=data_arr_batch)
     next_observation = qm.reset()
     assert next_observation.shape[0] == n_step
+    next_observation, reward, done = qm.step(1)
+    assert not done
     next_observation, reward, done = qm.step(0)
     assert not done
-    next_observation, reward, done = qm.step(1)
     next_observation, reward, done = qm.step(2)
     try:
         qm.step(3)
