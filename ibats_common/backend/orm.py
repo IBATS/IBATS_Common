@@ -1414,7 +1414,7 @@ def strat_heart_beat_thread():
                 else:
                     n -= 1
 
-            time.sleep(300)
+            time.sleep(600)
             try:
                 with with_db_session(engine_ibats) as session:
                     update_dt = datetime.now()
