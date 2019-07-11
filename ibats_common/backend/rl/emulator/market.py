@@ -106,7 +106,7 @@ class QuotesMarket(object):
         next_observation = self.data_observation[self.step_counter]
 
         done = False
-        if self.total_value < price:
+        if self.total_value < price * 20:
             done = True
         if self.step_counter >= self.max_step_count:
             done = True
