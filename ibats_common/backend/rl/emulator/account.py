@@ -13,22 +13,29 @@ from ibats_common.backend.rl.emulator.market import QuotesMarket
 
 
 class Account(object):
-    def __init__(self, md_df, data_factors):
+    def __init__(self, md_df, data_factors, expand_dims=True):
         self.A = QuotesMarket(md_df, data_factors)
         self.buffer_reward = []
         self.buffer_value = []
         self.buffer_action = []
         self.buffer_cash = []
+        self.expand_dims = expand_dims
 
     def reset(self):
         self.buffer_reward = []
         self.buffer_value = []
         self.buffer_action = []
         self.buffer_cash = []
-        return np.expand_dims(self.A.reset(), 0)
+        if self.expand_dims:
+            return np.expand_dims(self.A.reset(), 0)
+        else:
+            return self.A.reset()
 
     def latest_state(self):
-        return np.expand_dims(self.A.latest_state(), 0)
+        if self.expand_dims:
+            return np.expand_dims(self.A.latest_state(), 0)
+        else:
+            return self.A.latest_state()
 
     def step(self, action):
         next_state, reward, done = self.A.step(action)
@@ -37,7 +44,10 @@ class Account(object):
         self.buffer_reward.append(reward)
         self.buffer_value.append(self.A.total_value)
         self.buffer_cash.append(self.A.cash)
-        return np.expand_dims(next_state, 0), reward, done
+        if self.expand_dims:
+            return np.expand_dims(next_state, 0), reward, done
+        else:
+            return next_state, reward, done
 
     def plot_data(self)->pd.DataFrame:
         reward_df = pd.DataFrame(
