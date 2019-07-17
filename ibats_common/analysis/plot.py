@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.cm import get_cmap
 from ibats_utils.mess import date_2_str, is_windows_os, open_file_with_system_app
 # matplotlib.use('Qt5Agg')  # windows 下無效
 from matplotlib.font_manager import FontProperties
@@ -826,6 +827,59 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
     return file_path
 
 
+def plot_twin(df, df2, ax=None, name=None, enable_save_plot=True, enable_show_plot=True):
+    """输出双坐标中图像"""
+    if ax is None:
+        fig = plt.figure()  # figsize=(8, 16)
+        ax = fig.add_subplot(111)
+
+    ax.set_prop_cycle(color=get_cmap('tab20').colors)
+    # 绘图
+    if isinstance(df, pd.DataFrame):
+        if df.shape[1] == 1:
+            legend1 = [df.columns[0]]
+        else:
+            legend1 = list(df.columns)
+    elif isinstance(df, pd.Series):
+        legend1 = [df.name]
+    else:
+        legend1 = [""]
+    l1 = ax.plot(df)
+    ax2 = ax.twinx()
+    ax2.set_prop_cycle(color=get_cmap('Set1').colors)
+    if isinstance(df2, pd.DataFrame):
+        if df2.shape[1] == 1:
+            legend2 = [df2.columns[0]]
+        else:
+            legend2 = list(df2.columns)
+    elif isinstance(df2, pd.Series):
+        legend2 = [df2.name]
+    else:
+        legend2 = [""]
+    l2 = ax2.plot(df2, linestyle='--')
+    # 设置 legend
+    lns = l1 + l2
+    plt.legend(lns, legend1 + legend2, loc=0)
+    plt.grid(True)
+    # 设置 title
+    plt.suptitle(name)
+    # 展示
+    plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, file_name=f'{name}.png')
+
+
+def _test_plot_twin():
+    """测试 plot_twin"""
+    date_arr = pd.date_range(pd.to_datetime('2018-01-01'),
+                             pd.to_datetime('2018-01-01') + pd.Timedelta(days=99))
+    date_index = pd.DatetimeIndex(date_arr)
+    close_df = pd.DataFrame({'close': np.sin(np.linspace(0, 10, 100))}, index=date_index)
+    accuracy_df = pd.DataFrame({
+        'acc1': np.cos(np.linspace(0, 10, 100)),
+        'acc2': np.cos(np.linspace(1, 11, 100))
+    }, index=date_index)
+    plot_twin(accuracy_df, close_df['close'], name='plot twin test')
+
+
 @lru_cache()
 def get_font_properties():
     is_win = is_windows_os()
@@ -901,4 +955,5 @@ if __name__ == "__main__":
     # _test_label_distribution()
     # _test_n_days_rr_distribution()
     # _test_plot_accuracy()
-    _test_show_dl_accuracy()
+    # _test_show_dl_accuracy()
+    _test_plot_twin()

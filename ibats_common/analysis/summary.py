@@ -468,6 +468,7 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
     """
     info = get_stg_run_info(stg_run_id)
     stg_run_id = info.stg_run_id
+    stg_name = info.stg_name
     run_mode = RunMode(info.run_mode)
     kwargs = {"enable_show_plot": enable_show_plot, "enable_save_plot": enable_save_plot,
               "run_mode": run_mode, "stg_run_id": stg_run_id}
@@ -489,7 +490,7 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
     file_path_dic['cash_and_margin'] = file_path
 
     # 生成 docx 文档将所需变量
-    heading_title = f'策略分析报告[{stg_run_id}] ' \
+    heading_title = f'策略分析报告[{stg_run_id} {stg_name}] ' \
         f'{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days)'
 
     # 生成 docx 文件
@@ -572,8 +573,8 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
         except:
             calc_mode_str = " "
 
-        run_mode_str = run_mode.name + " "
-        file_name = f"{stg_run_id} {run_mode_str}{calc_mode_str}" \
+        # run_mode_str = run_mode.name + " "
+        file_name = f"{stg_run_id} {stg_name} {calc_mode_str}" \
             f"{date_2_str(min(sum_df.index))} - {date_2_str(max(sum_df.index))} ({sum_df.shape[0]} days) " \
             f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
         file_path = os.path.join(folder_path, file_name)
