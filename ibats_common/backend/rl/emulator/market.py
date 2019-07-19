@@ -8,14 +8,15 @@
 @desc    : 
 """
 import pandas as pd
+import numpy as np
 
 
 class QuotesMarket(object):
-    def __init__(self, md_df: pd.DataFrame, data_factors):
+    def __init__(self, md_df: pd.DataFrame, data_factors, state_with_flag=False):
         self.data_close = md_df['close']
         self.data_open = md_df['open']
         self.data_observation = data_factors
-        self.action_space = ['close', 'long', 'short']
+        self.action_space = ['close', 'long', 'short', 'keep']
         self.fee = 3e-3  # 千三手续费
         self.max_step_count = self.data_observation.shape[0] - 1
         self.init_cash = 1e5
@@ -25,6 +26,7 @@ class QuotesMarket(object):
         self.position = 0
         self.total_value = self.cash + self.position
         self.flags = 0
+        self.state_with_flag = state_with_flag
 
     def reset(self):
         self.step_counter = 0
@@ -32,10 +34,16 @@ class QuotesMarket(object):
         self.position = 0
         self.total_value = self.cash + self.position
         self.flags = 0
-        return self.data_observation[0]
+        if self.state_with_flag:
+            return self.data_observation[0], np.array([self.flags])
+        else:
+            return self.data_observation[0]
 
     def latest_state(self):
-        return self.data_observation[-1]
+        if self.state_with_flag:
+            return self.data_observation[-1], np.array([self.flags])
+        else:
+            return self.data_observation[-1]
 
     def get_action_space(self):
         return self.action_space
@@ -95,6 +103,8 @@ class QuotesMarket(object):
                 self.short()
             else:
                 self.keep()
+        elif action == 'keep':
+            self.keep()
         else:
             raise ValueError("action should be elements of ['long', 'short', 'close']")
 
@@ -106,20 +116,19 @@ class QuotesMarket(object):
         next_observation = self.data_observation[self.step_counter]
 
         done = False
-        if self.total_value < price * 20:
+        if self.total_value < price:
             done = True
         if self.step_counter >= self.max_step_count:
             done = True
 
-        return next_observation, reward, done
+        if self.state_with_flag:
+            return (next_observation, np.array([self.flags])), reward, done
+        else:
+            return next_observation, reward, done
 
     def step(self, action):
-        if action == 1:
-            return self.step_op('long')
-        elif action == 2:
-            return self.step_op('short')
-        elif action == 0:
-            return self.step_op('close')
+        if 0 <= action <= 3:
+            return self.step_op(self.action_space[action])
         else:
             raise ValueError("action should be one of [0,1,2]")
 
@@ -135,18 +144,34 @@ def _test_quote_market():
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
     md_df = md_df.loc[df_index, :]
     # 建立 QuotesMarket
-    qm = QuotesMarket(md_df=md_df[['close', 'open']], data_factors=data_arr_batch)
+    qm = QuotesMarket(md_df=md_df[['close', 'open']], data_factors=data_arr_batch, state_with_flag=True)
     next_observation = qm.reset()
-    assert next_observation.shape[0] == n_step
+    assert len(next_observation) == 2
+    assert next_observation[0].shape[0] == n_step
+    assert next_observation[1] == 0
     next_observation, reward, done = qm.step(1)
+    assert len(next_observation) == 2
+    assert next_observation[1] == 1
     assert not done
     next_observation, reward, done = qm.step(0)
-    assert not done
+    assert next_observation[1] == 0
+    assert reward != 0
+    next_observation, reward, done = qm.step(0)
+    assert next_observation[1] == 0
+    assert reward == 0
+    next_observation, reward, done = qm.step(3)
+    assert next_observation[1] == 0
+    assert reward == 0
     next_observation, reward, done = qm.step(2)
+    assert next_observation[1] == -1
+    assert not done
+    next_observation, reward, done = qm.step(3)
+    assert next_observation[1] == -1
+    assert reward != 0
     try:
-        qm.step(3)
+        qm.step(4)
     except ValueError:
-        print('is ok for not supporting action=3')
+        print('is ok for not supporting action>3')
 
 
 if __name__ == "__main__":
