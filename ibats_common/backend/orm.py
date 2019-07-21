@@ -1400,12 +1400,13 @@ def init_data():
 def strat_heart_beat_thread():
     import time
     global _HEART_BEAT_THREAD
+    beat_logger = logging.getLogger('heart_beat')
     if _HEART_BEAT_THREAD is not None and _HEART_BEAT_THREAD.is_alive():
-        logger.info('timer_heart_beat thread is running')
+        beat_logger.info('timer_heart_beat thread is running')
         return
 
     def timer_heart_beat():
-        logging.debug('timer_heart_beat thread start')
+        beat_logger.debug('timer_heart_beat thread start')
         is_debug, n = False, 10
         while True:
             if is_debug:
@@ -1420,12 +1421,12 @@ def strat_heart_beat_thread():
                     update_dt = datetime.now()
                     session.query(HeartBeat).update({HeartBeat.update_dt: update_dt})
                     session.commit()
-                logger.debug('heart beat at %s', update_dt)
+                beat_logger.debug('heart beat at %s', update_dt)
             except:
-                logger.exception('heart beat exception')
+                beat_logger.exception('heart beat exception')
                 break
 
-        logging.debug('timer_heart_beat thread finished')
+        beat_logger.debug('timer_heart_beat thread finished')
 
     import threading
     _HEART_BEAT_THREAD = threading.Thread(target=timer_heart_beat)
