@@ -12,14 +12,14 @@ import numpy as np
 
 
 class QuotesMarket(object):
-    def __init__(self, md_df: pd.DataFrame, data_factors, state_with_flag=False):
+    def __init__(self, md_df: pd.DataFrame, data_factors, state_with_flag=False, init_cash=2e5):
         self.data_close = md_df['close']
         self.data_open = md_df['open']
         self.data_observation = data_factors
         self.action_space = ['close', 'long', 'short', 'keep']
         self.fee = 3e-3  # 千三手续费
         self.max_step_count = self.data_observation.shape[0] - 1
-        self.init_cash = 1e5
+        self.init_cash = init_cash
         # reset use
         self.step_counter = 0
         self.cash = self.init_cash
