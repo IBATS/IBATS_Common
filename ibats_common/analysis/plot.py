@@ -827,24 +827,31 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
     return file_path
 
 
-def plot_twin(df, df2, ax=None, name=None, enable_save_plot=True, enable_show_plot=True):
+def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_show_plot=True):
     """输出双坐标中图像"""
     if ax is None:
         fig = plt.figure()  # figsize=(8, 16)
         ax = fig.add_subplot(111)
 
     ax.set_prop_cycle(color=get_cmap('tab20').colors)
-    # 绘图
-    if isinstance(df, pd.DataFrame):
-        if df.shape[1] == 1:
-            legend1 = [df.columns[0]]
+    if not isinstance(df_list, list):
+        df_list = [df_list]
+
+    l1, legend1 = [], []
+    for df, linestyle in zip(df_list, ['-', ':', 'dashdotdotted', 'densely dashdotdotted', 'densely dotted'][:len(df_list)]):
+        # 绘图
+        if isinstance(df, pd.DataFrame):
+            if df.shape[1] == 1:
+                legend1 += [df.columns[0]]
+            else:
+                legend1 += list(df.columns)
+        elif isinstance(df, pd.Series):
+            legend1 += [df.name]
         else:
-            legend1 = list(df.columns)
-    elif isinstance(df, pd.Series):
-        legend1 = [df.name]
-    else:
-        legend1 = [""]
-    l1 = ax.plot(df)
+            legend1 += [""]
+
+        l1 += ax.plot(df, linestyle=linestyle)
+
     ax2 = ax.twinx()
     ax2.set_prop_cycle(color=get_cmap('Set1').colors)
     if isinstance(df2, pd.DataFrame):
@@ -877,7 +884,11 @@ def _test_plot_twin():
         'acc1': np.cos(np.linspace(0, 10, 100)),
         'acc2': np.cos(np.linspace(1, 11, 100))
     }, index=date_index)
-    plot_twin(accuracy_df, close_df['close'], name='plot twin test')
+    accuracy2_df = pd.DataFrame({
+        'acc_a': np.cos(np.linspace(0, 10, 100)) + 0.2,
+        'acc_b': np.cos(np.linspace(1, 11, 100)) - 0.2
+    }, index=date_index)
+    plot_twin([accuracy_df, accuracy2_df], close_df['close'], name='plot twin test')
 
 
 @lru_cache()
