@@ -7,17 +7,20 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 
 class QuotesMarket(object):
-    def __init__(self, md_df: pd.DataFrame, data_factors, state_with_flag=False, init_cash=2e5):
+    def __init__(self, md_df: pd.DataFrame, data_factors, init_cash=2e5, fee_rate=3e-3,
+                 state_with_flag=False, reward_with_fee0=False):
         self.data_close = md_df['close']
         self.data_open = md_df['open']
         self.data_observation = data_factors
         self.action_space = ['close', 'long', 'short', 'keep']
-        self.fee = 3e-3  # 千三手续费
+        self.fee_rate = fee_rate  # 千三手续费
+        self.fee_curr_step = 0
+        self.fee_tot = 0
         self.max_step_count = self.data_observation.shape[0] - 1
         self.init_cash = init_cash
         # reset use
@@ -25,15 +28,20 @@ class QuotesMarket(object):
         self.cash = self.init_cash
         self.position = 0
         self.total_value = self.cash + self.position
+        self.total_value_fee0 = self.cash + self.position
         self.flags = 0
         self.state_with_flag = state_with_flag
+        self.reward_with_fee0 = reward_with_fee0
 
     def reset(self):
         self.step_counter = 0
         self.cash = self.init_cash
         self.position = 0
         self.total_value = self.cash + self.position
+        self.total_value_fee0 = self.cash + self.position
         self.flags = 0
+        self.fee_curr_step = 0
+        self.fee_tot = 0
         if self.state_with_flag:
             return self.data_observation[0], np.array([self.flags])
         else:
@@ -51,14 +59,16 @@ class QuotesMarket(object):
     def long(self):
         self.flags = 1
         quotes = self.data_open[self.step_counter] * 10
-        self.cash -= quotes * (1 + self.fee)
+        self.cash -= quotes * (1 + self.fee_rate)
         self.position = quotes
+        self.fee_curr_step += quotes * self.fee_rate
 
     def short(self):
         self.flags = -1
         quotes = self.data_open[self.step_counter] * 10
-        self.cash += quotes * (1 - self.fee)
+        self.cash += quotes * (1 - self.fee_rate)
         self.position = - quotes
+        self.fee_curr_step += quotes * self.fee_rate
 
     def keep(self):
         quotes = self.data_open[self.step_counter] * 10
@@ -67,17 +77,19 @@ class QuotesMarket(object):
     def close_long(self):
         self.flags = 0
         quotes = self.data_open[self.step_counter] * 10
-        self.cash += quotes * (1 - self.fee)
+        self.cash += quotes * (1 - self.fee_rate)
         self.position = 0
+        self.fee_curr_step += quotes * self.fee_rate
 
     def close_short(self):
         self.flags = 0
         quotes = self.data_open[self.step_counter] * 10
-        self.cash -= quotes * (1 + self.fee)
+        self.cash -= quotes * (1 + self.fee_rate)
         self.position = 0
+        self.fee_curr_step += quotes * self.fee_rate
 
     def step_op(self, action):
-
+        self.fee_curr_step = 0
         if action == 'long':
             if self.flags == 0:
                 self.long()
@@ -108,6 +120,11 @@ class QuotesMarket(object):
         else:
             raise ValueError("action should be elements of ['long', 'short', 'close']")
 
+        # 计算费用
+        self.fee_tot += self.fee_curr_step
+        self.total_value_fee0 = self.total_value + self.fee_tot
+
+        # 计算价值
         price = self.data_close[self.step_counter]
         position = price * 10 * self.flags
         reward = self.cash + position - self.total_value
@@ -121,10 +138,11 @@ class QuotesMarket(object):
         if self.step_counter >= self.max_step_count:
             done = True
 
-        if self.state_with_flag:
-            return (next_observation, np.array([self.flags])), reward, done
-        else:
-            return next_observation, reward, done
+        ret_state = (next_observation, np.array([self.flags])) if self.state_with_flag else next_observation
+        ret_reward = (reward / price, (reward + self.fee_curr_step) / price) if self.reward_with_fee0 else (
+                reward / price)
+
+        return ret_state, ret_reward, done
 
     def step(self, action):
         if 0 <= action <= 3:
