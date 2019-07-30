@@ -13,8 +13,8 @@ from ibats_common.backend.rl.emulator.market import QuotesMarket
 
 
 class Account(object):
-    def __init__(self, md_df, data_factors, expand_dims=True, state_with_flag=False, reward_with_fee0=False):
-        self.A = QuotesMarket(md_df, data_factors, state_with_flag=state_with_flag, reward_with_fee0=reward_with_fee0)
+    def __init__(self, md_df, data_factors, expand_dims=True, state_with_flag=False, **kwargs):
+        self.A = QuotesMarket(md_df, data_factors, state_with_flag=state_with_flag, **kwargs)
         self.buffer_reward = []
         self.buffer_value = []
         self.buffer_action = []
@@ -22,6 +22,7 @@ class Account(object):
         self.buffer_fee = []
         self.buffer_value_fee0 = []
         self.buffer_fee_tot = []
+        self.buffer_action_count = []
         self.expand_dims = expand_dims
         self.actions = self.A.get_action_space()
         self.action_size = len(self.actions)
@@ -35,6 +36,7 @@ class Account(object):
         self.buffer_fee = []
         self.buffer_value_fee0 = []
         self.buffer_fee_tot = []
+        self.buffer_action_count = []
         if self.expand_dims:
             # return np.expand_dims(self.A.reset(), 0)
             state = self.A.reset()
@@ -65,6 +67,7 @@ class Account(object):
         self.buffer_cash.append(self.A.cash)
         self.buffer_fee_tot.append(self.A.fee_tot)
         self.buffer_value_fee0.append(self.A.total_value_fee0)
+        self.buffer_action_count.append(self.A.action_count)
         if self.expand_dims:
             if self.state_with_flag:
                 return (np.expand_dims(next_state[0], 0), next_state[1]), reward, done
@@ -83,6 +86,7 @@ class Account(object):
              "close": self.A.data_close.iloc[:len(self.buffer_action)],
              "fee_tot": self.buffer_fee_tot,
              "value_fee0": self.buffer_value_fee0,
+             "action_count": self.buffer_action_count,
              }, index=self.A.data_close.index[:len(self.buffer_action)])
         return reward_df
 

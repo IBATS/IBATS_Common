@@ -32,6 +32,7 @@ class QuotesMarket(object):
         self.flags = 0
         self.state_with_flag = state_with_flag
         self.reward_with_fee0 = reward_with_fee0
+        self.action_count = 0
 
     def reset(self):
         self.step_counter = 0
@@ -42,6 +43,7 @@ class QuotesMarket(object):
         self.flags = 0
         self.fee_curr_step = 0
         self.fee_tot = 0
+        self.action_count = 0
         if self.state_with_flag:
             return self.data_observation[0], np.array([self.flags])
         else:
@@ -62,6 +64,7 @@ class QuotesMarket(object):
         self.cash -= quotes * (1 + self.fee_rate)
         self.position = quotes
         self.fee_curr_step += quotes * self.fee_rate
+        self.action_count += 1
 
     def short(self):
         self.flags = -1
@@ -69,6 +72,7 @@ class QuotesMarket(object):
         self.cash += quotes * (1 - self.fee_rate)
         self.position = - quotes
         self.fee_curr_step += quotes * self.fee_rate
+        self.action_count += 1
 
     def keep(self):
         quotes = self.data_open[self.step_counter] * 10
@@ -80,6 +84,7 @@ class QuotesMarket(object):
         self.cash += quotes * (1 - self.fee_rate)
         self.position = 0
         self.fee_curr_step += quotes * self.fee_rate
+        self.action_count += 1
 
     def close_short(self):
         self.flags = 0
@@ -87,6 +92,7 @@ class QuotesMarket(object):
         self.cash -= quotes * (1 + self.fee_rate)
         self.position = 0
         self.fee_curr_step += quotes * self.fee_rate
+        self.action_count += 1
 
     def step_op(self, action):
         self.fee_curr_step = 0
