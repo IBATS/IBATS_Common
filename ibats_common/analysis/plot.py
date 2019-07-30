@@ -827,7 +827,7 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
     return file_path
 
 
-def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_show_plot=True):
+def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_show_plot=True, do_clr=True):
     """输出双坐标中图像"""
     if ax is None:
         fig = plt.figure()  # figsize=(8, 16)
@@ -866,12 +866,16 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
     l2 = ax2.plot(df2, linestyle='--')
     # 设置 legend
     lns = l1 + l2
-    plt.legend(lns, legend1 + legend2, loc=0)
+    # legend 参数设置
+    # https://blog.csdn.net/helunqu2017/article/details/78641290
+    # loc 0 best 3 lower left
+    plt.legend(lns, legend1 + legend2, loc=3, frameon=False, ncol=2, fontsize='xx-small')  # , framealpha=0.3
     plt.grid(True)
     # 设置 title
     plt.suptitle(name)
     # 展示
-    plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, file_name=f'{name}.png')
+    plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, do_clr=do_clr,
+                 file_name=f'{name}.png')
 
 
 def _test_plot_twin():
