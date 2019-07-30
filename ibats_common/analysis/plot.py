@@ -872,7 +872,8 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
     plt.legend(lns, legend1 + legend2, loc=3, frameon=False, ncol=2, fontsize='xx-small')  # , framealpha=0.3
     plt.grid(True)
     # 设置 title
-    plt.suptitle(name)
+    # plt.suptitle(name)
+    plt.title(name)
     # 展示
     plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, do_clr=do_clr,
                  file_name=f'{name}.png')
