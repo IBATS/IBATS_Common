@@ -830,7 +830,7 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
 def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_show_plot=True, do_clr=True):
     """输出双坐标中图像"""
     if ax is None:
-        fig = plt.figure()  # figsize=(8, 16)
+        fig = plt.figure(figsize=(8, 16))
         ax = fig.add_subplot(111)
 
     ax.set_prop_cycle(color=get_cmap('tab20').colors)
@@ -852,24 +852,30 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
 
         l1 += ax.plot(df, linestyle=linestyle)
 
-    ax2 = ax.twinx()
-    ax2.set_prop_cycle(color=get_cmap('Set1').colors)
-    if isinstance(df2, pd.DataFrame):
-        if df2.shape[1] == 1:
-            legend2 = [df2.columns[0]]
+    if df2 is not None:
+        ax2 = ax.twinx()
+        ax2.set_prop_cycle(color=get_cmap('Set1').colors)
+        if isinstance(df2, pd.DataFrame):
+            if df2.shape[1] == 1:
+                legend2 = [df2.columns[0]]
+            else:
+                legend2 = list(df2.columns)
+        elif isinstance(df2, pd.Series):
+            legend2 = [df2.name]
         else:
-            legend2 = list(df2.columns)
-    elif isinstance(df2, pd.Series):
-        legend2 = [df2.name]
+            legend2 = [""]
+        l2 = ax2.plot(df2, linestyle='--')
+        # 设置 legend
+        lns = l1 + l2
+        legend = legend1 + legend2
     else:
-        legend2 = [""]
-    l2 = ax2.plot(df2, linestyle='--')
-    # 设置 legend
-    lns = l1 + l2
+        lns = l1
+        legend = legend1
+
     # legend 参数设置
     # https://blog.csdn.net/helunqu2017/article/details/78641290
     # loc 0 best 3 lower left
-    plt.legend(lns, legend1 + legend2, loc=3, frameon=False, ncol=2, fontsize='xx-small')  # , framealpha=0.3
+    plt.legend(lns, legend, loc=3, frameon=False, ncol=2, fontsize='xx-small')  # , framealpha=0.3
     plt.grid(True)
     # 设置 title
     # plt.suptitle(name)
