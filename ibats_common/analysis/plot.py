@@ -827,10 +827,11 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
     return file_path
 
 
-def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_show_plot=True, do_clr=True):
+def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_show_plot=True, do_clr=True,
+              y_scales_log=[False, False]):
     """输出双坐标中图像"""
     if ax is None:
-        fig = plt.figure(figsize=(8, 16))
+        fig = plt.figure()  # figsize=(8, 16)
         ax = fig.add_subplot(111)
 
     ax.set_prop_cycle(color=get_cmap('tab20').colors)
@@ -851,6 +852,8 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
             legend1 += [""]
 
         l1 += ax.plot(df, linestyle=linestyle)
+        if y_scales_log[0]:
+            ax.set_yscale("log")
 
     if df2 is not None:
         ax2 = ax.twinx()
@@ -865,6 +868,8 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
         else:
             legend2 = [""]
         l2 = ax2.plot(df2, linestyle='--')
+        if y_scales_log[1]:
+            ax.set_yscale("log")
         # 设置 legend
         lns = l1 + l2
         legend = legend1 + legend2
@@ -892,14 +897,15 @@ def _test_plot_twin():
     date_index = pd.DatetimeIndex(date_arr)
     close_df = pd.DataFrame({'close': np.sin(np.linspace(0, 10, 100))}, index=date_index)
     accuracy_df = pd.DataFrame({
-        'acc1': np.cos(np.linspace(0, 10, 100)),
-        'acc2': np.cos(np.linspace(1, 11, 100))
+        'acc1': np.cos(np.linspace(0, 10, 100)) + 2,
+        'acc2': np.cos(np.linspace(1, 11, 100)) + 2
     }, index=date_index)
     accuracy2_df = pd.DataFrame({
-        'acc_a': np.cos(np.linspace(0, 10, 100)) + 0.2,
-        'acc_b': np.cos(np.linspace(1, 11, 100)) - 0.2
+        'acc_a': (np.cos(np.linspace(0, 10, 100)) + 3) * 100,
+        'acc_b': np.cos(np.linspace(1, 11, 100)) + 3
     }, index=date_index)
-    plot_twin([accuracy_df, accuracy2_df], close_df['close'], name='plot twin test')
+    plot_twin([accuracy_df, accuracy2_df], close_df['close'], name='plot twin test log',
+              y_scales_log=[True, True])
 
 
 @lru_cache()
