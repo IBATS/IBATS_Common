@@ -661,17 +661,22 @@ def show_drl_accuracy(real_label_s, action_s, close_df: pd.DataFrame, split_poin
     return file_path
 
 
-def plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None, stg_run_id=None, do_clr=True):
+def plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None, stg_run_id=None, do_clr=True,
+                 folder_path=None):
     if enable_save_plot:
-        if stg_run_id is None:
-            folder_path = get_cache_folder_path()
+        if folder_path is None:
+            if stg_run_id is None:
+                folder_path = get_cache_folder_path()
+            else:
+                folder_path = os.path.join(get_cache_folder_path(), str(stg_run_id))
         else:
-            folder_path = os.path.join(get_cache_folder_path(), str(stg_run_id))
+            folder_path = os.path.abspath(folder_path)
 
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
         file_path = os.path.join(folder_path, file_name)
+        logger.debug("save to %s", file_path)
         plt.savefig(file_path, dpi=75)
     else:
         file_path = None
@@ -828,7 +833,7 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
 
 
 def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_show_plot=True, do_clr=True,
-              y_scales_log=[False, False]):
+              folder_path=None, y_scales_log=[False, False]):
     """输出双坐标中图像"""
     if ax is None:
         fig = plt.figure()  # figsize=(8, 16)
@@ -857,7 +862,7 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
 
     if df2 is not None:
         ax2 = ax.twinx()
-        ax2.set_prop_cycle(color=get_cmap('Set1').colors)
+        ax2.set_prop_cycle(color=get_cmap('Set2').colors)
         if isinstance(df2, pd.DataFrame):
             if df2.shape[1] == 1:
                 legend2 = [df2.columns[0]]
@@ -887,7 +892,7 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
     plt.title(name)
     # 展示
     plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, do_clr=do_clr,
-                 file_name=f'{name}.png')
+                 file_name=f'{name}.png', folder_path=folder_path)
 
 
 def _test_plot_twin():
@@ -901,11 +906,11 @@ def _test_plot_twin():
         'acc2': np.cos(np.linspace(1, 11, 100)) + 2
     }, index=date_index)
     accuracy2_df = pd.DataFrame({
-        'acc_a': (np.cos(np.linspace(0, 10, 100)) + 3) * 100,
+        'acc_a': (np.cos(np.linspace(0, 10, 100)) + 1) * 100 + 1,
         'acc_b': np.cos(np.linspace(1, 11, 100)) + 3
     }, index=date_index)
     plot_twin([accuracy_df, accuracy2_df], close_df['close'], name='plot twin test log',
-              y_scales_log=[True, True])
+              y_scales_log=[False, True])
 
 
 @lru_cache()
