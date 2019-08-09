@@ -874,7 +874,7 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
             legend2 = [""]
         l2 = ax2.plot(df2, linestyle='--')
         if y_scales_log[1]:
-            ax.set_yscale("log")
+            ax2.set_yscale("log")
         # 设置 legend
         lns = l1 + l2
         legend = legend1 + legend2
