@@ -9,7 +9,7 @@
 """
 import datetime
 import logging
-
+import bisect
 import ffn
 import numpy as np
 import pandas as pd
@@ -275,6 +275,19 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list, drop=False, log_
 
     # 威廉指标
     df['WILLR'] = talib.WILLR(high_s, low_s, close_s, timeperiod=14)
+
+    # 价格分位数水平
+    data_list, data_count = [], 0
+
+    def get_index_pct(x):
+        """获取当前价格在历史价格数组中的位置的百分比"""
+        global data_count
+        bisect.insort(data_list, x)
+        data_count += 1
+        idx = bisect.bisect_left(data_list, x)
+        return idx/data_count
+
+    df['index_pct'] = close_s.apply(get_index_pct)
 
     # 对 volume amount 取 log
     if log_av:
