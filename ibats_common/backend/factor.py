@@ -277,15 +277,14 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list, drop=False, log_
     df['WILLR'] = talib.WILLR(high_s, low_s, close_s, timeperiod=14)
 
     # 价格分位数水平
-    data_list, data_count = [], 0
+    data_list, data_count = [], [0]
 
     def get_index_pct(x):
         """获取当前价格在历史价格数组中的位置的百分比"""
-        global data_count
         bisect.insort(data_list, x)
-        data_count += 1
+        data_count[0] += 1
         idx = bisect.bisect_left(data_list, x)
-        return idx/data_count
+        return idx/data_count[0]
 
     df['index_pct'] = close_s.apply(get_index_pct)
 
