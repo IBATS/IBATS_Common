@@ -5,14 +5,12 @@
 @Time    : 19-8-8 下午12:28
 @File    : utils.py
 @contact : mmmaaaggg@163.com
-@desc    : 
+@desc    : use_cup_only 需要优先于一切 import tensorflow 的语句被调用才能生效
 """
-from tensorflow.python.client import device_lib
-import tensorflow as tf
-import keras.backend.tensorflow_backend as ktf
 
 
 def show_device():
+    from tensorflow.python.client import device_lib
     return device_lib.list_local_devices()
 
 
@@ -24,6 +22,14 @@ def _test_show_device():
 
 
 def use_cup_only():
+    import os
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
+    # os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+    import tensorflow as tf
+    import keras.backend.tensorflow_backend as ktf
+
     ktf.set_session(tf.Session(config=tf.ConfigProto(device_count={'gpu': 0})))
 
 
