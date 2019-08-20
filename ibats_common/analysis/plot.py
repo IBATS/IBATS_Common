@@ -526,10 +526,10 @@ def show_dl_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=
         return
     enable_kwargs = dict(enable_save_plot=False, enable_show_plot=False, do_clr=False)
     if show_moving_avg:
-        fig = plt.figure(figsize=(8, 16))
+        fig = plt.figure(figsize=(12, 16))
         fig_idx = 310
     else:
-        fig = plt.figure(figsize=(8, 12))
+        fig = plt.figure(figsize=(12, 14))
         fig_idx = 210
 
     # 分析成功率
@@ -611,10 +611,10 @@ def show_drl_accuracy(real_label_s, action_s, close_df: pd.DataFrame, split_poin
         return
     enable_kwargs = dict(enable_save_plot=False, enable_show_plot=False, do_clr=False)
     if show_moving_avg:
-        fig = plt.figure(figsize=(8, 16))
+        fig = plt.figure(figsize=(12, 16))
         fig_idx = 310
     else:
-        fig = plt.figure(figsize=(8, 12))
+        fig = plt.figure(figsize=(12, 14))
         fig_idx = 210
 
     # 分析成功率
@@ -836,7 +836,7 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
               folder_path=None, y_scales_log=[False, False]):
     """输出双坐标中图像"""
     if ax is None:
-        fig = plt.figure()  # figsize=(8, 16)
+        fig = plt.figure(figsize=(10, 16))  #
         ax = fig.add_subplot(111)
 
     ax.set_prop_cycle(color=get_cmap('tab20').colors)
