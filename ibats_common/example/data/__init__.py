@@ -15,8 +15,10 @@ from ibats_utils.mess import str_2_date
 from ibats_common import module_root_path
 
 
-def load_data(file_name, encoding=None)-> pd.DataFrame:
-    file_path = os.path.join(module_root_path, 'example', 'data', file_name)
+def load_data(file_name, encoding=None, folder_path=None)-> pd.DataFrame:
+    if folder_path is None:
+        folder_path = os.path.join(module_root_path, 'example', 'data')
+    file_path = os.path.join(folder_path, file_name)
     df = pd.read_csv(file_path, encoding=encoding)
     return df
 
