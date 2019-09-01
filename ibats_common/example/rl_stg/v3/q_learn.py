@@ -15,7 +15,7 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 from ibats_utils.mess import date_2_str, load_class
-from ibats_common.example.reinforcement_learning.v2 import module_version
+from ibats_common.example.rl_stg.v3 import module_version
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +184,7 @@ class Env:
 
 
 def _test_env(trade_date_from='2010-1-1', trade_date_to='2018-10-18'):
-    from ibats_common.example.reinforcement_learning.v2.rl_stg import get_stg_handler
+    from ibats_common.example.rl_stg.v3.rl_stg import get_stg_handler
     env = Env(trade_date_from, trade_date_to, get_stg_handler, q_table_key=trade_date_to)
     action_space = ['empty', 'hold_long', 'hold_short']
     actions = list(range(len(action_space)))
