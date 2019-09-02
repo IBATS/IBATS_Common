@@ -10,8 +10,8 @@
 from ibats_utils.mess import load_class, date_2_str
 import numpy as np
 from ibats_common.common import BacktestTradeMode, ContextKey, Direction, CalcMode
-from ibats_common.example.reinforcement_learning.v2.q_learn import QLearningTable, Env
-from ibats_common.example.reinforcement_learning.v2 import module_version
+from ibats_common.example.rl_stg.v3.q_learn import QLearningTable, Env
+from ibats_common.example.rl_stg.v3 import module_version
 from ibats_common.strategy import StgBase
 from ibats_common.strategy_handler import strategy_handler_factory
 from ibats_local_trader.agent.md_agent import *
@@ -115,12 +115,12 @@ def get_stg_handler(retrain_period, q_table_key=None):
     calc_mode = CalcMode.Normal
     if retrain_period == 0:
         strategy_params = {'unit': 1,
-                           'module_name': f'ibats_common.example.reinforcement_learning.{module_version}.rl_stg',
+                           'module_name': f'ibats_common.example.rl_stg.{module_version}.rl_stg',
                            'class_name': 'RLHandler',
                            'q_table_key': q_table_key}
     else:
         strategy_params = {'unit': 1,
-                           'module_name': f'ibats_common.example.reinforcement_learning.{module_version}.rl_stg',
+                           'module_name': f'ibats_common.example.rl_stg.{module_version}.rl_stg',
                            'class_name': 'RLHandler4Train',
                            'q_table_key': q_table_key,
                            'retrain_period': retrain_period
@@ -186,7 +186,6 @@ class RLHandler:
         """
         :param q_table_key:
         """
-        import logging
         action_space = ['empty', 'hold_long', 'hold_short']
         self.actions = list(range(len(action_space)))
         self.q_table_key = q_table_key
@@ -194,7 +193,6 @@ class RLHandler:
         self.last_state = None
         self.last_action = None
         self.enable_load_if_exist = True
-        self.logger = logging.getLogger(str(self.__class__))
 
     def init_state(self, md_df: pd.DataFrame):
         # 每一次新 episode 需要重置 state, action
@@ -280,7 +278,7 @@ class RLHandler4Train(RLHandler):
 
     def train(self, trade_date_to):
         """
-        具体功能参见 ibats_common.example.reinforcement_learning.q_learn import main
+        具体功能参见 ibats_common.example.rl_stg.q_learn import main
         :param trade_date_to:
         :return:
         """
@@ -294,7 +292,7 @@ class RLHandler4Train(RLHandler):
             self.init_ql_table(trade_date_to)
 
         if not is_loaded:
-            self.logger.info('开始训练：[%s, %s]', self.train_date_from, trade_date_to)
+            logger.info('开始训练：[%s, %s]', self.train_date_from, trade_date_to)
             env = Env(self.train_date_from, trade_date_to, self.get_stg_handler, q_table_key=self.ql_table.key)
             for episode in range(self.episode_count):
                 # fresh env
@@ -303,7 +301,7 @@ class RLHandler4Train(RLHandler):
 
             # end of game
             env.destroy()
-            self.logger.info('RL Over')
+            logger.info('RL Over')
             self.ql_table.save()
         # 设置最新训练日期
         self.train_date_latest = pd.to_datetime(trade_date_to)
@@ -344,7 +342,7 @@ def _test_rl_handler(trade_date_from='2010-1-1', trade_date_to='2018-10-18'):
     print("action_df = \n", action_df)
     ql_table = QLearningTable(actions=rl_handler.actions, key=trade_date_to)
     # assert ql_table.q_table.shape[0] == 0
-    # ql_table_class = load_class(module_name='ibats_common.example.reinforcement_learning.q_learn',
+    # ql_table_class = load_class(module_name='ibats_common.example.rl_stg.q_learn',
     #                            class_name='QLearningTable')
     # ql_table = ql_table_class(actions=rl_handler.actions, key=trade_date_to)
     assert ql_table.q_table.shape[0] > 0
@@ -354,7 +352,7 @@ def _test_rl_handler(trade_date_from='2010-1-1', trade_date_to='2018-10-18'):
 
 
 def _test_rl_handler_4_train(trade_date_from='2010-1-1', trade_date_to='2018-10-18'):
-    from ibats_common.example.reinforcement_learning.v1.rl_stg import get_stg_handler
+    from ibats_common.example.rl_stg.v1.rl_stg import get_stg_handler
     from ibats_common.example.data import load_data
     trade_date_from_ = str_2_date(trade_date_from)
     trade_date_to_ = str_2_date(trade_date_to)
@@ -372,7 +370,7 @@ def _test_rl_handler_4_train(trade_date_from='2010-1-1', trade_date_to='2018-10-
     action_df = pd.DataFrame([trade_date_action_dic]).T
     print("action_df = \n", action_df)
     # ql_table = QLearningTable(rl_handler.actions, key=trade_date_to)
-    ql_table_class = load_class(module_name=f'ibats_common.example.reinforcement_learning.{module_version}.q_learn',
+    ql_table_class = load_class(module_name=f'ibats_common.example.rl_stg.{module_version}.q_learn',
                                 class_name='QLearningTable')
     ql_table = ql_table_class(actions=rl_handler.actions, key=trade_date_to)
     assert ql_table.q_table.shape[0] > 0
