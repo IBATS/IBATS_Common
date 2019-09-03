@@ -26,11 +26,12 @@ def load_data(file_name, encoding=None, folder_path=None, index_col=None, range_
     if range_from is None:
         is_in_range = None
     else:
-        is_in_range = df.index >= range_from
-    if range_to is None:
-        is_in_range = df.index <= range_to
-    else:
-        is_in_range &= df.index <= range_to
+        is_in_range = df.index >= pd.to_datetime(range_from)
+    if range_to is not None:
+        if is_in_range is None:
+            is_in_range = df.index <= pd.to_datetime(range_to)
+        else:
+            is_in_range &= df.index <= pd.to_datetime(range_to)
     if is_in_range is not None:
         df = df[is_in_range]
 
