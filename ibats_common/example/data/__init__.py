@@ -8,14 +8,14 @@
 @desc    : 
 """
 import os
+
 import pandas as pd
-import numpy as np
-from ibats_utils.mess import str_2_date
 
 from ibats_common import module_root_path
 
 
-def load_data(file_name, encoding=None, folder_path=None, index_col=None, range_from=None, range_to=None)-> pd.DataFrame:
+def load_data(file_name, encoding=None, folder_path=None, index_col=None, range_from=None,
+              range_to=None) -> pd.DataFrame:
     if folder_path is None:
         folder_path = os.path.join(module_root_path, 'example', 'data')
     file_path = os.path.join(folder_path, file_name)
@@ -23,11 +23,13 @@ def load_data(file_name, encoding=None, folder_path=None, index_col=None, range_
                      parse_dates=[index_col] if index_col is not None else False)
     # df.index = pd.DatetimeIndex(df.index)
     # 获取指定日期区间的数据
-    if range_from is not None:
-        is_in_range = df.index >= range_from
-    else:
+    if range_from is None:
         is_in_range = None
-    if range_to is not None:
+    else:
+        is_in_range = df.index >= range_from
+    if range_to is None:
+        is_in_range = df.index <= range_to
+    else:
         is_in_range &= df.index <= range_to
     if is_in_range is not None:
         df = df[is_in_range]
@@ -61,11 +63,11 @@ def _test_load_data():
     DATA_FOLDER_PATH = r'D:\WSPych\IBATSCommon\ibats_common\example\data' \
         if is_windows_os() else r'/home/mg/github/IBATS_Common/ibats_common/example/data'
     df = load_data('RB.csv',
-              folder_path=DATA_FOLDER_PATH,
-              index_col='trade_date', range_from='2013-1-1', range_to='2015-12-31'
-              )
-    assert min(df.index) > str_2_date('2013-1-1')
-    assert max(df.index) < str_2_date('2015-12-31')
+                   folder_path=DATA_FOLDER_PATH,
+                   index_col='trade_date', range_from='2013-1-1', range_to='2015-12-31'
+                   )
+    assert min(df.index) > pd.to_datetime('2013-1-1')
+    assert max(df.index) == pd.to_datetime('2015-12-31')
 
 
 if __name__ == "__main__":
