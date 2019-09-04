@@ -833,7 +833,7 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
 
 
 def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_show_plot=True, do_clr=True,
-              folder_path=None, y_scales_log=[False, False]):
+              folder_path=None, y_scales_log=[False, False], in_sample_date_line=None):
     """输出双坐标中图像"""
     if ax is None:
         fig = plt.figure(figsize=(10, 16))  #
@@ -843,7 +843,7 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
     if not isinstance(df_list, list):
         df_list = [df_list]
 
-    l1, legend1 = [], []
+    l1, legend1, min_x = [], [], None
     for df, linestyle in zip(df_list, ['-', ':', 'dashdotdotted', 'densely dashdotdotted', 'densely dotted'][:len(df_list)]):
         # 绘图
         if isinstance(df, pd.DataFrame):
@@ -856,9 +856,15 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
         else:
             legend1 += [""]
 
+        min_x = min(df.index)
         l1 += ax.plot(df, linestyle=linestyle)
         if y_scales_log[0]:
             ax.set_yscale("log")
+
+    # 分割着色
+    x1 = pd.to_datetime(in_sample_date_line)
+    p = plt.axvspan(min_x, x1, facecolor='#2ca02c', alpha=0.5)
+
 
     if df2 is not None:
         ax2 = ax.twinx()
@@ -902,15 +908,15 @@ def _test_plot_twin():
     date_index = pd.DatetimeIndex(date_arr)
     close_df = pd.DataFrame({'close': np.sin(np.linspace(0, 10, 100))}, index=date_index)
     accuracy_df = pd.DataFrame({
-        'acc1': np.cos(np.linspace(0, 10, 100)) + 2,
-        'acc2': np.cos(np.linspace(1, 11, 100)) + 2
+        'acc1': np.cos(np.linspace(0, 10, 100)) + 9,
+        'acc2': np.cos(np.linspace(1, 11, 100)) + 9
     }, index=date_index)
     accuracy2_df = pd.DataFrame({
-        'acc_a': (np.cos(np.linspace(0, 10, 100)) + 1) * 100 + 1,
-        'acc_b': np.cos(np.linspace(1, 11, 100)) + 3
+        'acc_a': (np.cos(np.linspace(0, 10, 100)) + 2) * 10 - 5,
+        'acc_b': np.cos(np.linspace(1, 11, 100)) + 9
     }, index=date_index)
     plot_twin([accuracy_df, accuracy2_df], close_df['close'], name='plot twin test log',
-              y_scales_log=[False, True])
+              y_scales_log=[True, False], in_sample_date_line='2018-02-01')
 
 
 @lru_cache()
