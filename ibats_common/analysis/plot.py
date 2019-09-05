@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 logger.debug("matplotlib.get_backend() => %s", matplotlib.get_backend())
 register_matplotlib_converters()
 logger.debug('import %s', ffn)
+ALTER_BG_COLOR = '#f0f0f0'
 
 
 def get_file_name(header, name=None):
@@ -488,7 +489,7 @@ def label_distribution(close_df: pd.DataFrame, min_rr: float, max_rr: float, max
     ax = close_df.plot(grid=True)
     plt.suptitle(f'label [{min_rr * 100:.2f}% ~ {max_rr * 100:.2f}%]')
     x_values = list(close_df.index)
-    colors = [None, '#2ca02c', '#d62728']
+    colors = [None, ALTER_BG_COLOR, '#d62728']
 
     value_count = len(value_arr)
     label_list = list(set(target_arr))
@@ -824,7 +825,7 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
             else:
                 x1 = point
                 if num >= 1:
-                    p = plt.axvspan(x0, x1, facecolor='#2ca02c', alpha=0.5)
+                    p = plt.axvspan(x0, x1, facecolor=ALTER_BG_COLOR, alpha=0.5)
 
     datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S_%f')
     file_name = f"{datetime_str}" if name is None else f"{name}_{datetime_str}"
@@ -862,9 +863,12 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
             ax.set_yscale("log")
 
     # 分割着色
-    x1 = pd.to_datetime(in_sample_date_line)
-    p = plt.axvspan(min_x, x1, facecolor='#2ca02c', alpha=0.5)
-
+    if in_sample_date_line is not None:
+        if min_x is None:
+            logger.warning('min_x is None, cannot draw date_line')
+        else:
+            x1 = pd.to_datetime(in_sample_date_line)
+            p = plt.axvspan(min_x, x1, facecolor=ALTER_BG_COLOR, alpha=0.5)
 
     if df2 is not None:
         ax2 = ax.twinx()
