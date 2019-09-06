@@ -19,8 +19,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from matplotlib.cm import get_cmap
 from ibats_utils.mess import date_2_str, is_windows_os, open_file_with_system_app
+from matplotlib.cm import get_cmap
 # matplotlib.use('Qt5Agg')  # windows 下無效
 from matplotlib.font_manager import FontProperties
 from pandas.plotting import register_matplotlib_converters
@@ -141,7 +141,7 @@ def plot_rr_df(df: pd.DataFrame, col_name_list=None, enable_show_plot=True, enab
     ax = data_df.plot(grid=True)
     ax.set_title(
         f"Return Rate " if name is None else f"Return Rate [{name}] "
-                                             f"{date_2_str(min(data_df.index))} - {date_2_str(max(data_df.index))} ({data_df.shape[0]} days)")
+        f"{date_2_str(min(data_df.index))} - {date_2_str(max(data_df.index))} ({data_df.shape[0]} days)")
 
     file_name = get_file_name(f'rr', name=name)
     file_path = plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot,
@@ -184,7 +184,7 @@ def plot_scatter_matrix(df: pd.DataFrame, diagonal='hist', col_name_list=None, e
     pd.plotting.scatter_matrix(data_df)
     plt.suptitle(
         f"Scatter Matrix " if name is None else f"Scatter Matrix [{name}] "
-                                                f"{date_2_str(min(data_df.index))} - {date_2_str(max(data_df.index))} ({data_df.shape[0]} days)")
+        f"{date_2_str(min(data_df.index))} - {date_2_str(max(data_df.index))} ({data_df.shape[0]} days)")
 
     file_name = get_file_name('scatter_matrix', name=name)
     file_path = plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot,
@@ -834,10 +834,10 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
 
 
 def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_show_plot=True, do_clr=True,
-              folder_path=None, y_scales_log=[False, False], in_sample_date_line=None):
+              folder_path=None, y_scales_log=[False, False], in_sample_date_line=None, figsize=(6, 8)):
     """输出双坐标中图像"""
     if ax is None:
-        fig = plt.figure(figsize=(10, 16))  #
+        fig = plt.figure(figsize=figsize)  #
         ax = fig.add_subplot(111)
 
     ax.set_prop_cycle(color=get_cmap('tab20').colors)
@@ -845,7 +845,8 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
         df_list = [df_list]
 
     l1, legend1, min_x = [], [], None
-    for df, linestyle in zip(df_list, ['-', ':', 'dashdotdotted', 'densely dashdotdotted', 'densely dotted'][:len(df_list)]):
+    for df, linestyle in zip(df_list,
+                             ['-', ':', 'dashdotdotted', 'densely dashdotdotted', 'densely dotted'][:len(df_list)]):
         # 绘图
         if isinstance(df, pd.DataFrame):
             if df.shape[1] == 1:
@@ -901,8 +902,8 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
     # plt.suptitle(name)
     plt.title(name)
     # 展示
-    plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, do_clr=do_clr,
-                 file_name=f'{name}.png', folder_path=folder_path)
+    return plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, do_clr=do_clr,
+                        file_name=f'{name}.png', folder_path=folder_path)
 
 
 def _test_plot_twin():
