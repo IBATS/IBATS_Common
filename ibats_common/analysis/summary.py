@@ -452,7 +452,7 @@ def stats_df_2_docx_table(stats_df, document):
         "start": date_2_str,
         "end": date_2_str,
     }
-    df_2_table(document, stats_df, format_by_index=format_by_index)
+    df_2_table(document, stats_df, format_by_index=format_by_index, max_col_count=5)
 
 
 def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=False, enable_clean_cache=True,
