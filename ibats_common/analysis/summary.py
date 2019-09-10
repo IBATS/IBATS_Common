@@ -19,9 +19,6 @@ import numpy as np
 import pandas as pd
 from docx.shared import Pt
 from docx.shared import RGBColor
-from docx.oxml.ns import nsdecls
-from docx.oxml import parse_xml
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 from ibats_utils.mess import open_file_with_system_app, date_2_str, datetime_2_str, split_chunk, iter_2_range
 from scipy.stats import anderson, normaltest
 
@@ -285,9 +282,31 @@ def summary_rr(df: pd.DataFrame, risk_free=0.03,
     return ret_dic, each_col_dic, file_path_dic
 
 
-def df_2_table(doc, df, format_by_index=None, format_by_col=None, max_col_count=None):
+def df_2_table(doc, df, format_by_index=None, format_by_col=None, max_col_count=None,
+               mark_top_n=None, mark_top_n_on_cols=None):
+    """
+
+    :param doc:
+    :param df:
+    :param format_by_index: 按索引格式化
+    :param format_by_col: 按列格式化
+    :param max_col_count: 每行最大列数（不包括索引）
+    :param mark_top_n: 标记 top N
+    :param mark_top_n_on_cols: 选择哪些列标记 top N，None 代表不标记
+    :return:
+    """
     if max_col_count is None:
         max_col_count = df.shape[1]
+
+    if mark_top_n is not None:
+        if mark_top_n_on_cols is not None:
+            rank_df = df[mark_top_n_on_cols]
+        else:
+            rank_df = df
+        rank_df = rank_df.rank()
+        is_in_rank_df = rank_df <= mark_top_n
+    else:
+        is_in_rank_df = None
 
     for table_num, col_name_list in enumerate(split_chunk(list(df.columns), max_col_count)):
         if table_num > 0:
@@ -299,6 +318,9 @@ def df_2_table(doc, df, format_by_index=None, format_by_col=None, max_col_count=
         t = doc.add_table(row_num + 1, col_num + 1)
 
         # Highlight all cells limegreen (RGB 32CD32) if cell contains text "0.5"
+        from docx.oxml.ns import nsdecls
+        from docx.oxml import parse_xml
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
 
         # write head
         # col_name_list = list(sub_df.columns)
@@ -331,8 +353,9 @@ def df_2_table(doc, df, format_by_index=None, format_by_col=None, max_col_count=
                 format_row = None
 
             for j in range(col_num):
-                if format_row is None and format_by_col is not None and col_name_list[j] in format_by_col:
-                    format_cell = format_by_col[col_name_list[j]]
+                col_name = col_name_list[j]
+                if format_row is None and format_by_col is not None and col_name in format_by_col:
+                    format_cell = format_by_col[col_name]
                 else:
                     format_cell = format_row
 
@@ -349,9 +372,12 @@ def df_2_table(doc, df, format_by_index=None, format_by_col=None, max_col_count=
                 paragraph = t.cell(i + 1, j + 1).paragraphs[0]
                 paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
                 try:
-                    paragraph.add_run(text)
+                    style = paragraph.add_run(text)
+                    if is_in_rank_df is not None and col_name in is_in_rank_df and is_in_rank_df.loc[index, col_name]:
+                        style.font.color.rgb = RGBColor(0xed, 0x1c, 0x24)
+                        style.bold = True
                 except TypeError as exp:
-                    logger.exception('df.iloc[%d, %d] = df["%s", "%s"] = %s', i, j, index, sub_df.columns[j], text)
+                    logger.exception('df.iloc[%d, %d] = df["%s", "%s"] = %s', i, j, index, col_name, text)
                     raise exp from exp
 
         for i in range(1, row_num + 1):
@@ -359,6 +385,22 @@ def df_2_table(doc, df, format_by_index=None, format_by_col=None, max_col_count=
                 if i % 2 == 0:
                     t.cell(i, j)._tc.get_or_add_tcPr().append(
                         parse_xml(r'<w:shd {} w:fill="A3D9EA"/>'.format(nsdecls('w'))))
+
+
+def _test_df_2_table():
+    df = pd.DataFrame({'a': list(range(10, 20)), 'b': list(range(10, 0, -1))})
+    # 生成 docx 文件
+    document = docx.Document()
+    # 设置默认字体
+    document.styles['Normal'].font.name = '微软雅黑'
+    document.styles['Normal']._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
+
+    document.add_heading(f'测试使用', 1)
+    df_2_table(document, df, mark_top_n_on_cols=df.columns, mark_top_n=3)
+    # file_path = os.path.abspath(os.path.join(os.path.curdir, 'test.docx'))
+    file_path = "/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output/2013-11-08/model/reports/test.docx"
+    document.save(file_path)
+    open_file_with_system_app(file_path)
 
 
 def _test_summary_md():
@@ -938,4 +980,5 @@ if __name__ == "__main__":
     # _test_summary_stg()
     # _test_summary_stg_2_docx()
     # _test_summary_md_2_docx()
-    _test_summary_release_2_docx()
+    # _test_summary_release_2_docx()
+    _test_df_2_table()
