@@ -19,6 +19,9 @@ import numpy as np
 import pandas as pd
 from docx.shared import Pt
 from docx.shared import RGBColor
+from docx.oxml.ns import nsdecls
+from docx.oxml import parse_xml
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from ibats_utils.mess import open_file_with_system_app, date_2_str, datetime_2_str, split_chunk, iter_2_range
 from scipy.stats import anderson, normaltest
 
@@ -296,9 +299,6 @@ def df_2_table(doc, df, format_by_index=None, format_by_col=None, max_col_count=
         t = doc.add_table(row_num + 1, col_num + 1)
 
         # Highlight all cells limegreen (RGB 32CD32) if cell contains text "0.5"
-        from docx.oxml.ns import nsdecls
-        from docx.oxml import parse_xml
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
 
         # write head
         # col_name_list = list(sub_df.columns)
@@ -326,27 +326,33 @@ def df_2_table(doc, df, format_by_index=None, format_by_col=None, max_col_count=
             paragraph.add_run(index_str).bold = True
             paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
             if format_by_index is not None and index in format_by_index:
-                formater = format_by_index[index]
+                format_row = format_by_index[index]
             else:
-                formater = None
+                format_row = None
 
             for j in range(col_num):
-                if formater is None and format_by_col is not None and col_name_list[j] in format_by_col:
-                    formater = format_by_col[col_name_list[j]]
+                if format_row is None and format_by_col is not None and col_name_list[j] in format_by_col:
+                    format_cell = format_by_col[col_name_list[j]]
+                else:
+                    format_cell = format_row
 
                 content = sub_df.values[i, j]
-                if formater is None:
+                if format_cell is None:
                     text = str(content)
-                elif isinstance(formater, str):
-                    text = str.format(formater, content)
-                elif callable(formater):
-                    text = formater(content)
+                elif isinstance(format_cell, str):
+                    text = str.format(format_cell, content)
+                elif callable(format_cell):
+                    text = format_cell(content)
                 else:
-                    raise ValueError('%s: %s 无效', index, formater)
+                    raise ValueError('%s: %s 无效', index, format_cell)
 
                 paragraph = t.cell(i + 1, j + 1).paragraphs[0]
                 paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-                paragraph.add_run(text)
+                try:
+                    paragraph.add_run(text)
+                except TypeError as exp:
+                    logger.exception('df.iloc[%d, %d] = df["%s", "%s"] = %s', i, j, index, sub_df.columns[j], text)
+                    raise exp from exp
 
         for i in range(1, row_num + 1):
             for j in range(col_num + 1):
@@ -396,11 +402,12 @@ def _test_summary_stg():
     summary_stg(stg_run_id)
 
 
-def stats_df_2_docx_table(stats_df, document):
+def stats_df_2_docx_table(stats_df, document, format_axis='index'):
     """
     将 stats_df 统计信息以表格形式写入 docx 文件中
     :param stats_df:
     :param document:
+    :param format_axis: 'column' / 'index' 选择state是按 col 还是 index 进行格式化，默认是 col
     :return:
     """
 
@@ -426,7 +433,7 @@ def stats_df_2_docx_table(stats_df, document):
         "win_year_perc": FORMAT_2_PERCENT,
         "twelve_month_win_perc": FORMAT_2_PERCENT,
         "incep": FORMAT_2_PERCENT,
-        "rf": FORMAT_2_FLOAT2,
+        "rf": FORMAT_2_PERCENT,
         "max_drawdown": FORMAT_2_PERCENT,
         "calmar": FORMAT_2_FLOAT2,
         "daily_sharpe": FORMAT_2_FLOAT2,
@@ -452,7 +459,10 @@ def stats_df_2_docx_table(stats_df, document):
         "start": date_2_str,
         "end": date_2_str,
     }
-    df_2_table(document, stats_df, format_by_index=format_by_index, max_col_count=5)
+    df_2_table(document, stats_df,
+               format_by_index=format_by_index if format_axis == 'index' else None,
+               format_by_col=format_by_index if format_axis == 'column' else None,
+               max_col_count=4)
 
 
 def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=False, enable_clean_cache=True,
@@ -505,13 +515,13 @@ def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=
     # 设置字体颜色
     UserStyle1.font.color.rgb = docx.shared.RGBColor(0xff, 0xde, 0x00)
     # 居中文本
-    UserStyle1.paragraph_format.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+    UserStyle1.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
     # 设置中文字体
     UserStyle1.font.name = '微软雅黑'
     UserStyle1._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
 
     # 文件内容
-    document.add_heading(heading_title, 0).alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+    document.add_heading(heading_title, 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
     document.add_paragraph('')
     document.add_paragraph('')
     heading_count = 1
@@ -651,13 +661,13 @@ def summary_md_2_docx(md_df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.
     # 设置字体颜色
     UserStyle1.font.color.rgb = docx.shared.RGBColor(0xff, 0xde, 0x00)
     # 居中文本
-    UserStyle1.paragraph_format.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+    UserStyle1.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
     # 设置中文字体
     UserStyle1.font.name = '微软雅黑'
     UserStyle1._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
 
     # 文件内容
-    document.add_heading(heading_title, 0).alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+    document.add_heading(heading_title, 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
     document.add_paragraph('')
     document.add_paragraph('')
     heading_count = 1
@@ -746,7 +756,7 @@ def summary_md_2_docx(md_df: pd.DataFrame, percentiles=[0.2, 0.33, 0.5, 0.66, 0.
     col_name = close_key
     # 文件内容
     heading_title = f'{col_name} 数据分析结果'
-    document.add_heading(heading_title, 0).alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+    document.add_heading(heading_title, 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
     document.add_paragraph('')
     document.add_paragraph('')
     heading_count = 1
@@ -844,13 +854,13 @@ def summary_release_2_docx(title, img_meta_dic_list, stg_run_id=None, enable_cle
     # 设置字体颜色
     UserStyle1.font.color.rgb = docx.shared.RGBColor(0xff, 0xde, 0x00)
     # 居中文本
-    UserStyle1.paragraph_format.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+    UserStyle1.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
     # 设置中文字体
     UserStyle1.font.name = '微软雅黑'
     UserStyle1._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
 
     # 文件内容
-    document.add_heading(title, 0).alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+    document.add_heading(title, 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
     document.add_paragraph('')
     document.add_paragraph('')
     heading_size = 1
