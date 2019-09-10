@@ -303,7 +303,7 @@ def df_2_table(doc, df, format_by_index=None, format_by_col=None, max_col_count=
             rank_df = df[mark_top_n_on_cols]
         else:
             rank_df = df
-        rank_df = rank_df.rank()
+        rank_df = rank_df.rank(ascending=False)
         is_in_rank_df = rank_df <= mark_top_n
     else:
         is_in_rank_df = None
