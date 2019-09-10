@@ -444,12 +444,13 @@ def _test_summary_stg():
     summary_stg(stg_run_id)
 
 
-def stats_df_2_docx_table(stats_df, document, format_axis='index'):
+def stats_df_2_docx_table(stats_df, document, format_axis='index', **kwargs):
     """
     将 stats_df 统计信息以表格形式写入 docx 文件中
     :param stats_df:
     :param document:
     :param format_axis: 'column' / 'index' 选择state是按 col 还是 index 进行格式化，默认是 col
+    :param kwargs:
     :return:
     """
 
@@ -504,7 +505,7 @@ def stats_df_2_docx_table(stats_df, document, format_axis='index'):
     df_2_table(document, stats_df,
                format_by_index=format_by_index if format_axis == 'index' else None,
                format_by_col=format_by_index if format_axis == 'column' else None,
-               max_col_count=4)
+               max_col_count=4, **kwargs)
 
 
 def summary_stg_2_docx(stg_run_id=None, enable_save_plot=True, enable_show_plot=False, enable_clean_cache=True,
