@@ -847,6 +847,8 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
     l1, legend1, min_x = [], [], None
     for df, linestyle in zip(df_list,
                              ['-', ':', 'dashdotdotted', 'densely dashdotdotted', 'densely dotted'][:len(df_list)]):
+        if df.shape[0] == 0:
+            continue
         # 绘图
         if isinstance(df, pd.DataFrame):
             if df.shape[1] == 1:
