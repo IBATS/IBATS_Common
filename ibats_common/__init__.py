@@ -7,11 +7,8 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
-import os
-import re
+import pandas as pd
 
-from ibats_utils.mess import get_folder_path
-
-module_root_path = get_folder_path(re.compile(r'^ibats[\w]+'), create_if_not_found=False)  # 'ibats_common'
-root_parent_path = os.path.abspath(os.path.join(module_root_path, os.path.pardir)) \
-    if module_root_path is not None else None
+pd.set_option('display.width', 240)
+pd.set_option('display.max_columns', 20)
+pd.set_option('display.float_format', '{:,.4f}'.format)

@@ -11,13 +11,16 @@ import os
 
 import pandas as pd
 
-from ibats_common import module_root_path
+from ibats_common.backend.mess import get_folder_path
 
 
 def load_data(file_name, encoding=None, folder_path=None, index_col=None, range_from=None,
               range_to=None) -> pd.DataFrame:
     if folder_path is None:
-        folder_path = os.path.join(module_root_path, 'example', 'data')
+        folder_path = os.path.join(get_folder_path('example', create_if_not_found=False), 'data')
+        if folder_path is None:
+            raise ValueError(
+                "folder_path is None, or you have to had a ./example/data folder on current or parent folder")
     file_path = os.path.join(folder_path, file_name)
     df = pd.read_csv(file_path, encoding=encoding, index_col=index_col,
                      parse_dates=[index_col] if index_col is not None else False)

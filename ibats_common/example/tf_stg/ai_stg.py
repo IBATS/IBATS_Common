@@ -500,7 +500,7 @@ class AIStg(StgBase):
 
 
 def _test_use(is_plot):
-    from ibats_common import module_root_path
+    from ibats_common.backend.mess import get_folder_path
     import os
     # 参数设置
     run_mode = RunMode.Backtest
@@ -512,7 +512,8 @@ def _test_use(is_plot):
         'init_md_date_from': '1995-1-1',  # 行情初始化加载历史数据，供策略分析预加载使用
         'init_md_date_to': '2013-1-1',
         # 'C:\GitHub\IBATS_Common\ibats_common\example\ru_price2.csv'
-        'file_path': os.path.abspath(os.path.join(module_root_path, 'example', 'data', 'RB.csv')),
+        'file_path': os.path.abspath(os.path.join(
+            get_folder_path('example', create_if_not_found=False), 'data', 'RB.csv')),
         'symbol_key': 'instrument_type',
     }]
     if run_mode == RunMode.Realtime:

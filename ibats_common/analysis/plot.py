@@ -26,7 +26,7 @@ from matplotlib.font_manager import FontProperties
 from pandas.plotting import register_matplotlib_converters
 from scipy import stats
 
-from ibats_common.analysis import get_cache_folder_path
+from ibats_common.backend.mess import get_cache_folder_path
 from ibats_common.backend.label import calc_label2, calc_label3
 
 logger = logging.getLogger(__name__)

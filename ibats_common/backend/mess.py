@@ -7,11 +7,15 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
+from functools import lru_cache
+
 import pandas as pd
+from ibats_utils.db import with_db_session
+from ibats_utils.mess import get_folder_path
 from sqlalchemy.sql import func
-from ibats_utils.db import with_db_session, get_db_session, execute_scalar
-from ibats_common.backend.orm import StgRunStatusDetail, OrderDetail, TradeDetail, StgRunInfo
+
 from ibats_common.backend import engines
+from ibats_common.backend.orm import StgRunInfo
 
 
 def csv_formatter(file_path_from, file_path_to):
@@ -58,8 +62,34 @@ def get_stg_run_id_latest():
     return stg_run_id
 
 
+@lru_cache()
+def get_report_folder_path(stg_run_id=None) -> str:
+    import os
+    folder_path = get_folder_path('output', create_if_not_found=True)
+    if stg_run_id is None:
+        _report_file_path = os.path.join(folder_path, 'report')
+    else:
+        _report_file_path = os.path.join(folder_path, 'report', str(stg_run_id))
+    if not os.path.exists(_report_file_path):
+        os.makedirs(_report_file_path)
+
+    return _report_file_path
+
+
+@lru_cache(maxsize=1)
+def get_cache_folder_path() -> str:
+    import os
+    folder_path = get_folder_path('output', create_if_not_found=True)
+    _report_file_path = os.path.join(folder_path, 'report', "_cache_")
+    if not os.path.exists(_report_file_path):
+        os.makedirs(_report_file_path)
+
+    return _report_file_path
+
+
 if __name__ == "__main__":
     import os
+
     folder_path_from = "/home/mg/Downloads/commodity_daily"
     file_name = "RB ConInfoFull_Adj.csv"
     file_path_from = os.path.join(folder_path_from, file_name)

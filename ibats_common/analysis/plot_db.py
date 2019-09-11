@@ -17,7 +17,7 @@ from ibats_utils.db import with_db_session
 from ibats_utils.mess import date_2_str
 from sqlalchemy.sql import func
 
-from ibats_common.analysis import get_cache_folder_path
+from ibats_common.backend.mess import get_cache_folder_path
 from ibats_common.analysis.plot import get_file_name, plot_or_show
 from ibats_common.backend import engines
 from ibats_common.backend.mess import get_stg_run_id_latest
@@ -186,11 +186,6 @@ def get_rr_with_md(stg_run_id, compound_rr=True):
         symbol_rr_dic[key] = (md_df, close_key)
 
     return sum_df, symbol_rr_dic
-
-
-def _test_show_rr_with_md():
-    stg_run_id = None
-    show_rr_with_md(stg_run_id)
 
 
 def show_rr_with_md(stg_run_id, show_sum_plot=True, show_each_md_plot=False, enable_save_plot=False):
@@ -456,6 +451,5 @@ def _test_show_cash_and_margin():
 
 
 if __name__ == '__main__':
-    # _test_show_rr_with_md()
     # _test_show_rr_with_md()
     _test_show_cash_and_margin()

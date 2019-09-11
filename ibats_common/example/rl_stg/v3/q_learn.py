@@ -108,9 +108,8 @@ class QLearningTable:
             )
 
     def _get_file_path(self, key):
-        from ibats_common import module_root_path
-        # ibats_common/example/module_data
-        folder_path = os.path.join(module_root_path, 'example', 'module_data', module_version)
+        from ibats_common.backend.mess import get_folder_path
+        folder_path = os.path.join(get_folder_path('example', create_if_not_found=False), 'module_data', module_version)
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
         file_name = f"q_table_{key}_{len(self.actions)}.csv"

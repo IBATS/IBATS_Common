@@ -21,7 +21,7 @@ import tflearn
 from ibats_utils.mess import copy_module_file_to, date_2_str, str_2_date, get_last, copy_file_to
 from sklearn.model_selection import train_test_split
 
-from ibats_common import module_root_path
+from ibats_common.backend.mess import get_report_folder_path
 from ibats_common.analysis.plot import show_dl_accuracy
 from ibats_common.analysis.summary import summary_release_2_docx
 from ibats_common.backend.factor import get_factor
@@ -71,10 +71,12 @@ class AIStgBase(StgBase):
         # 该字段与 self.load_model_if_exist 函数的 enable_load_model_if_exist参数是 “or” 的关系
         self.enable_load_model_if_exist = False
         if self.enable_load_model_if_exist:
-            self.base_folder_path = folder_path = os.path.join(module_root_path, 'tf_saves_2019-06-27_16_24_34')
+            self.base_folder_path = folder_path = os.path.join(
+                get_report_folder_path(self.stg_run_id), 'tf_saves_2019-06-27_16_24_34')
         else:
             datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
-            self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
+            self.base_folder_path = folder_path = os.path.join(
+                get_report_folder_path(self.stg_run_id), f'tf_saves_{datetime_str}')
         # 备份文件
         file_path = copy_module_file_to(self.__class__, folder_path)
         self.logger.debug('文件已经备份到：%s', file_path)

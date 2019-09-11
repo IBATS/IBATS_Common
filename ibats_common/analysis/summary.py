@@ -22,7 +22,7 @@ from docx.shared import RGBColor
 from ibats_utils.mess import open_file_with_system_app, date_2_str, datetime_2_str, split_chunk, iter_2_range
 from scipy.stats import anderson, normaltest
 
-from ibats_common.analysis import get_report_folder_path
+from ibats_common.backend.mess import get_report_folder_path
 from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix, plot_corr, \
     clean_cache, hist_n_rr, label_distribution, show_dl_accuracy
 from ibats_common.analysis.plot_db import get_rr_with_md, show_trade, show_cash_and_margin
