@@ -898,7 +898,7 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
     # legend 参数设置
     # https://blog.csdn.net/helunqu2017/article/details/78641290
     # loc 0 best 3 lower left
-    plt.legend(lns, legend, loc=3, frameon=False, ncol=2, fontsize='xx-small')  # , framealpha=0.3
+    plt.legend(lns, legend, loc=3, frameon=False, ncol=2, fontsize='x-small')  # , framealpha=0.3
     plt.grid(True)
     # 设置 title
     # plt.suptitle(name)
