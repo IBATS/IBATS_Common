@@ -13,6 +13,8 @@ import pandas as pd
 
 from ibats_common.backend.mess import get_folder_path
 
+OHLCAV_COL_NAME_LIST = ["open", "high", "low", "close", "amount", "volume"]
+
 
 def load_data(file_name, encoding=None, folder_path=None, index_col=None, range_from=None,
               range_to=None) -> pd.DataFrame:
