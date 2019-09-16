@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 logger.debug("matplotlib.get_backend() => %s", matplotlib.get_backend())
 register_matplotlib_converters()
 logger.debug('import %s', ffn)
-ALTER_BG_COLOR = '#f0f0f0'
+ALTER_BG_COLOR = '#e0e0e0'
 
 
 def get_file_name(header, name=None):
@@ -844,7 +844,7 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
     if not isinstance(df_list, list):
         df_list = [df_list]
 
-    l1, legend1, min_x = [], [], None
+    l1, legend1, min_x, max_x = [], [], None, None
     for df, linestyle in zip(df_list,
                              ['-', ':', 'dashdotdotted', 'densely dashdotdotted', 'densely dotted'][:len(df_list)]):
         if df.shape[0] == 0:
@@ -860,7 +860,12 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
         else:
             legend1 += [""]
 
-        min_x = min(df.index)
+        min_x_tmp, max_x_tmp = min(df.index), max(df.index)
+        if min_x is None or min_x > min_x_tmp:
+            min_x = min_x_tmp
+        if max_x is None or max_x > max_x_tmp:
+            max_x = max_x_tmp
+
         l1 += ax.plot(df, linestyle=linestyle)
         if y_scales_log[0]:
             ax.set_yscale("log")
@@ -871,7 +876,7 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
             logger.warning('min_x is None, cannot draw date_line')
         else:
             x1 = pd.to_datetime(in_sample_date_line)
-            p = plt.axvspan(min_x, x1, facecolor=ALTER_BG_COLOR, alpha=0.5)
+            p = plt.axvspan(min_x, x1, facecolor=ALTER_BG_COLOR, alpha=0.3)
 
     if df2 is not None:
         ax2 = ax.twinx()
@@ -899,7 +904,10 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_sh
     # https://blog.csdn.net/helunqu2017/article/details/78641290
     # loc 0 best 3 lower left
     plt.legend(lns, legend, loc=3, frameon=False, ncol=2, fontsize='x-small')  # , framealpha=0.3
-    plt.grid(True)
+    plt.grid(True, color="gray", linewidth="0.5", alpha=0.3)  # , linestyle="-."
+    frame = plt.gca()
+    frame.axes.get_xaxis().set_visible(True)
+    plt.xlim([min_x, max_x])  # x轴边界
     # 设置 title
     # plt.suptitle(name)
     plt.title(name)
