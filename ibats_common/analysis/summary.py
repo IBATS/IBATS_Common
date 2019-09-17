@@ -8,6 +8,7 @@
 @desc    : 
 """
 import datetime
+import itertools
 import json
 import logging
 import os
@@ -17,15 +18,20 @@ import docx
 import ffn
 import numpy as np
 import pandas as pd
-from docx.shared import Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import parse_xml
+from docx.oxml.ns import nsdecls
+from docx.oxml.ns import nsdecls
+from docx.shared import Pt, Inches
 from docx.shared import RGBColor
-from ibats_utils.mess import open_file_with_system_app, date_2_str, datetime_2_str, split_chunk, iter_2_range
+from ibats_utils.mess import open_file_with_system_app, date_2_str, datetime_2_str, split_chunk, iter_2_range, \
+    format_2_str
 from scipy.stats import anderson, normaltest
 
-from ibats_common.backend.mess import get_report_folder_path
 from ibats_common.analysis.plot import drawdown_plot, plot_rr_df, wave_hist, plot_scatter_matrix, plot_corr, \
     clean_cache, hist_n_rr, label_distribution, show_dl_accuracy
 from ibats_common.analysis.plot_db import get_rr_with_md, show_trade, show_cash_and_margin
+from ibats_common.backend.mess import get_report_folder_path
 from ibats_common.backend.mess import get_stg_run_info
 from ibats_common.common import RunMode, CalcMode
 
@@ -35,6 +41,7 @@ STR_FORMAT_DATETIME_4_FILE_NAME = '%Y-%m-%d %H_%M_%S'
 FORMAT_2_PERCENT = lambda x: f"{x * 100: .2f}%"
 FORMAT_2_FLOAT2 = r"{0:.2f}"
 FORMAT_2_FLOAT4 = r"{0:.4f}"
+FORMAT_2_MONEY = r"{0:,.2f}"
 
 
 def summary_md(md_df: pd.DataFrame, percentiles=[0.2, 1 / 3, 0.5, 2 / 3, 0.8],
@@ -317,11 +324,6 @@ def df_2_table(doc, df, format_by_index=None, format_by_col=None, max_col_count=
         row_num, col_num = sub_df.shape
         t = doc.add_table(row_num + 1, col_num + 1)
 
-        # Highlight all cells limegreen (RGB 32CD32) if cell contains text "0.5"
-        from docx.oxml.ns import nsdecls
-        from docx.oxml import parse_xml
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-
         # write head
         # col_name_list = list(sub_df.columns)
         for j in range(col_num):
@@ -423,6 +425,123 @@ def _test_summary_md():
                 "stat_col_name_list": ['close'],
             }
         })
+
+
+def dic_2_table(doc, param_dic: dict, col_group_num=1,
+                format_key=None, format_dic: (dict, None) = None, col_width=[1.75, 4.25]):
+    # Highlight all cells limegreen (RGB 32CD32) if cell contains text "0.5"
+    data_count = len(param_dic)
+    if data_count == 0:
+        return
+    col_num_max = col_group_num * 2
+    row_num_max = (data_count // col_group_num + 1) if data_count % col_group_num == 0 else \
+        (data_count // col_group_num + 2)
+    t = doc.add_table(row_num_max, col_num_max)
+
+    # write head
+    # col_name_list = list(sub_df.columns)
+    for j in range(col_num_max):
+        paragraph = t.cell(0, j).paragraphs[0]
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        if j % 2 == 0:
+            paragraph.add_run('key').bold = True
+        else:
+            paragraph.add_run('value').bold = True
+
+    # write head bg color
+    for j in range(col_num_max):
+        # t.cell(0, j).text = df.columns[j]
+        t.cell(0, j)._tc.get_or_add_tcPr().append(
+            parse_xml(r'<w:shd {} w:fill="00A2E8"/>'.format(nsdecls('w'))))
+
+    # format table style to be a grid
+    t.style = 'TableGrid'
+
+    # write key value
+    for num, (key, value) in enumerate(param_dic.items()):
+        row_num, col_num = num // col_group_num + 1, num % col_group_num * 2
+
+        paragraph = t.cell(row_num, col_num).paragraphs[0]
+        # populate the table with the dataframe
+        text = format_2_str(key, format_key)
+
+        paragraph.add_run(text).bold = True
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+        if format_dic is not None and key in format_dic:
+            format_cell = format_dic[key]
+        else:
+            format_cell = None
+
+        text = format_2_str(value, format_cell)
+        paragraph = t.cell(row_num, col_num + 1).paragraphs[0]
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        try:
+            style = paragraph.add_run(text)
+        except TypeError as exp:
+            logger.exception('param_dic[%s] = %s', key, text)
+            raise exp from exp
+
+    # set alternative color
+    for i in range(1, row_num_max):
+        for j in range(col_num_max):
+            if i % 2 == 0:
+                t.cell(i, j)._tc.get_or_add_tcPr().append(
+                    parse_xml(r'<w:shd {} w:fill="A3D9EA"/>'.format(nsdecls('w'))))
+
+    # 如果出现多列，则将列的宽度 / 列数
+    widths = (Inches(col_width[0] / col_group_num), Inches(col_width[1] / col_group_num))
+    width_in_row = itertools.chain.from_iterable(itertools.repeat(widths, col_group_num))
+    t.autofit = False
+    # set col width
+    # https://stackoverflow.com/questions/43051462/python-docx-how-to-set-cell-width-in-tables
+    # It's not work
+    # for row in t.rows:
+    #     for cell, width in zip(row.cells, width_in_row):
+    #         cell.width = width
+    # it's work
+    for idx, width in enumerate(width_in_row):
+        t.columns[idx].width = width
+
+
+def _test_dic_2_table():
+    # 生成 docx 文件
+    document = docx.Document()
+    # 设置默认字体
+    document.styles['Normal'].font.name = '微软雅黑'
+    document.styles['Normal']._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
+    # 创建自定义段落样式(第一个参数为样式名, 第二个参数为样式类型, 1为段落样式, 2为字符样式, 3为表格样式)
+    UserStyle1 = document.styles.add_style('UserStyle1', 1)
+    # 设置字体尺寸
+    UserStyle1.font.size = docx.shared.Pt(40)
+    # 设置字体颜色
+    UserStyle1.font.color.rgb = docx.shared.RGBColor(0xff, 0xde, 0x00)
+    # 居中文本
+    UserStyle1.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # 设置中文字体
+    UserStyle1.font.name = '微软雅黑'
+    UserStyle1._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
+
+    # 文件内容
+    heading_count, sub_heading_count = 0, 0
+    document.add_heading('测试使用', 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
+    document.add_paragraph('')
+    document.add_paragraph('')
+
+    dic = {
+        'from_date': str_2_date('2018-08-09'),
+        'name': 'name test',
+        'num': 12345,
+        'float': 23456.789,
+        'list': [1, 2, 3, 4],
+        'long text': """bla bla bla（唧唧歪歪） 在英语中是“等等，之类的”的意思。
+        当别人知道你要表达的意思时，用blablabla会比较方便，可要注意用的场合与人。在某种场合也形容某些人比较八卦。"""
+    }
+    file_path = 'test.docx'
+    dic_2_table(document, dic, col_group_num=2, )
+    document.save(file_path)
+    open_file_with_system_app(file_path)
+    return file_path
 
 
 def summary_stg(stg_run_id=None):
@@ -960,7 +1079,8 @@ def _test_summary_release_2_docx():
         'in_range_count': close_df.shape[0],
         'trade_date_end': pd.to_datetime('2018-01-01') + pd.Timedelta(days=99),
     })
-    img_file_path = show_dl_accuracy(real_ys, pred_ys, close_df, split_point_list, base_line_list, show_moving_avg=False)
+    img_file_path = show_dl_accuracy(real_ys, pred_ys, close_df, split_point_list, base_line_list,
+                                     show_moving_avg=False)
     img_meta_dic_list.append({
         'img_file_path': img_file_path,
         'trade_date_last_train': pd.to_datetime('2018-01-01'),
