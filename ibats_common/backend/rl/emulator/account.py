@@ -88,6 +88,7 @@ class Account(object):
              "value_fee0": self.buffer_value_fee0,
              "action_count": self.buffer_action_count,
              }, index=self.A.data_close.index[:len(self.buffer_action)])
+        reward_df['net_value'] = reward_df['value'] / self.A.init_cash
         return reward_df
 
 
