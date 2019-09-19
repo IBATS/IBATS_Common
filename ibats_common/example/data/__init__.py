@@ -43,16 +43,15 @@ def load_data(file_name, encoding=None, folder_path=None, index_col=None, range_
     return df
 
 
-def get_trade_date_series():
-    df = load_data('trade_date.csv').astype('datetime64[ns]')
-    # ret_list = [str_2_date(_) for _ in load_data('trade_date.csv').T.to_numpy()[0]]
+def get_trade_date_series(folder_path=None):
+    df = load_data('trade_date.csv', folder_path=folder_path).astype('datetime64[ns]')
     date_s = df.iloc[:, 0]
     return date_s
 
 
-def get_delivery_date_series(instrument_type):
+def get_delivery_date_series(instrument_type, folder_path=None):
     df = load_data(
-        'future_info.csv'
+        'future_info.csv', folder_path=folder_path
     ).set_index(
         'symbol'
     ).filter(
