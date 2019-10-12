@@ -373,19 +373,32 @@ def _test_get_factor():
                     adj_factor, train_df['close'].iloc[0], train_df.shape, list(train_df.columns))
 
 
-def transfer_2_batch(df: pd.DataFrame, n_step, labels=None):
+def transfer_2_batch(df: pd.DataFrame, n_step, labels=None, date_from=None):
     """
     [num, factor_count] -> [num - n_step + 1, n_step, factor_count]
     将 df 转化成 n_step 长度的一段一段的数据
     labels 为与 df对应的数据，处理方式与index相同，如果labels不为空，则返回数据最后增加以下 new_ys
     :param df:
     :param n_step:
-    :param labels:
+    :param labels:如果不为 None，则长度必须与 df.shape[0] 一致
+    :param date_from:
     :return:
     """
     df_len = df.shape[0]
-    if labels is not None and df_len == len(labels):
+    if labels is not None and df_len != len(labels):
         raise ValueError("ys 长度 %d 必须与 df 长度 %d 保持一致", len(labels), df_len)
+    # 根据 date_from 对factor进行截取
+    if date_from is not None:
+        date_from = pd.to_datetime(date_from)
+        is_fit = df.index == date_from
+        if np.any(is_fit):
+            start_idx = np.argmax(is_fit) - n_step + 1
+            if start_idx>0:
+                df = df.iloc[start_idx:]
+                df_len = df.shape[0]
+                if labels is not None:
+                    labels = labels[start_idx:]
+
     new_shape = [df_len - n_step + 1, n_step]
     new_shape.extend(df.shape[1:])
     df_index, df_columns = df.index[(n_step - 1):], df.columns
@@ -413,16 +426,28 @@ def _test_get_batch_factor():
          'c': list(range(data_len * 10, data_len * 11))},
         index=date_index,
     )
+    labels = list(range(data_len))
     print("df\n", df)
     n_step = 5
-    df_index, df_columns, data_arr_batch = transfer_2_batch(df, n_step)
-
+    df_index, df_columns, data_arr_batch, new_labels = transfer_2_batch(df, n_step, labels)
     print("new df_index", df_index)
     print("new factor_columns", df_columns)
     print('new reshaped data_arr_batch')
     print(data_arr_batch)
     print("df.shape: ", df.shape)
     print("new_shape:", data_arr_batch.shape)
+    print("new_labels:", new_labels)
+
+    date_from = '2018-01-13'
+    df_index, df_columns, data_arr_batch, new_labels = transfer_2_batch(df, n_step, labels, date_from=date_from)
+    print('date_from=', date_from)
+    print("new df_index", df_index)
+    print("new factor_columns", df_columns)
+    print('new reshaped data_arr_batch')
+    print(data_arr_batch)
+    print("df.shape: ", df.shape)
+    print("new_shape:", data_arr_batch.shape)
+    print("new_labels:", new_labels)
 
 
 def get_batch_factor(md_df: pd.DataFrame, n_step, labels=None, **factor_kwargs):
