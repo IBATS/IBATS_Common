@@ -392,7 +392,7 @@ def transfer_2_batch(df: pd.DataFrame, n_step, labels=None, date_from=None):
         date_from = pd.to_datetime(date_from)
         is_fit = df.index == date_from
         if np.any(is_fit):
-            start_idx = np.argmax(is_fit) - n_step + 1
+            start_idx = np.argmax(is_fit) - n_step
             if start_idx>0:
                 df = df.iloc[start_idx:]
                 df_len = df.shape[0]
