@@ -88,8 +88,18 @@ class Account(object):
              "value_fee0": self.buffer_value_fee0,
              "action_count": self.buffer_action_count,
              }, index=self.A.data_close.index[:len(self.buffer_action)])
-        reward_df['net_value'] = reward_df['value'] / self.A.init_cash
+        cum_rr_s = reward_df['value'] / self.A.init_cash - 1
+        reward_df['net_value'] = cum_linear_rr_2_cum_exp_rr(cum_rr_s)
         return reward_df
+
+
+def cum_linear_rr_2_cum_exp_rr(cum_rr_s: pd.Series):
+    """将 累计线性增长率 曲线转化为 累计指数增长率 曲线"""
+    rr = cum_rr_s.copy()
+    rr[1:] -= rr.shift(1)[1:]
+    rr = rr + 1
+    cum_exp_rr = rr.cumprod()
+    return cum_exp_rr
 
 
 def _test_account():
