@@ -89,9 +89,9 @@ class Account(object):
              "action_count": self.buffer_action_count,
              }, index=self.A.data_close.index[:len(self.buffer_action)])
         cum_rr_s = reward_df['value'] / self.A.init_cash - 1
-        reward_df['net_value'] = cum_linear_rr_2_cum_exp_rr(cum_rr_s)
+        reward_df['nav'] = cum_linear_rr_2_cum_exp_rr(cum_rr_s)
         cum_rr_s = reward_df['value_fee0'] / self.A.init_cash - 1
-        reward_df['net_value_fee0'] = cum_linear_rr_2_cum_exp_rr(cum_rr_s)
+        reward_df['nav_fee0'] = cum_linear_rr_2_cum_exp_rr(cum_rr_s)
         return reward_df
 
 
