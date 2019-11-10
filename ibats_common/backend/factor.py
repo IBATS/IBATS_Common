@@ -390,7 +390,7 @@ def transfer_2_batch(df: pd.DataFrame, n_step, labels=None, date_from=None):
     # 根据 date_from 对factor进行截取
     if date_from is not None:
         date_from = pd.to_datetime(date_from)
-        is_fit = df.index == date_from
+        is_fit = df.index >= date_from
         if np.any(is_fit):
             start_idx = np.argmax(is_fit) - n_step
             if start_idx>0:
