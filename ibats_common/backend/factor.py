@@ -14,6 +14,7 @@ import ffn
 import numpy as np
 import pandas as pd
 import talib
+from ibats_utils.mess import date_2_str
 
 logger = logging.getLogger(__name__)
 logger.debug('import %s', ffn)
@@ -393,11 +394,24 @@ def transfer_2_batch(df: pd.DataFrame, n_step, labels=None, date_from=None):
         is_fit = df.index >= date_from
         if np.any(is_fit):
             start_idx = np.argmax(is_fit) - n_step
-            if start_idx>0:
-                df = df.iloc[start_idx:]
-                df_len = df.shape[0]
-                if labels is not None:
-                    labels = labels[start_idx:]
+
+            if start_idx < 0:
+                start_idx = 0
+                logger.warning("%s 为起始日期的数据，前向历史数据不足 %d 条，因此，起始日期向后推移至 %s",
+                               date_2_str(date_from), n_step, date_2_str(df.index[60]))
+
+            df = df.iloc[start_idx:]
+            df_len = df.shape[0]
+            if labels is not None:
+                labels = labels[start_idx:]
+
+        else:
+            logger.warning("没有 %s 之后的数据，当前数据最晚日期为 %s",
+                           date_2_str(date_from), date_2_str(max(df.index)))
+            if labels is not None:
+                return None, None, None, None
+            else:
+                return None, None, None
 
     new_shape = [df_len - n_step + 1, n_step]
     new_shape.extend(df.shape[1:])
