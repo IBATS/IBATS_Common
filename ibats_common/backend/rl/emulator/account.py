@@ -105,7 +105,7 @@ def cum_linear_rr_2_cum_exp_rr(cum_rr_s: pd.Series):
 
 
 def _test_account():
-    # 建立相关数据
+    """测试 env.reset() 返回状态 是否符合预期"""
     n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
@@ -122,14 +122,14 @@ def _test_account():
     env = Account(md_df, data_factors)
     next_observation = env.reset()
     print('next_observation.shape:', next_observation.shape)
-    assert next_observation.shape == (1, 12, 78, 5)
+    assert next_observation.shape == (1, 12, 79, 5)
     next_state, reward, done = env.step(1)
-    assert next_observation.shape == (1, 12, 78, 5)
+    assert next_observation.shape == (1, 12, 79, 5)
     assert not done
 
 
 def _test_account2():
-    # 建立相关数据
+    """测试 plot_data 返回数据是否符合预期"""
     n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
@@ -166,5 +166,5 @@ def _test_account2():
 
 
 if __name__ == "__main__":
-    # _test_account()
+    _test_account()
     _test_account2()
