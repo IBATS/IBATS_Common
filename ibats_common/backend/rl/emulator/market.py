@@ -34,7 +34,7 @@ class QuotesMarket(object):
         self.step_counter = 0
         self.cash = self.init_cash
         self.holding_value = 0      # holding_value 多仓为整，空仓为负
-        self._total_value_last_state = self.cash + self.holding_value
+        self.total_value = self.cash + self.holding_value
         self._open_curr = None
         self.total_value_fee0 = self.cash + self.holding_value
         self.flags = 0
@@ -47,7 +47,7 @@ class QuotesMarket(object):
         self.step_counter = 0
         self.cash = self.init_cash
         self.holding_value = 0
-        self._total_value_last_state = self.cash + self.holding_value
+        self.total_value = self.cash + self.holding_value
         self.total_value_fee0 = self.cash + self.holding_value
         self.flags = 0
         self.fee_curr_step = 0
@@ -148,22 +148,22 @@ class QuotesMarket(object):
         price = self.data_close[self.step_counter]
         holding_value_abs = price * self.position_count
         self.holding_value = holding_value_abs * self.flags
-        reward = self.cash + holding_value_abs - self._total_value_last_state
+        reward = self.cash + holding_value_abs - self.total_value
 
         # 计算费用
         self.fee_tot += self.fee_curr_step
-        self.total_value_fee0 = self._total_value_last_state + self.fee_tot
+        self.total_value_fee0 = self.total_value + self.fee_tot
 
         # 获得下一状态
         self.step_counter += 1
         self._open_curr = None
         done = False
-        if self._total_value_last_state < price:
+        if self.total_value < price:
             done = True
         if self.step_counter >= self.max_step_count:
             done = True
 
-        self._total_value_last_state = holding_value_abs + self.cash
+        self.total_value = holding_value_abs + self.cash
         next_observation = self.data_observation[self.step_counter]
 
         ret_state = (next_observation, np.array([self.flags])) if self.state_with_flag else next_observation
