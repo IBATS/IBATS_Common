@@ -374,7 +374,7 @@ def _test_get_factor():
                     adj_factor, train_df['close'].iloc[0], train_df.shape, list(train_df.columns))
 
 
-def transfer_2_batch(df: pd.DataFrame, n_step, labels=None, date_from=None):
+def transfer_2_batch(df: pd.DataFrame, n_step, labels=None, date_from=None, date_to=None):
     """
     [num, factor_count] -> [num - n_step + 1, n_step, factor_count]
     将 df 转化成 n_step 长度的一段一段的数据
@@ -383,11 +383,13 @@ def transfer_2_batch(df: pd.DataFrame, n_step, labels=None, date_from=None):
     :param n_step:
     :param labels:如果不为 None，则长度必须与 df.shape[0] 一致
     :param date_from:
+    :param date_to:
     :return:
     """
     df_len = df.shape[0]
     if labels is not None and df_len != len(labels):
         raise ValueError("ys 长度 %d 必须与 df 长度 %d 保持一致", len(labels), df_len)
+    # TODO: date_from, date_to 的逻辑可以进一步优化，延期为了省时间先保持这样
     # 根据 date_from 对factor进行截取
     if date_from is not None:
         date_from = pd.to_datetime(date_from)
@@ -408,6 +410,25 @@ def transfer_2_batch(df: pd.DataFrame, n_step, labels=None, date_from=None):
         else:
             logger.warning("没有 %s 之后的数据，当前数据最晚日期为 %s",
                            date_2_str(date_from), date_2_str(max(df.index)))
+            if labels is not None:
+                return None, None, None, None
+            else:
+                return None, None, None
+
+    # 根据 date_from 对factor进行截取
+    if date_to is not None:
+        date_to = pd.to_datetime(date_to)
+        is_fit = df.index <= date_to
+        if np.any(is_fit):
+            to_idx = np.argmin(is_fit)
+            df = df.iloc[:to_idx]
+            df_len = df.shape[0]
+            if labels is not None:
+                labels = labels[:to_idx]
+
+        else:
+            logger.warning("没有 %s 之前的数据，当前数据最晚日期为 %s",
+                           date_2_str(date_to), date_2_str(min(df.index)))
             if labels is not None:
                 return None, None, None, None
             else:
