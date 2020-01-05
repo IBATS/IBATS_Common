@@ -1397,7 +1397,8 @@ def init_data():
             session.commit()
 
 
-def strat_heart_beat_thread():
+def start_heart_beat_thread():
+    """该方法已废弃"""
     import time
     global _HEART_BEAT_THREAD
     beat_logger = logging.getLogger('heart_beat')
@@ -1444,7 +1445,7 @@ def init():
     init_data()
 
 
-strat_heart_beat_thread()
+# start_heart_beat_thread()
 
 
 if __name__ == "__main__":
