@@ -31,7 +31,7 @@ from ibats_common.example.data import get_trade_date_series, get_delivery_date_s
 from ibats_common.strategy import StgBase
 
 logger = logging.getLogger(__name__)
-logger.debug('import %s', ffn)
+FFN_VERSION = ffn.__version__
 
 
 class AIStgBase(StgBase):
