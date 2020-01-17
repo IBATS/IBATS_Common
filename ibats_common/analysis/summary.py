@@ -36,7 +36,7 @@ from ibats_common.backend.mess import get_stg_run_info
 from ibats_common.common import RunMode, CalcMode
 
 logger = logging.getLogger(__name__)
-logger.debug('import %s', ffn)
+FFN_VERSION = ffn.__version__
 STR_FORMAT_DATETIME_4_FILE_NAME = '%Y-%m-%d %H_%M_%S'
 FORMAT_2_PERCENT = lambda x: f"{x * 100: .2f}%"
 FORMAT_2_FLOAT2 = r"{0:.2f}"

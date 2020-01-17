@@ -32,7 +32,7 @@ from ibats_common.backend.label import calc_label2, calc_label3
 logger = logging.getLogger(__name__)
 logger.debug("matplotlib.get_backend() => %s", matplotlib.get_backend())
 register_matplotlib_converters()
-logger.debug('import %s', ffn)
+FFN_VERSION = ffn.__version__
 ALTER_BG_COLOR = '#e0e0e0'
 
 
