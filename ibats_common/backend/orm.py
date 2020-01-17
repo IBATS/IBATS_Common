@@ -1397,7 +1397,12 @@ def init_data():
             session.commit()
 
 
-def strat_heart_beat_thread():
+def start_heart_beat_thread():
+    """该方法已废弃"""
+    import warnings
+    warnings.filterwarnings(
+        'default', '该方法以及废弃，有SqlAlchemy中的 CreateEngine pool_pre_ping=True 功能替代，'
+                   '详见 IBATS_Utils 2020-01-05 commit 8f56a87f')
     import time
     global _HEART_BEAT_THREAD
     beat_logger = logging.getLogger('heart_beat')
@@ -1444,7 +1449,8 @@ def init():
     init_data()
 
 
-strat_heart_beat_thread()
+# 该方法已废弃
+# start_heart_beat_thread()
 
 
 if __name__ == "__main__":
