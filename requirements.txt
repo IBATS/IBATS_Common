@@ -8,7 +8,7 @@ mysqlclient
 xlrd>=1.1.0
 pytest>=4.3.0
 IBATS-Utils==1.2.8
-matplotlib==3.0.1
+matplotlib==3.0.3
 seaborn>=0.9
 ffn==0.3.4
 python-docx>=0.8.10
