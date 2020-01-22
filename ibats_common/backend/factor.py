@@ -17,7 +17,7 @@ import talib
 from ibats_utils.mess import date_2_str
 
 logger = logging.getLogger(__name__)
-logger.debug('import %s', ffn)
+FFN_VERSION = ffn.__version__
 
 
 def add_factor_of_trade_date(df: pd.DataFrame, trade_date_series):
