@@ -5,7 +5,8 @@
 @Time    : 2019/4/7 16:31
 @File    : plot.py
 @contact : mmmaaaggg@163.com
-@desc    : 
+@desc    :
+2020-01-22 remove " and is_windows_os()" on if condition of plot_or_show function
 """
 import itertools
 import logging
@@ -683,7 +684,8 @@ def plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None, s
         file_path = None
 
     if enable_show_plot:
-        if file_path is not None and is_windows_os():
+        # 2020-01-22 remove " and is_windows_os()" on if condition of plot_or_show function
+        if file_path is not None:
             open_file_with_system_app(file_path)
         else:
             plt.show()

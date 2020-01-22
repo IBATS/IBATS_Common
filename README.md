@@ -9,3 +9,9 @@
 [![Twitter](https://img.shields.io/twitter/url/https/github.com/IBATS/IBATSCommon.svg?style=social)](https://twitter.com/intent/tweet?text=Wow:&url=https%3A%2F%2Fgithub.com%2FIBATS%2FIBATSCommon) 
 
 IBATS（Integration Backtest Analysis Trade System）的公共模块，所有Feeder, Trader均集成这个模块，并使用其提供的一些公共工具
+
+#### 修改历史：
+- 2020-01-22
+>remove " and is_windows_os()" on if condition of plot_or_show function
+
+在此之前的历史就不记录了
