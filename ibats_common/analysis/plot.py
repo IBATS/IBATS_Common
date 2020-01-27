@@ -16,13 +16,13 @@ from functools import lru_cache
 
 import ffn
 import matplotlib
+# matplotlib.use('Qt5Agg')  # 需要 pip3 install PyQt5，windows 下無效
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 from ibats_utils.mess import date_2_str, is_windows_os, open_file_with_system_app
 from matplotlib.cm import get_cmap
-# matplotlib.use('Qt5Agg')  # windows 下無效
 from matplotlib.font_manager import FontProperties
 from pandas.plotting import register_matplotlib_converters
 from scipy import stats
