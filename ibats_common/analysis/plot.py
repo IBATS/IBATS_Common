@@ -31,7 +31,7 @@ from ibats_common.backend.mess import get_cache_folder_path
 from ibats_common.backend.label import calc_label2, calc_label3
 
 logger = logging.getLogger(__name__)
-logger.debug("matplotlib.get_backend() => %s", matplotlib.get_backend())
+logger.debug("matplotlib.backend => %s", matplotlib.get_backend())
 register_matplotlib_converters()
 FFN_VERSION = ffn.__version__
 ALTER_BG_COLOR = '#e0e0e0'
@@ -676,7 +676,10 @@ def plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None, s
 
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
-
+        if file_name is None:
+            file_name = 'output.png'
+        if not file_name.endswith('.png'):
+            file_name += '.png'
         file_path = os.path.join(folder_path, file_name)
         logger.debug("save to %s", file_path)
         plt.savefig(file_path, dpi=75)
@@ -1010,6 +1013,6 @@ if __name__ == "__main__":
     # _test_hist_n_rr()
     # _test_label_distribution()
     # _test_n_days_rr_distribution()
-    # _test_plot_accuracy()
+    _test_plot_accuracy()
     # _test_show_dl_accuracy()
-    _test_plot_twin()
+    # _test_plot_twin()
