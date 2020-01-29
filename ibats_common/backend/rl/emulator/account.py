@@ -9,11 +9,19 @@
 """
 import numpy as np
 import pandas as pd
-from ibats_common.backend.rl.emulator.market import QuotesMarket
+
+VERSION_V1 = 'v1'
+VERSION_V2 = 'v2'
 
 
 class Account(object):
-    def __init__(self, md_df, data_factors, expand_dims=True, state_with_flag=False, **kwargs):
+    def __init__(self, md_df, data_factors, expand_dims=True, state_with_flag=False, version=VERSION_V1, **kwargs):
+        if version == VERSION_V1:
+            from ibats_common.backend.rl.emulator.market import QuotesMarket
+        elif version == VERSION_V2:
+            from ibats_common.backend.rl.emulator.market2 import QuotesMarket
+        else:
+            raise ValueError(f'param version can only be one of {(VERSION_V1, VERSION_V2)}')
         self.A = QuotesMarket(md_df, data_factors, state_with_flag=state_with_flag, **kwargs)
         self.buffer_reward = []
         self.buffer_value = []
@@ -24,7 +32,7 @@ class Account(object):
         self.buffer_fee_tot = []
         self.buffer_action_count = []
         self.expand_dims = expand_dims
-        self.actions = self.A.get_action_space()
+        self.actions = self.A.get_action_operations()
         self.action_size = len(self.actions)
         self.state_with_flag = state_with_flag
 
@@ -76,7 +84,7 @@ class Account(object):
         else:
             return next_state, reward, done
 
-    def plot_data(self)->pd.DataFrame:
+    def plot_data(self) -> pd.DataFrame:
         reward_df = pd.DataFrame(
             {"value": self.buffer_value,
              "reward": self.buffer_reward,
@@ -115,7 +123,7 @@ def _test_account():
     factors_df = get_factor(md_df, dropna=True)
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
     md_df = md_df.loc[df_index, :]
-    shape = [data_arr_batch.shape[0], 5, int(n_step/5), data_arr_batch.shape[2]]
+    shape = [data_arr_batch.shape[0], 5, int(n_step / 5), data_arr_batch.shape[2]]
     data_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
     print(data_arr_batch.shape, '->', shape, '->', data_factors.shape)
     # 建立 Account
@@ -139,7 +147,7 @@ def _test_account2():
     factors_df = get_factor(md_df, dropna=True)
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
     md_df = md_df.loc[df_index, :]
-    shape = [data_arr_batch.shape[0], 5, int(n_step/5), data_arr_batch.shape[2]]
+    shape = [data_arr_batch.shape[0], 5, int(n_step / 5), data_arr_batch.shape[2]]
     data_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
     print(data_arr_batch.shape, '->', shape, '->', data_factors.shape)
     # 建立 Account
@@ -147,7 +155,7 @@ def _test_account2():
     next_observation = env.reset()
     # 做空
     env.step(2)
-    for n in range(int(md_df.shape[0]/2)):
+    for n in range(int(md_df.shape[0] / 2)):
         env.step(3)
     # 做多
     next_observation, reward, done = env.step(1)

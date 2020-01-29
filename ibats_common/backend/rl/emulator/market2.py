@@ -5,22 +5,30 @@
 @Time    : 2019/6/28 17:09
 @File    : market.py
 @contact : mmmaaaggg@163.com
-@desc    : 
+@desc    :
+2020-01-29
+在 market 基础上进行修改
+调整 action 数值，为了更加适应 one_hot 模式，调整 long=0, short=1 close=2, keep=3
 """
 import numpy as np
 import pandas as pd
 
-ACTION_CLOSE, ACTION_LONG, ACTION_SHORT, ACTION_KEEP = 0, 1, 2, 3
-ACTION_OP_CLOSE, ACTION_OP_LONG, ACTION_OP_SHORT, ACTION_OP_KEEP = 'close', 'long', 'short', 'keep'
+ACTION_LONG, ACTION_SHORT, ACTION_CLOSE, ACTION_KEEP = 0, 1, 2, 3
+ACTIONS = [ACTION_LONG, ACTION_SHORT, ACTION_CLOSE, ACTION_KEEP]
+ACTION_OP_LONG, ACTION_OP_SHORT, ACTION_OP_CLOSE, ACTION_OP_KEEP = 'long', 'short', 'close', 'keep'
+ACTION_OPS = [ACTION_OP_LONG, ACTION_OP_SHORT, ACTION_OP_CLOSE, ACTION_OP_KEEP]
+ACTION_OP_DIC = {_: ACTION_OPS[_] for _ in ACTIONS}
+OP_ACTION_DIC = {ACTION_OPS[_]: _ for _ in ACTIONS}
+FLAG_LONG, FLAG_SHORT, FLAG_EMPTY = 1, -1, 0
 
 
 class QuotesMarket(object):
     def __init__(self, md_df: pd.DataFrame, data_factors, init_cash=2e5, fee_rate=3e-3,
-                 state_with_flag=False, reward_with_fee0=False):
-        self.data_close = md_df['close']
-        self.data_open = md_df['open']
+                 state_with_flag=False, reward_with_fee0=False, md_close_label='close', md_open_label='open'):
+        self.data_close = md_df[md_close_label]
+        self.data_open = md_df[md_open_label]
         self.data_observation = data_factors
-        self.action_space = [ACTION_OP_CLOSE, ACTION_OP_LONG, ACTION_OP_SHORT, ACTION_OP_KEEP]
+        self.action_operations = ACTION_OPS
         self.fee_rate = fee_rate  # 千三手续费
         self.fee_curr_step = 0
         self.fee_tot = 0
@@ -59,10 +67,10 @@ class QuotesMarket(object):
             return self.data_observation[-1]
 
     def get_action_operations(self):
-        return self.action_space
+        return self.action_operations
 
     def long(self):
-        self.flags = 1
+        self.flags = FLAG_LONG
         quotes = self.data_open[self.step_counter] * 10
         self.cash -= quotes * (1 + self.fee_rate)
         self.position = quotes
@@ -70,7 +78,7 @@ class QuotesMarket(object):
         self.action_count += 1
 
     def short(self):
-        self.flags = -1
+        self.flags = FLAG_SHORT
         quotes = self.data_open[self.step_counter] * 10
         self.cash += quotes * (1 - self.fee_rate)
         self.position = - quotes
@@ -82,7 +90,7 @@ class QuotesMarket(object):
         self.position = quotes * self.flags
 
     def close_long(self):
-        self.flags = 0
+        self.flags = FLAG_EMPTY
         quotes = self.data_open[self.step_counter] * 10
         self.cash += quotes * (1 - self.fee_rate)
         self.position = 0
@@ -90,44 +98,44 @@ class QuotesMarket(object):
         self.action_count += 1
 
     def close_short(self):
-        self.flags = 0
+        self.flags = FLAG_EMPTY
         quotes = self.data_open[self.step_counter] * 10
         self.cash -= quotes * (1 + self.fee_rate)
         self.position = 0
         self.fee_curr_step += quotes * self.fee_rate
         self.action_count += 1
 
-    def step_op(self, action):
+    def step(self, action: int):
         self.fee_curr_step = 0
-        if action == 'long':
-            if self.flags == 0:
+        if action == ACTION_LONG:
+            if self.flags == FLAG_EMPTY:
                 self.long()
-            elif self.flags == -1:
+            elif self.flags == FLAG_SHORT:
                 self.close_short()
                 self.long()
             else:
                 self.keep()
 
-        elif action == 'close':
-            if self.flags == 1:
+        elif action == ACTION_CLOSE:
+            if self.flags == FLAG_LONG:
                 self.close_long()
-            elif self.flags == -1:
+            elif self.flags == FLAG_SHORT:
                 self.close_short()
             else:
                 pass
 
-        elif action == 'short':
-            if self.flags == 0:
+        elif action == ACTION_SHORT:
+            if self.flags == FLAG_EMPTY:
                 self.short()
-            elif self.flags == 1:
+            elif self.flags == FLAG_LONG:
                 self.close_long()
                 self.short()
             else:
                 self.keep()
-        elif action == 'keep':
+        elif action == ACTION_KEEP:
             self.keep()
         else:
-            raise ValueError("action should be elements of ['long', 'short', 'close']")
+            raise ValueError(f"action should be one of keys {ACTIONS}")
 
         # 计算费用
         self.fee_tot += self.fee_curr_step
@@ -153,12 +161,6 @@ class QuotesMarket(object):
 
         return ret_state, ret_reward, done
 
-    def step(self, action):
-        if 0 <= action <= 3:
-            return self.step_op(self.action_space[action])
-        else:
-            raise ValueError("action should be one of [0,1,2]")
-
 
 def _test_quote_market():
     n_step = 60
@@ -176,24 +178,24 @@ def _test_quote_market():
     assert len(next_observation) == 2
     assert next_observation[0].shape[0] == n_step
     assert next_observation[1] == 0
-    next_observation, reward, done = qm.step(1)
+    next_observation, reward, done = qm.step(ACTION_LONG)
     assert len(next_observation) == 2
-    assert next_observation[1] == 1
+    assert next_observation[1] == FLAG_LONG
     assert not done
-    next_observation, reward, done = qm.step(0)
-    assert next_observation[1] == 0
+    next_observation, reward, done = qm.step(ACTION_CLOSE)
+    assert next_observation[1] == FLAG_EMPTY
     assert reward != 0
-    next_observation, reward, done = qm.step(0)
-    assert next_observation[1] == 0
+    next_observation, reward, done = qm.step(ACTION_CLOSE)
+    assert next_observation[1] == FLAG_EMPTY
     assert reward == 0
-    next_observation, reward, done = qm.step(3)
-    assert next_observation[1] == 0
+    next_observation, reward, done = qm.step(ACTION_KEEP)
+    assert next_observation[1] == FLAG_EMPTY
     assert reward == 0
-    next_observation, reward, done = qm.step(2)
-    assert next_observation[1] == -1
+    next_observation, reward, done = qm.step(ACTION_SHORT)
+    assert next_observation[1] == FLAG_SHORT
     assert not done
-    next_observation, reward, done = qm.step(3)
-    assert next_observation[1] == -1
+    next_observation, reward, done = qm.step(ACTION_KEEP)
+    assert next_observation[1] == FLAG_SHORT
     assert reward != 0
     try:
         qm.step(4)
