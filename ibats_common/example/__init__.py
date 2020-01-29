@@ -16,11 +16,8 @@ from datetime import datetime, timedelta
 import ffn
 import numpy as np
 import pandas as pd
-import tensorflow as tf
-import tflearn
 from ibats_utils.mess import copy_module_file_to, date_2_str, str_2_date, get_last, copy_file_to
 from sklearn.model_selection import train_test_split
-
 from ibats_common.backend.mess import get_report_folder_path
 from ibats_common.analysis.plot import show_dl_accuracy
 from ibats_common.analysis.summary import summary_release_2_docx
@@ -99,6 +96,7 @@ class AIStgBase(StgBase):
         return self.get_session()
 
     def get_session(self, renew=False, close_last_one_if_renew=True):
+        import tensorflow as tf
         if renew or self._session is None:
             if self.model is None:
                 raise ValueError('model 需要先于 session 被创建')
@@ -124,6 +122,7 @@ class AIStgBase(StgBase):
         :param rebuild_model:
         :return:
         """
+        import tensorflow as tf
         if self._model is None or rebuild_model:
             self.logger.info('重新构建模型')
             tf.reset_default_graph()
@@ -190,6 +189,7 @@ class AIStgBase(StgBase):
         raise NotImplementedError()
 
     def train(self, factor_df_dic: dict, predict_test_random_state):
+        import tflearn
         factor_df = factor_df_dic[1]
 
         trade_date_from_str, trade_date_to_str = date_2_str(factor_df.index[0]), date_2_str(factor_df.index[-1])
