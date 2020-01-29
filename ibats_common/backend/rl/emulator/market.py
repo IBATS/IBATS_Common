@@ -10,6 +10,9 @@
 import numpy as np
 import pandas as pd
 
+ACTION_CLOSE, ACTION_LONG, ACTION_SHORT, ACTION_KEEP = 0, 1, 2, 3
+ACTION_OP_CLOSE, ACTION_OP_LONG, ACTION_OP_SHORT, ACTION_OP_KEEP = 'close', 'long', 'short', 'keep'
+
 
 class QuotesMarket(object):
     def __init__(self, md_df: pd.DataFrame, data_factors, init_cash=2e5, fee_rate=3e-3,
