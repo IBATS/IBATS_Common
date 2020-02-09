@@ -26,7 +26,7 @@ def calc_label2(value_arr: np.ndarray, min_rr: float, max_rr: float, one_hot=Tru
     :param dtype:
     :return:
     """
-    from keras.utils import to_categorical
+    from tensorflow.keras.utils import to_categorical
     value_arr[np.isnan(value_arr)] = 0
     arr_len = value_arr.shape[0]
     # target_arr = np.zeros((arr_len, 2))
@@ -86,7 +86,7 @@ def calc_label3(value_arr: np.ndarray, min_rr: float, max_rr: float, max_future:
     :param dtype:
     :return:
     """
-    from keras.utils import to_categorical
+    from tensorflow.keras.utils import to_categorical
     value_arr[np.isnan(value_arr)] = 0
     arr_len = value_arr.shape[0]
     # target_arr = np.zeros((arr_len, 2))

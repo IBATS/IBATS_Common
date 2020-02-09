@@ -19,7 +19,11 @@ ACTION_OP_LONG, ACTION_OP_SHORT, ACTION_OP_CLOSE, ACTION_OP_KEEP = 'long', 'shor
 ACTION_OPS = [ACTION_OP_LONG, ACTION_OP_SHORT, ACTION_OP_CLOSE, ACTION_OP_KEEP]
 ACTION_OP_DIC = {_: ACTION_OPS[_] for _ in ACTIONS}
 OP_ACTION_DIC = {ACTION_OPS[_]: _ for _ in ACTIONS}
-FLAG_LONG, FLAG_SHORT, FLAG_EMPTY = 1, -1, 0
+# 内部访问的flag
+_FLAG_LONG, _FLAG_SHORT, _FLAG_EMPTY = 1, -1, 0
+# one-hot 模式的flag
+FLAG_LONG, FLAG_SHORT, FLAG_EMPTY = _FLAG_LONG + 1, _FLAG_SHORT + 1, _FLAG_EMPTY + 1
+FLAGS = [FLAG_LONG, FLAG_SHORT, FLAG_EMPTY]
 
 
 class QuotesMarket(object):
@@ -40,10 +44,15 @@ class QuotesMarket(object):
         self.position = 0
         self.total_value = self.cash + self.position
         self.total_value_fee0 = self.cash + self.position
-        self.flags = 0
+        self._flags = _FLAG_EMPTY
         self.state_with_flag = state_with_flag
         self.reward_with_fee0 = reward_with_fee0
         self.action_count = 0
+
+    @property
+    def flags(self):
+        """外部访问 flag 标志位，为了方便 one_hot 模式，因此做 + 1 处理"""
+        return self._flags + 1  # 转换成 one_hot 模式的 flag
 
     def reset(self):
         self.step_counter = 0
@@ -51,7 +60,7 @@ class QuotesMarket(object):
         self.position = 0
         self.total_value = self.cash + self.position
         self.total_value_fee0 = self.cash + self.position
-        self.flags = 0
+        self._flags = _FLAG_EMPTY
         self.fee_curr_step = 0
         self.fee_tot = 0
         self.action_count = 0
@@ -70,7 +79,7 @@ class QuotesMarket(object):
         return self.action_operations
 
     def long(self):
-        self.flags = FLAG_LONG
+        self._flags = _FLAG_LONG
         quotes = self.data_open[self.step_counter] * 10
         self.cash -= quotes * (1 + self.fee_rate)
         self.position = quotes
@@ -78,7 +87,7 @@ class QuotesMarket(object):
         self.action_count += 1
 
     def short(self):
-        self.flags = FLAG_SHORT
+        self._flags = _FLAG_SHORT
         quotes = self.data_open[self.step_counter] * 10
         self.cash += quotes * (1 - self.fee_rate)
         self.position = - quotes
@@ -87,10 +96,10 @@ class QuotesMarket(object):
 
     def keep(self):
         quotes = self.data_open[self.step_counter] * 10
-        self.position = quotes * self.flags
+        self.position = quotes * self._flags
 
     def close_long(self):
-        self.flags = FLAG_EMPTY
+        self._flags = _FLAG_EMPTY
         quotes = self.data_open[self.step_counter] * 10
         self.cash += quotes * (1 - self.fee_rate)
         self.position = 0
@@ -98,7 +107,7 @@ class QuotesMarket(object):
         self.action_count += 1
 
     def close_short(self):
-        self.flags = FLAG_EMPTY
+        self._flags = _FLAG_EMPTY
         quotes = self.data_open[self.step_counter] * 10
         self.cash -= quotes * (1 + self.fee_rate)
         self.position = 0
@@ -108,26 +117,26 @@ class QuotesMarket(object):
     def step(self, action: int):
         self.fee_curr_step = 0
         if action == ACTION_LONG:
-            if self.flags == FLAG_EMPTY:
+            if self._flags == _FLAG_EMPTY:
                 self.long()
-            elif self.flags == FLAG_SHORT:
+            elif self._flags == _FLAG_SHORT:
                 self.close_short()
                 self.long()
             else:
                 self.keep()
 
         elif action == ACTION_CLOSE:
-            if self.flags == FLAG_LONG:
+            if self._flags == _FLAG_LONG:
                 self.close_long()
-            elif self.flags == FLAG_SHORT:
+            elif self._flags == _FLAG_SHORT:
                 self.close_short()
             else:
                 pass
 
         elif action == ACTION_SHORT:
-            if self.flags == FLAG_EMPTY:
+            if self._flags == _FLAG_EMPTY:
                 self.short()
-            elif self.flags == FLAG_LONG:
+            elif self._flags == _FLAG_LONG:
                 self.close_long()
                 self.short()
             else:
@@ -143,7 +152,7 @@ class QuotesMarket(object):
 
         # 计算价值
         price = self.data_close[self.step_counter]
-        position = price * 10 * self.flags
+        position = price * 10 * self._flags
         reward = self.cash + position - self.total_value
         self.step_counter += 1
         self.total_value = position + self.cash
@@ -177,7 +186,7 @@ def _test_quote_market():
     next_observation = qm.reset()
     assert len(next_observation) == 2
     assert next_observation[0].shape[0] == n_step
-    assert next_observation[1] == 0
+    assert next_observation[1] == FLAG_EMPTY
     next_observation, reward, done = qm.step(ACTION_LONG)
     assert len(next_observation) == 2
     assert next_observation[1] == FLAG_LONG

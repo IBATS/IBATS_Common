@@ -11,7 +11,16 @@
 IBATS（Integration Backtest Analysis Trade System）的公共模块，所有Feeder, Trader均集成这个模块，并使用其提供的一些公共工具
 
 #### 修改历史：
-- 2020-01-22
->remove " and is_windows_os()" on if condition of plot_or_show function
 
-在此之前的历史就不记录了
+- 2020-02-09
+> remove keras
+> add dependence tensorflow>=2.1.0. keras is replaced by tensorflow.keras 
+
+- 2020-01-29
+> market2 在 market 基础上进行修改：调整 action 数值，为了更加适应 one_hot 模式，调整 long=0, short=1 close=2, keep=3。 \
+> flag转化为 one hot 模式。
+
+- 2020-01-22
+> remove " and is_windows_os()" on if condition of plot_or_show function.
+
+- 在此之前的历史就不记录了

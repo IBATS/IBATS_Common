@@ -27,10 +27,10 @@ def use_cup_only():
     # os.environ["CUDA_VISIBLE_DEVICES"] = ""
     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-    import keras.backend.tensorflow_backend as ktf
+    import tensorflow.python.keras.backend as K
 
     import tensorflow as tf
-    ktf.set_session(tf.Session(config=tf.ConfigProto(device_count={'gpu': 0})))
+    K.set_session(tf.Session(config=tf.ConfigProto(device_count={'gpu': 0})))
 
 
 if __name__ == '__main__':
