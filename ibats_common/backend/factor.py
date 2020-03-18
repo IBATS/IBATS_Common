@@ -437,7 +437,7 @@ def transfer_2_batch(df: pd.DataFrame, n_step, labels=None, date_from=None, date
     new_shape = [df_len - n_step + 1, n_step]
     new_shape.extend(df.shape[1:])
     df_index, df_columns = df.index[(n_step - 1):], df.columns
-    data_arr_batch, factor_arr = np.zeros(new_shape), df.to_numpy()
+    data_arr_batch, factor_arr = np.zeros(new_shape), df.to_numpy(dtype=np.float32)
 
     for idx_from, idx_to in enumerate(range(n_step, factor_arr.shape[0] + 1)):
         data_arr_batch[idx_from] = factor_arr[idx_from: idx_to]
