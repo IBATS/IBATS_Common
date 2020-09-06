@@ -136,7 +136,7 @@ class QuotesMarket(object):
         # 计算价值
         price = self.data_close[self.step_counter]
         position = price * 10 * self.flags
-        reward = self.cash + position - self.total_value
+        reward_cur_period = self.cash + position - self.total_value
         self.step_counter += 1
         self.total_value = position + self.cash
         next_observation = self.data_observation[self.step_counter]
@@ -148,8 +148,8 @@ class QuotesMarket(object):
             done = True
 
         ret_state = (next_observation, np.array([self.flags])) if self.state_with_flag else next_observation
-        ret_reward = (reward / price, (reward + self.fee_curr_step) / price) if self.reward_with_fee0 else (
-                reward / price)
+        ret_reward = (reward_cur_period / price, (reward_cur_period + self.fee_curr_step) / price) \
+            if self.reward_with_fee0 else (reward_cur_period / price)
 
         return ret_state, ret_reward, done
 
