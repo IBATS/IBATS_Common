@@ -35,6 +35,7 @@ class Account(object):
         self.actions = self.A.get_action_operations()
         self.action_size = len(self.actions)
         self.state_with_flag = state_with_flag
+        self.version = version
 
     def reset(self):
         if self.expand_dims:
