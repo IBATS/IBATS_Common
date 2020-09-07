@@ -118,7 +118,7 @@ class QuotesMarket(object):
         if self.long_holding_punish > 0.0:
             observation_latest.append(np.array([self._keep_holding_periods_len], dtype=np.float32))
 
-        if len(observation_latest) == 0:
+        if len(observation_latest) == 1:
             return observation_latest[0]
         else:
             return tuple(observation_latest)
