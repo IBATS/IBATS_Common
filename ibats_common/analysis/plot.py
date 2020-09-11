@@ -193,7 +193,8 @@ def plot_scatter_matrix(df: pd.DataFrame, diagonal='hist', col_name_list=None, e
     return file_path
 
 
-def hist_norm(data, bins=10, enable_show_plot=True, enable_save_plot=False, name=None, stg_run_id=None):
+def hist_norm(data, bins=10, enable_show_plot=True, enable_save_plot=False,
+              name=None, stg_run_id=None, do_clr=True, folder_path=None):
     """
     hist 分布图及正太分布曲线
     :param data:
@@ -202,6 +203,8 @@ def hist_norm(data, bins=10, enable_show_plot=True, enable_save_plot=False, name
     :param enable_save_plot:
     :param name:
     :param stg_run_id:
+    :param do_clr:
+    :param folder_path:
     :return:
     """
     fig, ax = plt.subplots()
@@ -214,7 +217,7 @@ def hist_norm(data, bins=10, enable_show_plot=True, enable_save_plot=False, name
 
     file_name = get_file_name(f'hist', name=name)
     rr_plot_file_path = plot_or_show(enable_show_plot=enable_show_plot, enable_save_plot=enable_save_plot,
-                                     file_name=file_name, stg_run_id=stg_run_id)
+                                     file_name=file_name, stg_run_id=stg_run_id, do_clr=do_clr, folder_path=folder_path)
     return n, bins_v, rr_plot_file_path
 
 
