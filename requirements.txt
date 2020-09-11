@@ -12,5 +12,5 @@ matplotlib==3.0.3
 seaborn>=0.9
 ffn>=0.3.4
 python-docx>=0.8.10
-TA-Lib==0.4.17
+TA-Lib>=0.4.17
 tensorflow>=2.2.0

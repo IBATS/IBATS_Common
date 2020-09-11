@@ -11,6 +11,7 @@
 调整属性名称
 增加了 position_unit, long_holding_punish, punish_value, reward_multiplier 等参数化配置的地方
 """
+from enum import IntEnum
 import numpy as np
 import pandas as pd
 
@@ -25,13 +26,27 @@ _FLAG_LONG, _FLAG_SHORT, _FLAG_EMPTY = 1.0, -1.0, 0.0
 # one-hot 模式的flag
 FLAG_LONG, FLAG_SHORT, FLAG_EMPTY = _FLAG_LONG + 1, _FLAG_SHORT + 1, _FLAG_EMPTY + 1
 FLAGS = [FLAG_LONG, FLAG_SHORT, FLAG_EMPTY]
+DEFAULT_MD_OHLCVA_LABELS_MINIMAL = ['open', None, None, 'close', None, None]
+DEFAULT_MD_OHLCVA_LABELS = ['open', 'high', 'low', 'close', 'volume', 'amount']
+OPEN_INDEX, HIGH_INDEX, LOW_INDEX, CLOSE_INDEX, VOLUME_INDEX, AMOUNT_INDEX = 0, 1, 2, 3, 4, 5
+
+
+class DealPriceScheme(IntEnum):
+    """
+    成交价形成机制
+    """
+    CURRENT_CLOSE = 0
+    NEXT_OPEN = 1
+    NEXT_OC_MIDDLE = 2  # 平均价格： (开盘价 + 收盘价) /2
+    NEXT_BAR_CENTER = 3  # 重心价格： ((开盘价 + 收盘价) * 2 + 最高价 + 最低价) / 6
 
 
 class QuotesMarket(object):
     def __init__(self, md_df: pd.DataFrame, data_factors, init_cash=2e5,
                  fee_rate=3e-3, position_unit=10, state_with_flag=False, reward_with_fee0=False,
-                 md_close_label='close', md_open_label='open',
-                 long_holding_punish=0, punish_value=0.01, reward_multiplier=1):
+                 md_ohlcva_labels=DEFAULT_MD_OHLCVA_LABELS_MINIMAL,
+                 long_holding_punish=0, punish_value=0.01, reward_multiplier=1,
+                 deal_price_scheme: DealPriceScheme = DealPriceScheme.NEXT_OPEN):
         """
         :param md_df: 行情数据
         :param data_factors: 因子数据,将作为 observation 返回
@@ -40,17 +55,27 @@ class QuotesMarket(object):
         :param position_unit: 持仓单位
         :param state_with_flag: 默认False, observation 是否包含 多空标识,以及 当前 累计收益率 rr
         :param reward_with_fee0: 默认False, reward 是否包含 fee=0 状态的 reward
-        :param md_close_label: close 标识 key
-        :param md_open_label: open 标识 key
+        :param md_ohlcva_labels: md 行情数据的 开、高、低、收、成交量、成交金额 标签，没有的可以为None，最少需要有 开盘 收盘 标签
         :param long_holding_punish: 默认为 0.0 数字是浮点型 np.float32
             数字大于0时，开始生效.持仓超过 限定数值后，开始对reward增加惩罚项。
             同时，返回的 observation 中包含连续持仓条数。
         :param punish_value: 默认为 0.01 惩罚值
         :param reward_multiplier: 默认为乘数 1.0
+        :param deal_price_scheme: 成交价格方案，默认下一根K先开盘价
         :return:
         """
-        self.data_close = md_df[md_close_label]
-        self.data_open = md_df[md_open_label]
+        # 参数有效性检查
+        if deal_price_scheme == DealPriceScheme.NEXT_BAR_CENTER:
+            assert md_ohlcva_labels[HIGH_INDEX] is not None
+            assert md_ohlcva_labels[LOW_INDEX] is not None
+        # 开高低收，vol，amount 序列
+        self.data_close = md_df[md_ohlcva_labels[CLOSE_INDEX]]
+        self.data_open = md_df[md_ohlcva_labels[OPEN_INDEX]]
+        self.data_high = md_df[md_ohlcva_labels[HIGH_INDEX]] if md_ohlcva_labels[HIGH_INDEX] is not None else None
+        self.data_low = md_df[md_ohlcva_labels[LOW_INDEX]] if md_ohlcva_labels[LOW_INDEX] is not None else None
+        self.data_volume = md_df[md_ohlcva_labels[VOLUME_INDEX]] if md_ohlcva_labels[VOLUME_INDEX] is not None else None
+        self.data_amount = md_df[md_ohlcva_labels[AMOUNT_INDEX]] if md_ohlcva_labels[AMOUNT_INDEX] is not None else None
+        # 因子序列
         self.data_factor = data_factors
         self.action_operations = ACTION_OPS
         self.position_unit = position_unit
@@ -76,6 +101,7 @@ class QuotesMarket(object):
         self._keep_holding_periods_len = 0.0
         self.punish_value = punish_value
         self.reward_multiplier = reward_multiplier
+        self.deal_price_scheme = deal_price_scheme
 
     @property
     def flag(self):
@@ -129,9 +155,28 @@ class QuotesMarket(object):
     def get_action_operations(self):
         return self.action_operations
 
+    @property
+    def get_deal_price(self):
+        """
+        获取当前成交价格
+        """
+        if self.deal_price_scheme == DealPriceScheme.NEXT_OPEN:
+            price = self.data_open[self.step_counter]
+        elif self.deal_price_scheme == DealPriceScheme.NEXT_OC_MIDDLE:
+            price = (self.data_close[self.step_counter] + self.data_open[self.step_counter]) / 2
+        elif self.deal_price_scheme == DealPriceScheme.NEXT_BAR_CENTER:
+            price = ((self.data_close[self.step_counter] + self.data_open[self.step_counter]) * 2 +
+                     self.data_high[self.step_counter] + self.data_low[self.step_counter]) / 6
+        elif self.deal_price_scheme == DealPriceScheme.CURRENT_CLOSE:
+            price = self.data_close[self.step_counter - 1]
+        else:
+            raise ValueError(f'当前价格成交机制 {self.deal_price_scheme} 不支持')
+
+        return price
+
     def long(self):
         self._flag = _FLAG_LONG
-        quotes = self.data_open[self.step_counter] * self.position_unit
+        quotes = self.get_deal_price * self.position_unit
         self.cash -= quotes * (1 + self.fee_rate)
         self.position_value = quotes
         self.fee_curr_step += quotes * self.fee_rate
@@ -140,7 +185,7 @@ class QuotesMarket(object):
 
     def short(self):
         self._flag = _FLAG_SHORT
-        quotes = self.data_open[self.step_counter] * self.position_unit
+        quotes = self.get_deal_price * self.position_unit
         self.cash += quotes * (1 - self.fee_rate)
         self.position_value = - quotes
         self.fee_curr_step += quotes * self.fee_rate
@@ -148,13 +193,13 @@ class QuotesMarket(object):
         self._keep_holding_periods_len = 0.0
 
     def keep(self):
-        quotes = self.data_open[self.step_counter] * self.position_unit
+        quotes = self.get_deal_price * self.position_unit
         self.position_value = quotes * self._flag
         self._keep_holding_periods_len += 1.0
 
     def close_long(self):
         self._flag = _FLAG_EMPTY
-        quotes = self.data_open[self.step_counter] * self.position_unit
+        quotes = self.get_deal_price * self.position_unit
         self.cash += quotes * (1 - self.fee_rate)
         self.position_value = 0
         self.fee_curr_step += quotes * self.fee_rate
@@ -163,7 +208,7 @@ class QuotesMarket(object):
 
     def close_short(self):
         self._flag = _FLAG_EMPTY
-        quotes = self.data_open[self.step_counter] * self.position_unit
+        quotes = self.get_deal_price * self.position_unit
         self.cash -= quotes * (1 + self.fee_rate)
         self.position_value = 0
         self.fee_curr_step += quotes * self.fee_rate
@@ -253,11 +298,13 @@ class QuotesMarket(object):
 
 
 def _test_quote_market():
+    import os
     n_step = 60
-    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
-    md_df = load_data('RB.csv', folder_path='/home/mg/github/IBATS_Common/ibats_common/example/data'
-                      ).set_index('trade_date')[ohlcav_col_name_list]
+    md_df = load_data(
+        'RB.csv',
+        folder_path=os.path.join(os.pardir, os.pardir, os.pardir, 'example', 'data')  # r'..\..\..\example\data'
+    ).set_index('trade_date')[DEFAULT_MD_OHLCVA_LABELS]
     md_df.index = pd.DatetimeIndex(md_df.index)
     from ibats_common.backend.factor import get_factor, transfer_2_batch
     factors_df = get_factor(md_df, dropna=True)

@@ -11,6 +11,11 @@
 IBATS（Integration Backtest Analysis Trade System）的公共模块，所有Feeder, Trader均集成这个模块，并使用其提供的一些公共工具
 
 #### 修改历史：
+- 2020-09-11  v0.18.7
+> 增强 market2 中的成交价格形成机制，支持通过 DealPriceScheme 参数化控制 
+
+- 2020-09-05  v0.18.6
+> 增加 market2.py 市场模拟工具
 
 - 2020-02-09
 > remove keras
