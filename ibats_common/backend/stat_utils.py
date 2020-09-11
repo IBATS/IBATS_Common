@@ -15,6 +15,25 @@ LABEL_P_SIGNIFICANT = 'p-value significant'
 LABEL_REJECTION_OF_ORIGINAL_HYPOTHESIS = 'rejection of original hypothesis'
 
 
+def corr(df: pd.DataFrame, method="pearson", enable_save_plot=True, enable_show_plot=True,
+         file_name="Corr.png", do_clr=True, folder_path=None):
+    """
+    相关性分析，并plot出图片
+    """
+    from ibats_common.analysis.plot import plot_or_show
+    data = df.corr(method=method)
+    pd.plotting.scatter_matrix(data, figsize=[_*1.5 for _ in data.shape],
+                               c='k',
+                               marker='+',
+                               diagonal='hist',
+                               alpha=0.8,
+                               range_padding=0.0)
+    plot_or_show(
+        enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot,
+        file_name=file_name, do_clr=do_clr, folder_path=folder_path)
+    return data
+
+
 def coint_test(x: Union[pd.Series, np.ndarray], y: Union[pd.Series, np.ndarray]) -> pd.Series:
     """
     协整检测
@@ -126,6 +145,15 @@ def _test_coint_test():
     # rejection of original hypothesis          1
     # dtype: object
     print(coint_test(df['close'], df['open']))
+
+
+def _test_corr(df: pd.DataFrame):
+    from ibats_common.example.data import load_data
+    folder_path = r'd:\github\IBATS_Common\ibats_common\example\data'
+    df = load_data("RB.csv", folder_path=folder_path,
+                   index_col=[0], parse_index_to_datetime=True)
+    del df['instrument_type']
+    corr(df, plot=True)
 
 
 if __name__ == "__main__":
