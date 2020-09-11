@@ -9,22 +9,54 @@ from typing import Union
 import pandas as pd
 import numpy as np
 from statsmodels.tsa.stattools import adfuller, coint
-from scipy.stats import anderson
+from scipy.stats import anderson, kstest
 
 LABEL_T_SMALLER_THAN = 't-statistic Smaller Than'
+LABEL_STATISTIC_LARGER_THAN = 'statistic larger Than'
 LABEL_P_SIGNIFICANT = 'p-value significant'
 LABEL_REJECTION_OF_ORIGINAL_HYPOTHESIS = 'rejection of original hypothesis'
 
 
-def ks_test(x, cdf='norm'):
+def ks_test(x, cdf='norm', enable_save_plot=True, enable_show_plot=True,
+            file_name="hist.png", do_clr=True, folder_path=None):
     """
-    kstest cdf 原假设是 服从 cdf 分布。p-value小于0.05则拒绝假设，说明不服从当前分布
+    当前函数通过两种方法验证是否符合某一分布
+    1）通过 kstest cdf 原假设是 服从 cdf 分布，
+    2）anderson
+    当 LABEL_REJECTION_OF_ORIGINAL_HYPOTHESIS 值 等于 1是，当前数据不符合给定分布
     """
-    result = statistic, p_value, significance_level = anderson(x, cdf=cdf)
+    statistic, p_value = kstest(x, cdf=cdf)
+    statistic, critical_values, significance_level = anderson(x, dist=cdf)
     output_s = pd.Series(
         [statistic, p_value],
         index=["KS test statistic", 'p-value'])
     output_s[LABEL_P_SIGNIFICANT] = 1 if p_value < 0.05 else 0
+    output_s[LABEL_P_SIGNIFICANT] = 1 if p_value < 0.05 else 0
+    output_s[LABEL_STATISTIC_LARGER_THAN] = None
+    for n, (critical_value, level) in enumerate(zip(critical_values, significance_level)):
+        key = f"{int(level)}%"
+        critical_value = critical_values[n]
+        output_s['Critical Value (%s)' % key] = critical_value
+        # 由于显著水平是递减的 significance_level=array([ 15. ,  10. ,   5. ,   2.5,   1. ])，
+        # 所以无需判断 output_s[LABEL_T_SMALLER_THAN] is None
+        if statistic > critical_value:
+            output_s[LABEL_STATISTIC_LARGER_THAN] = level / 100
+
+    # 关于统计值与评价值的对比：当统计值大于这些评价值时，表示在对应的显著性水平下，原假设被拒绝，即不属于某分布。
+    # 如果p-value 显著，且 statistic 大于 1% level对应的 critical_value 则极其显著拒绝原假设
+    # output_s[LABEL_T_SMALLER_THAN] <= 0.01 其中 0.01 对应 level / 100 中 level = 1 的那一项，
+    # 当 LABEL_REJECTION_OF_ORIGINAL_HYPOTHESIS 值 等于 1是，当前数据不符合给定分布
+    output_s[LABEL_REJECTION_OF_ORIGINAL_HYPOTHESIS] = 1 if \
+        output_s[LABEL_STATISTIC_LARGER_THAN] is not None \
+        and output_s[LABEL_STATISTIC_LARGER_THAN] <= 0.01 \
+        and output_s[LABEL_P_SIGNIFICANT] == 1 else 0
+
+    if enable_save_plot or enable_show_plot:
+        from ibats_common.analysis.plot import hist_norm
+        hist_norm(x, enable_show_plot=enable_show_plot, enable_save_plot=enable_save_plot,
+                  name=file_name, do_clr=do_clr, folder_path=folder_path)
+
+    return output_s
 
 
 def corr(df: pd.DataFrame, method="pearson", enable_save_plot=True, enable_show_plot=True,
@@ -34,15 +66,16 @@ def corr(df: pd.DataFrame, method="pearson", enable_save_plot=True, enable_show_
     """
     from ibats_common.analysis.plot import plot_or_show
     data = df.corr(method=method)
-    pd.plotting.scatter_matrix(data, figsize=[_*1.5 for _ in data.shape],
-                               c='k',
-                               marker='+',
-                               diagonal='hist',
-                               alpha=0.8,
-                               range_padding=0.0)
-    plot_or_show(
-        enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot,
-        file_name=file_name, do_clr=do_clr, folder_path=folder_path)
+    if enable_save_plot or enable_save_plot:
+        pd.plotting.scatter_matrix(data, figsize=[_ * 1.5 for _ in data.shape],
+                                   c='k',
+                                   marker='+',
+                                   diagonal='hist',
+                                   alpha=0.8,
+                                   range_padding=0.0)
+        plot_or_show(
+            enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot,
+            file_name=file_name, do_clr=do_clr, folder_path=folder_path)
     return data
 
 
@@ -159,7 +192,7 @@ def _test_coint_test():
     print(coint_test(df['close'], df['open']))
 
 
-def _test_corr(df: pd.DataFrame):
+def _test_corr():
     from ibats_common.example.data import load_data
     folder_path = r'd:\github\IBATS_Common\ibats_common\example\data'
     df = load_data("RB.csv", folder_path=folder_path,
@@ -174,8 +207,33 @@ def _test_ks_test():
     df = load_data("RB.csv", folder_path=folder_path,
                    index_col=[0], parse_index_to_datetime=True)
     del df['instrument_type']
-    ks_test(df['close'])
+    # 结果类似如下
+    # KS test statistic                  15.1484
+    # p-value                             0.0000
+    # p-value significant                 1.0000
+    # statistic larger Than               0.0100
+    # Critical Value (15%)                0.5750
+    # Critical Value (10%)                0.6550
+    # Critical Value (5%)                 0.7860
+    # Critical Value (2%)                 0.9170
+    # Critical Value (1%)                 1.0900
+    # rejection of original hypothesis         1
+    print(ks_test(df['close']))
+    # KS test statistic                  38.5932
+    # p-value                             0.0000
+    # p-value significant                 1.0000
+    # statistic larger Than               0.0100
+    # Critical Value (15%)                0.5750
+    # Critical Value (10%)                0.6550
+    # Critical Value (5%)                 0.7860
+    # Critical Value (2%)                 0.9170
+    # Critical Value (1%)                 1.0900
+    # rejection of original hypothesis         1
+    print(ks_test(df['close'].pct_change().dropna()))
+
 
 if __name__ == "__main__":
     _test_adf_test()
     _test_coint_test()
+    _test_corr()
+    _test_ks_test()
