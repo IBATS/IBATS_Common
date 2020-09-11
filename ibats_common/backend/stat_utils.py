@@ -9,10 +9,22 @@ from typing import Union
 import pandas as pd
 import numpy as np
 from statsmodels.tsa.stattools import adfuller, coint
+from scipy.stats import anderson
 
 LABEL_T_SMALLER_THAN = 't-statistic Smaller Than'
 LABEL_P_SIGNIFICANT = 'p-value significant'
 LABEL_REJECTION_OF_ORIGINAL_HYPOTHESIS = 'rejection of original hypothesis'
+
+
+def ks_test(x, cdf='norm'):
+    """
+    kstest cdf 原假设是 服从 cdf 分布。p-value小于0.05则拒绝假设，说明不服从当前分布
+    """
+    result = statistic, p_value, significance_level = anderson(x, cdf=cdf)
+    output_s = pd.Series(
+        [statistic, p_value],
+        index=["KS test statistic", 'p-value'])
+    output_s[LABEL_P_SIGNIFICANT] = 1 if p_value < 0.05 else 0
 
 
 def corr(df: pd.DataFrame, method="pearson", enable_save_plot=True, enable_show_plot=True,
@@ -153,8 +165,16 @@ def _test_corr(df: pd.DataFrame):
     df = load_data("RB.csv", folder_path=folder_path,
                    index_col=[0], parse_index_to_datetime=True)
     del df['instrument_type']
-    corr(df, plot=True)
+    corr(df)
 
+
+def _test_ks_test():
+    from ibats_common.example.data import load_data
+    folder_path = r'd:\github\IBATS_Common\ibats_common\example\data'
+    df = load_data("RB.csv", folder_path=folder_path,
+                   index_col=[0], parse_index_to_datetime=True)
+    del df['instrument_type']
+    ks_test(df['close'])
 
 if __name__ == "__main__":
     _test_adf_test()
