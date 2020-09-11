@@ -17,16 +17,16 @@ OHLCAV_COL_NAME_LIST = ["open", "high", "low", "close", "amount", "volume"]
 
 
 def load_data(file_name, encoding=None, folder_path=None, index_col=None, range_from=None,
-              range_to=None) -> pd.DataFrame:
+              range_to=None, parse_index_to_datetime=False) -> pd.DataFrame:
     if folder_path is None:
         folder_path = os.path.join(get_folder_path('example', create_if_not_found=False), 'data')
         if folder_path is None:
             raise ValueError(
                 "folder_path is None, or you have to had a ./example/data folder on current or parent folder")
     file_path = os.path.join(folder_path, file_name)
-    df = pd.read_csv(file_path, encoding=encoding, index_col=index_col,
-                     parse_dates=[index_col] if index_col is not None else False)
-    # df.index = pd.DatetimeIndex(df.index)
+    df = pd.read_csv(file_path, encoding=encoding, index_col=index_col)
+    if parse_index_to_datetime:
+        df.index = pd.to_datetime(df.index)
     # 获取指定日期区间的数据
     if range_from is None:
         is_in_range = None
