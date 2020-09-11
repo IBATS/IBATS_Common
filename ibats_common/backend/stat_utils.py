@@ -15,7 +15,7 @@ LABEL_P_SIGNIFICANT = 'p-value significant'
 LABEL_REJECTION_OF_ORIGINAL_HYPOTHESIS = 'rejection of original hypothesis'
 
 
-def coint_test(x: Union[pd.Series, np.ndarray], y: Union[pd.Series, np.ndarray])->pd.Series:
+def coint_test(x: Union[pd.Series, np.ndarray], y: Union[pd.Series, np.ndarray]) -> pd.Series:
     """
     协整检测
     如果 LABEL_REJECTION_OF_ORIGINAL_HYPOTHESIS 为 1 则代表机器显著的拒绝原假设，两序列存在协整关系
@@ -106,7 +106,7 @@ def _test_adf_test():
     # Critical Value (5%)                 -2.8627    -2.8627    -2.8627    -2.8627    -2.8627    -2.8627    -2.8627
     # Critical Value (10%)                -2.5674    -2.5674    -2.5674    -2.5674    -2.5674    -2.5674    -2.5674
     # rejection of original hypothesis          1          1          1          1          1          1          1
-    print(adf_test((df.pct_change()/df).dropna()))
+    print(adf_test((df.pct_change() / df).dropna()))
 
 
 def _test_coint_test():
