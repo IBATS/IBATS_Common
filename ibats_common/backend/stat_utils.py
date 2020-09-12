@@ -203,7 +203,7 @@ def _test_corr():
 
 def _test_ks_test():
     from ibats_common.example.data import load_data
-    folder_path = r'd:\github\IBATS_Common\ibats_common\example\data'
+    folder_path = r'c:\github\IBATS_Common\ibats_common\example\data'
     df = load_data("RB.csv", folder_path=folder_path,
                    index_col=[0], parse_index_to_datetime=True)
     del df['instrument_type']
@@ -229,7 +229,18 @@ def _test_ks_test():
     # Critical Value (2%)                 0.9170
     # Critical Value (1%)                 1.0900
     # rejection of original hypothesis         1
-    print(ks_test(df['close'].pct_change().dropna()))
+    print(ks_test(df['close'].to_returns().dropna()))
+    # KS test statistic                  0.3637
+    # p-value                            0.1952
+    # p-value significant                0.0000
+    # statistic larger Than                None
+    # Critical Value (15%)               0.5760
+    # Critical Value (10%)               0.6560
+    # Critical Value (5%)                0.7870
+    # Critical Value (2%)                0.9180
+    # Critical Value (1%)                1.0920
+    # rejection of original hypothesis        0
+    print(ks_test(np.random.normal(0, 1, 10000 )))
 
 
 if __name__ == "__main__":
