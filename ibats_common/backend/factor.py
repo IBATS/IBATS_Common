@@ -10,14 +10,14 @@
 import datetime
 import logging
 import bisect
-import ffn
+import ffn  # NOQA
 import numpy as np
 import pandas as pd
 import talib
 from ibats_utils.mess import date_2_str
 
 logger = logging.getLogger(__name__)
-FFN_VERSION = ffn.__version__
+DEFAULT_OHLCV_COL_NAME_LIST = ["open", "high", "low", "close", "amount", "volume"]
 
 
 def add_factor_of_trade_date(df: pd.DataFrame, trade_date_series):
@@ -111,7 +111,7 @@ def add_factor_of_delivery_date(df, delivery_date_series):
     return df
 
 
-def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list, drop=False, log_av=True):
+def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL_NAME_LIST, drop=False, log_av=True):
     open_key = ohlcav_col_name_list[0]
     high_key = ohlcav_col_name_list[1]
     low_key = ohlcav_col_name_list[2]
@@ -130,21 +130,28 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list, drop=False, log_
     df[f'deal_price'] = deal_price_s
     # 均线因子
     df[f'rr'] = close_s.to_returns()
-    for n in [5, 10, 15, 20, 30, 60]:
-        df[f'ma{n}'] = close_s.rolling(n).mean()
+    for n in [5, 10, 15, 20, 30, 60, 120]:
+        df[f'MA{n}'] = ma_n = close_s.rolling(n).mean()
+        df[f'c-MA{n}'] = close_s - ma_n
+        for m in [5, 10, 15, 20, 30, 60]:
+            # 生成均线差的因子 命名规则 MAm - MAn
+            if m >= n:
+                continue
+            df[f'MA{m}-MA{n}'] = df[f'MA{m}'] - ma_n
+
     # 波动率因子
     expanding = close_s.expanding(5)
     df[f'volatility_all'] = expanding.std() / expanding.mean()
-    for n in [20, 60]:
+    for n in [10, 20, 30, 60]:
         df[f'volatility{n}'] = close_s.rolling(n).std() / close_s.rolling(n).mean()
 
     # 收益率方差
     rr = close_s.to_returns()
-    for n in [20, 60]:
+    for n in [10, 20, 30, 60]:
         df[f'rr_std{n}'] = rr.rolling(n).std()
 
-    #累积/派发线（Accumulation / Distribution Line，该指标将每日的成交量通过价格加权累计，
-    #用以计算成交量的动量。属于趋势型因子
+    # 累积/派发线（Accumulation / Distribution Line，该指标将每日的成交量通过价格加权累计，
+    # 用以计算成交量的动量。属于趋势型因子
     df['AD'] = talib.AD(high_s, low_s, close_s, volume_s)
 
     # 佳庆指标（Chaikin Oscillator），该指标基于AD曲线的指数移动均线而计算得到。属于趋势型因子
@@ -285,7 +292,7 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list, drop=False, log_
         bisect.insort(data_list, x)
         data_count[0] += 1
         idx = bisect.bisect_left(data_list, x)
-        return idx/data_count[0]
+        return idx / data_count[0]
 
     df['index_pct'] = close_s.apply(get_index_pct)
 
@@ -457,7 +464,7 @@ def _test_get_batch_factor():
     date_index = pd.DatetimeIndex(date_arr)
     df = pd.DataFrame(
         {'a': list(range(data_len)),
-         'b': list(range(data_len*2, data_len * 3)),
+         'b': list(range(data_len * 2, data_len * 3)),
          'c': list(range(data_len * 10, data_len * 11))},
         index=date_index,
     )
