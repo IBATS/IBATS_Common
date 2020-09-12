@@ -29,3 +29,9 @@ IBATS（Integration Backtest Analysis Trade System）的公共模块，所有Fee
 > remove " and is_windows_os()" on if condition of plot_or_show function.
 
 - 在此之前的历史就不记录了
+
+#### 编译命令
+```bash
+python setup.py build bdist_wheel
+twine upload dist/*
+```
