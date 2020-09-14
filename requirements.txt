@@ -10,7 +10,7 @@ mysqlclient>=1.4.6
 xlrd>=1.1.0
 pytest>=4.3.0
 IBATS-Utils>=1.2.10
-matplotlib==3.0.3
+matplotlib>=3.0.3,<3.3.0  # ffn==0.3.4 不支持 matplotlib 3.3.0 及以后版本
 seaborn>=0.9
 ffn>=0.3.4
 python-docx>=0.8.10
