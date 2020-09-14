@@ -111,7 +111,17 @@ def add_factor_of_delivery_date(df, delivery_date_series):
     return df
 
 
-def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL_NAME_LIST, drop=False, log_av=True):
+def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL_NAME_LIST,
+                        concat_columns=None, drop=False, log_av=True):
+    """
+    计算数据的因子
+    :param df:
+    :param ohlcav_col_name_list: 各因子列的标签名称，其中 amount 列，如果没有可以为 None
+    :param concat_columns: 扩展列的标签名称，例如： open_interest io pre_close等
+    :param drop:
+    :param log_av: 对 amount volume 进行log
+    :return:
+    """
     open_key = ohlcav_col_name_list[0]
     high_key = ohlcav_col_name_list[1]
     low_key = ohlcav_col_name_list[2]
@@ -122,11 +132,15 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
     high_s = df[high_key]
     low_s = df[low_key]
     close_s = df[close_key]
-    amount_s = df[amount_key]
+    amount_s = df[amount_key] if amount_key is not None else None
     volume_s = df[volume_key]
     # 平均成交价格
-    deal_price_s = amount_s / volume_s
-    deal_price_s[volume_s.isna()] = ((open_s * 2 + high_s + low_s + close_s * 2) / 6)[volume_s.isna()]
+    if amount_s is None:
+        deal_price_s = (open_s * 2 + high_s + low_s + close_s * 2) / 6
+    else:
+        deal_price_s = amount_s / volume_s
+        deal_price_s[volume_s.isna()] = ((open_s * 2 + high_s + low_s + close_s * 2) / 6)[volume_s.isna()]
+
     df[f'deal_price'] = deal_price_s
     # 均线因子
     df[f'rr'] = close_s.to_returns()
@@ -299,7 +313,8 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
     # 对 volume amount 取 log
     if log_av:
         df[volume_key] = np.log(volume_s.fillna(0) + 1)
-        df[amount_key] = np.log(amount_s.fillna(0) + 1)
+        if amount_key is not None:
+            df[amount_key] = np.log(amount_s.fillna(0) + 1)
 
     if drop:
         df.dropna(inplace=True)
