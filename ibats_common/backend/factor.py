@@ -112,12 +112,11 @@ def add_factor_of_delivery_date(df, delivery_date_series):
 
 
 def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL_NAME_LIST,
-                        concat_columns=None, drop=False, log_av=True):
+                        drop=False, log_av=True):
     """
     计算数据的因子
     :param df:
     :param ohlcav_col_name_list: 各因子列的标签名称，其中 amount 列，如果没有可以为 None
-    :param concat_columns: 扩展列的标签名称，例如： open_interest io pre_close等
     :param drop:
     :param log_av: 对 amount volume 进行log
     :return:
