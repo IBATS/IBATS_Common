@@ -112,15 +112,17 @@ def add_factor_of_delivery_date(df, delivery_date_series):
 
 
 def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL_NAME_LIST,
-                        drop=False, log_av=True):
+                        drop=False, log_av=True, add_pct_change_columns=True):
     """
     计算数据的因子
     :param df:
     :param ohlcav_col_name_list: 各因子列的标签名称，其中 amount 列，如果没有可以为 None
     :param drop:
     :param log_av: 对 amount volume 进行log
+    :param add_pct_change_columns: 对非平稳序列增加相应的 pct_change 列
     :return:
     """
+    pct_change_columns = [_ for _ in ohlcav_col_name_list if _ is not None]
     open_key = ohlcav_col_name_list[0]
     high_key = ohlcav_col_name_list[1]
     low_key = ohlcav_col_name_list[2]
@@ -141,16 +143,18 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
         deal_price_s[volume_s.isna()] = ((open_s * 2 + high_s + low_s + close_s * 2) / 6)[volume_s.isna()]
 
     df[f'deal_price'] = deal_price_s
+    pct_change_columns.append('deal_price')
     # 均线因子
     df[f'rr'] = close_s.to_returns()
     for n in [5, 10, 15, 20, 30, 60, 120]:
         df[f'MA{n}'] = ma_n = close_s.rolling(n).mean()
-        df[f'c-MA{n}'] = close_s - ma_n
+        pct_change_columns.append(f'MA{n}')
+        df[f'c-MA{n}'] = (close_s - ma_n) / close_s
         for m in [5, 10, 15, 20, 30, 60]:
             # 生成均线差的因子 命名规则 MAm - MAn
             if m >= n:
                 continue
-            df[f'MA{m}-MA{n}'] = df[f'MA{m}'] - ma_n
+            df[f'MA{m}-MA{n}'] = (df[f'MA{m}'] - ma_n) / close_s
 
     # 波动率因子
     expanding = close_s.expanding(5)
@@ -160,15 +164,17 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
 
     # 收益率方差
     rr = close_s.to_returns()
-    for n in [10, 20, 30, 60]:
+    for n in [5, 10, 20, 30, 60]:
         df[f'rr_std{n}'] = rr.rolling(n).std()
 
     # 累积/派发线（Accumulation / Distribution Line，该指标将每日的成交量通过价格加权累计，
     # 用以计算成交量的动量。属于趋势型因子
     df['AD'] = talib.AD(high_s, low_s, close_s, volume_s)
+    pct_change_columns.append(f'AD')
 
     # 佳庆指标（Chaikin Oscillator），该指标基于AD曲线的指数移动均线而计算得到。属于趋势型因子
     df['ADOSC'] = talib.ADOSC(high_s, low_s, close_s, volume_s, fastperiod=3, slowperiod=10)
+    pct_change_columns.append(f'ADOSC')
 
     # 平均动向指数，DMI因子的构成部分。属于趋势型因子
     df['ADX'] = talib.ADX(high_s, low_s, close_s, timeperiod=14)
@@ -187,12 +193,13 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
 
     # 均幅指标（Average TRUE Ranger），取一定时间周期内的股价波动幅度的移动平均值，
     # 是显示市场变化率的指标，主要用于研判买卖时机。属于超买超卖型因子。
-    for n in [6, 14]:
+    for n in [6, 14, 21]:
         df[f'ATR{n}'] = talib.ATR(high_s, low_s, close_s, timeperiod=n)
 
     # 布林带
     df['Boll_Up'], df['Boll_Mid'], df['Boll_Down'] = \
         talib.BBANDS(close_s, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+    pct_change_columns.extend(['Boll_Up', 'Boll_Mid', 'Boll_Down'])
 
     # 均势指标
     df['BOP'] = talib.BOP(open_s, high_s, low_s, close_s)
@@ -210,6 +217,7 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
     # DEMA双指数移动平均线
     for n in [6, 12, 26]:
         df[f'DEMA{n}'] = talib.DEMA(close_s, timeperiod=n)
+        pct_change_columns.append(f'DEMA{n}')
 
     # DX 动向指数
     df['DX'] = talib.DX(high_s, low_s, close_s, timeperiod=14)
@@ -217,9 +225,12 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
     # EMA 指数移动平均线
     for n in [6, 12, 26, 60]:
         df[f'EMA{n}'] = talib.EMA(close_s, timeperiod=n)
+        pct_change_columns.append(f'EMA{n}')
 
     # KAMA 适应性移动平均线
-    df['KAMA'] = talib.KAMA(close_s, timeperiod=30)
+    for n in [5, 10, 20, 30, 60]:
+        df[f'KAMA{n}'] = talib.KAMA(close_s, timeperiod=n)
+        pct_change_columns.append(f'KAMA{n}')
 
     # MACD
     df['MACD_DIF'], df['MACD_DEA'], df['MACD_bar'] = \
@@ -227,6 +238,7 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
 
     # 中位数价格 不知道是什么意思
     df['MEDPRICE'] = talib.MEDPRICE(high_s, low_s)
+    pct_change_columns.append('MEDPRICE')
 
     # 负向指标 负向运动
     df['MiNUS_DI'] = talib.MINUS_DI(high_s, low_s, close_s, timeperiod=14)
@@ -242,6 +254,7 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
     # OBV 	能量潮指标（On Balance Volume，OBV），以股市的成交量变化来衡量股市的推动力，
     # 从而研判股价的走势。属于成交量型因子
     df['OBV'] = talib.OBV(close_s, volume_s)
+    pct_change_columns.append('OBV')
 
     # PLUS_DI 更向指示器
     df['PLUS_DI'] = talib.PLUS_DI(high_s, low_s, close_s, timeperiod=14)
@@ -273,23 +286,29 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
         df[f'VROCP{n}'] = talib.ROCP(volume_s, timeperiod=n)
 
     # RSI
-    df['RSI'] = talib.RSI(close_s, timeperiod=14)
+    for n in [7, 14, 21, 28]:
+        df[f'RSI{n}'] = talib.RSI(close_s, timeperiod=n)
 
     # SAR 抛物线转向
     df['SAR'] = talib.SAR(high_s, low_s, acceleration=0.02, maximum=0.2)
+    pct_change_columns.append('SAR')
 
     # TEMA
     for n in [6, 12, 26]:
         df[f'TEMA{n}'] = talib.TEMA(close_s, timeperiod=n)
+        pct_change_columns.append(f'TEMA{n}')
 
     # TRANGE 真实范围
     df['TRANGE'] = talib.TRANGE(high_s, low_s, close_s)
 
     # TYPPRICE 典型价格
     df['TYPPRICE'] = talib.TYPPRICE(high_s, low_s, close_s)
+    pct_change_columns.append('TYPPRICE')
 
     # TSF 时间序列预测
-    df['TSF'] = talib.TSF(close_s, timeperiod=14)
+    for n in [7, 14, 21, 28]:
+        df[f'TSF{n}'] = talib.TSF(close_s, timeperiod=n)
+        pct_change_columns.append(f'TSF{n}')
 
     # ULTOSC 极限振子
     df['ULTOSC'] = talib.ULTOSC(high_s, low_s, close_s, timeperiod1=7, timeperiod2=14, timeperiod3=28)
@@ -308,12 +327,18 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
         return idx / data_count[0]
 
     df['index_pct'] = close_s.apply(get_index_pct)
+    pct_change_columns.append('index_pct')
 
     # 对 volume amount 取 log
     if log_av:
         df[volume_key] = np.log(volume_s.fillna(0) + 1)
         if amount_key is not None:
             df[amount_key] = np.log(amount_s.fillna(0) + 1)
+
+    # 对非平稳的序列因子进行 pct_change 处理，期待可以形成新的平稳的序列
+    if add_pct_change_columns:
+        for name in pct_change_columns:
+            df[f'{name}_pct_chg'] = df[name].pct_change()
 
     if drop:
         df.dropna(inplace=True)
@@ -372,7 +397,7 @@ def get_factor(df: pd.DataFrame, trade_date_series=None, delivery_date_series=No
         return ret_df
 
 
-def _test_get_factor():
+def _test_get_factor(do_multiple_factors=False):
     from ibats_common.example.data import load_data, get_trade_date_series, get_delivery_date_series
     instrument_type = 'RU'
     file_name = f"{instrument_type}.csv"
@@ -386,13 +411,21 @@ def _test_get_factor():
 
     # ohlcav_col_name_list is not None
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
-    train_df_dic = get_factor(indexed_df, ohlcav_col_name_list=ohlcav_col_name_list,
-                              trade_date_series=get_trade_date_series(),
-                              delivery_date_series=get_delivery_date_series(instrument_type))
+    train_df_dic = get_factor(
+        indexed_df, ohlcav_col_name_list=ohlcav_col_name_list,
+        trade_date_series=get_trade_date_series(),
+        delivery_date_series=get_delivery_date_series(instrument_type),
+        do_multiple_factors=do_multiple_factors
+    )
     logger.info("ohlcav_col_name_list=%s", ohlcav_col_name_list)
-    for adj_factor, train_df in train_df_dic.items():
-        logger.info("adj_factor=%f, train_df: first close=%f\n%s\t%s",
-                    adj_factor, train_df['close'].iloc[0], train_df.shape, list(train_df.columns))
+    if do_multiple_factors:
+        for adj_factor, train_df in train_df_dic.items():
+            logger.info("adj_factor=%f, train_df: first close=%f\n%s\t%s",
+                        adj_factor, train_df['close'].iloc[0], train_df.shape, list(train_df.columns))
+    else:
+        train_df = train_df_dic
+        logger.info("train_df: first close=%f\n%s\t%s",
+                    train_df['close'].iloc[0], train_df.shape, list(train_df.columns))
 
 
 def transfer_2_batch(df: pd.DataFrame, n_step, labels=None, date_from=None, date_to=None):
@@ -521,5 +554,5 @@ def get_batch_factor(md_df: pd.DataFrame, n_step, labels=None, **factor_kwargs):
 
 
 if __name__ == '__main__':
-    # _test_get_factor()
-    _test_get_batch_factor()
+    _test_get_factor()
+    # _test_get_batch_factor()
