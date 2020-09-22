@@ -1,7 +1,7 @@
 wheel>=0.31.1
 twine>=3.1.1
 numpy<1.19.0
-pandas>=1.1.2
+pandas>=0.25.0
 scipy>=1.4.1
 statsmodels>=0.11.1
 redis>=2.10.6
@@ -10,9 +10,9 @@ mysqlclient>=1.4.6
 xlrd>=1.1.0
 pytest>=4.3.0
 IBATS-Utils>=1.2.10
-matplotlib>=3.0.3,<3.3.0  # ffn==0.3.4 不支持 matplotlib 3.3.0 及以后版本
+matplotlib>=3.0.3,<3.3.0  # ffn==0.3.4 unsupport matplotlib 3.3.0 or later versions
 seaborn>=0.9
 ffn>=0.3.4
 python-docx>=0.8.10
 TA-Lib>=0.4.17
-tensorflow>=2.2.0,<2.4.0
+# tensorflow>=2.2.0,<2.4.0

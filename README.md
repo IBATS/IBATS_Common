@@ -11,6 +11,9 @@
 IBATS（Integration Backtest Analysis Trade System）的公共模块，所有Feeder, Trader均集成这个模块，并使用其提供的一些公共工具
 
 #### 修改历史：
+- 2020-09-22  v0.19.5
+> 增加 add_pct_change_columns=True 在 add_factor_of_price，实现对非平稳序列增加相应的 pct_change 列
+
 - 2020-09-11  v0.18.7
 > 增强 market2 中的成交价格形成机制，支持通过 DealPriceScheme 参数化控制 
 
