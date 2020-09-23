@@ -12,6 +12,9 @@ IBATS（Integration Backtest Analysis Trade System）的公共模块，所有Fee
 
 #### 修改历史：
 - 2020-09-22  v0.19.6
+> pct_change 因子中 inf 值转化为当前序列的最大值或最小值（取决于是正无穷，还是负无穷）
+
+- 2020-09-22  v0.19.6
 > 增加 add_pct_change_columns=True 在 add_factor_of_price，实现对非平稳序列增加相应的 pct_change 列
 
 - 2020-09-11  v0.18.7
