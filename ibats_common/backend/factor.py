@@ -338,7 +338,12 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
     # 对非平稳的序列因子进行 pct_change 处理，期待可以形成新的平稳的序列
     if add_pct_change_columns:
         for name in pct_change_columns:
-            df[f'{name}_pct_chg'] = df[name].pct_change()
+            values = df[name].pct_change()
+            is_inf_values = np.isneginf(values)
+            values[is_inf_values] = np.min(values[~is_inf_values])
+            is_inf_values = np.isposinf(values)
+            values[is_inf_values] = np.max(values[~is_inf_values])
+            df[f'{name}_pct_chg'] = values
 
     if drop:
         df.dropna(inplace=True)
@@ -426,6 +431,15 @@ def _test_get_factor(do_multiple_factors=False):
         train_df = train_df_dic
         logger.info("train_df: first close=%f\n%s\t%s",
                     train_df['close'].iloc[0], train_df.shape, list(train_df.columns))
+        idxs = np.where(np.isnan(train_df))
+        if len(idxs[0]) > 0:
+            logger.error("has nan value at %s", idxs)
+
+        idxs = np.where(np.isinf(train_df))
+        if len(idxs[0]) > 0:
+            logger.error("has inf value at %s", idxs)
+
+        pass
 
 
 def transfer_2_batch(df: pd.DataFrame, n_step, labels=None, date_from=None, date_to=None):
@@ -554,5 +568,8 @@ def get_batch_factor(md_df: pd.DataFrame, n_step, labels=None, **factor_kwargs):
 
 
 if __name__ == '__main__':
+    from ibats_common.config import *
+
+    logger = logging.getLogger()
     _test_get_factor()
     # _test_get_batch_factor()
