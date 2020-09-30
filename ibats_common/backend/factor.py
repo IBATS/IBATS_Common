@@ -335,15 +335,20 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
         if amount_key is not None:
             df[amount_key] = np.log(amount_s.fillna(0) + 1)
 
-    # 对非平稳的序列因子进行 pct_change 处理，期待可以形成新的平稳的序列
+    # 对非平稳的序列因子进行 pct_change 或 diff(1)一阶差分 处理，期待可以形成新的平稳的序列
     if add_pct_change_columns:
         for name in pct_change_columns:
-            values = df[name].pct_change()
-            is_inf_values = np.isneginf(values)
-            values[is_inf_values] = np.min(values[~is_inf_values])
-            is_inf_values = np.isposinf(values)
-            values[is_inf_values] = np.max(values[~is_inf_values])
-            df[f'{name}_pct_chg'] = values
+            _s = df[name]
+            if _s.std() < 100:
+                values = _s.diff(1)
+                df[f'{name}_diff1'] = values
+            else:
+                values = df[name].pct_change()
+                is_inf_values = np.isneginf(values)
+                values[is_inf_values] = np.min(values[~is_inf_values])
+                is_inf_values = np.isposinf(values)
+                values[is_inf_values] = np.max(values[~is_inf_values])
+                df[f'{name}_pct_chg'] = values
 
     if drop:
         df.dropna(inplace=True)
