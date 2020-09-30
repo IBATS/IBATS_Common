@@ -11,6 +11,9 @@
 IBATS（Integration Backtest Analysis Trade System）的公共模块，所有Feeder, Trader均集成这个模块，并使用其提供的一些公共工具
 
 #### 修改历史：
+- 2020-09-30  v0.19.7
+> 对非平稳因子，如果sdt<10 使用diff(1) 否则使用 pct_change
+
 - 2020-09-22  v0.19.6
 > pct_change 因子中 inf 值转化为当前序列的最大值或最小值（取决于是正无穷，还是负无穷）
 
