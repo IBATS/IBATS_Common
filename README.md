@@ -11,6 +11,10 @@
 IBATS（Integration Backtest Analysis Trade System）的公共模块，所有Feeder, Trader均集成这个模块，并使用其提供的一些公共工具
 
 #### 修改历史：
+- 2020-10-06  v0.20.0
+> add factor_analysis with factor_analyzer module
+> add diff factor on get_factor function
+
 - 2020-09-30  v0.19.7
 > 对非平稳因子，如果sdt<10 使用diff(1) 否则使用 pct_change
 
