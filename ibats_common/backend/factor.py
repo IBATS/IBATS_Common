@@ -144,6 +144,10 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
 
     df[f'deal_price'] = deal_price_s
     pct_change_columns.append('deal_price')
+    # N 阶价差
+    for _ in range(1, 4):
+        df[f'diff{_}'] = close_s.diff(_)
+
     # 均线因子
     df[f'rr'] = close_s.to_returns()
     for n in [5, 10, 15, 20, 30, 60, 120]:
