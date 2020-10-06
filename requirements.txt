@@ -15,4 +15,5 @@ seaborn>=0.9
 ffn>=0.3.4
 python-docx>=0.8.10
 TA-Lib>=0.4.17
+factor_analyzer>=0.3.2
 # tensorflow>=2.2.0,<2.4.0
