@@ -112,7 +112,7 @@ def add_factor_of_delivery_date(df, delivery_date_series):
 
 
 def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL_NAME_LIST,
-                        drop=False, log_av=True, add_pct_change_columns=True):
+                        drop=False, log_av=True, add_pct_change_columns=True, with_diff_n=True):
     """
     计算数据的因子
     :param df:
@@ -120,6 +120,9 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
     :param drop:
     :param log_av: 对 amount volume 进行log
     :param add_pct_change_columns: 对非平稳序列增加相应的 pct_change 列
+    :param with_diff_n: 增加N阶 diff，增加N阶Diff，
+        可能导致 factor_analysis 抛出 LinAlgError，
+        因此在进行 factor analysis 时，可以关掉次因子
     :return:
     """
     pct_change_columns = [_ for _ in ohlcav_col_name_list if _ is not None]
@@ -145,8 +148,9 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
     df[f'deal_price'] = deal_price_s
     pct_change_columns.append('deal_price')
     # N 阶价差
-    for _ in range(1, 4):
-        df[f'diff{_}'] = close_s.diff(_)
+    if with_diff_n:
+        for _ in range(1, 4):
+            df[f'diff{_}'] = close_s.diff(_)
 
     # 均线因子
     df[f'rr'] = close_s.to_returns()
@@ -362,7 +366,7 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
 
 def get_factor(df: pd.DataFrame, trade_date_series=None, delivery_date_series=None,
                dropna=True, ohlcav_col_name_list=["open", "high", "low", "close", "amount", "volume"],
-               do_multiple_factors=False) -> (pd.DataFrame, dict):
+               do_multiple_factors=False, price_factor_kwargs=None) -> (pd.DataFrame, dict):
     """
     在当期时间序列数据基础上增加相关因子
     目前已经支持的因子包括量价因子、时间序列因子、交割日期因子
@@ -372,8 +376,10 @@ def get_factor(df: pd.DataFrame, trade_date_series=None, delivery_date_series=No
     :param dropna: 是否 dropna
     :param ohlcav_col_name_list: 量价因子相关列名称，默认["open", "high", "low", "close", "amount", "volume"]
     :param do_multiple_factors: 对数据进行倍增处理，将指定列乘以因子，如果 ！= None 则，返回dict{adj_factor: DataFrame}
+    :param price_factor_kwargs: 计算价格因子时的可选参数
     :return:
     """
+    price_factor_kwargs = {} if price_factor_kwargs is None else price_factor_kwargs
     ret_df = df.copy()
 
     # 交易日相关因子
@@ -388,7 +394,7 @@ def get_factor(df: pd.DataFrame, trade_date_series=None, delivery_date_series=No
     train_df_dic = {}
     if ohlcav_col_name_list is not None:
         ret_df_tmp = ret_df.copy()
-        ret_df = add_factor_of_price(ret_df, ohlcav_col_name_list)
+        ret_df = add_factor_of_price(ret_df, ohlcav_col_name_list, **price_factor_kwargs)
         if do_multiple_factors:
             if dropna:
                 ret_df.dropna(inplace=True)
@@ -397,7 +403,8 @@ def get_factor(df: pd.DataFrame, trade_date_series=None, delivery_date_series=No
                 train_df_tmp = ret_df_tmp.copy()
                 # 将 O,H,L,C,A 前五项进行因子扩充
                 train_df_tmp.loc[:, ohlcav_col_name_list[:5]] *= adj_factor
-                factor_df = add_factor_of_price(train_df_tmp, ohlcav_col_name_list=ohlcav_col_name_list)
+                factor_df = add_factor_of_price(
+                    train_df_tmp, ohlcav_col_name_list=ohlcav_col_name_list, **price_factor_kwargs)
                 if dropna:
                     factor_df.dropna(inplace=True)
                 train_df_dic[adj_factor] = factor_df
