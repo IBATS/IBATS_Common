@@ -64,6 +64,7 @@ def factor_analysis(factor_df, max_feature_count=None, plot=True):
         else:
             logger.info(f'\t√ -> kmo_total={kmo_total:.5f} 变量间的相关性强，变量越适合作因子分析')
         ana_dic[n_features] = {
+            "FactorAnalyzer": fa,
             # "communalities": communalities,
             # "loadings": loadings,
             # "Sum of squared loadings": var[0],
@@ -74,12 +75,12 @@ def factor_analysis(factor_df, max_feature_count=None, plot=True):
         if var[2][-1] > 0.95 and kmo_total > 0.6:
             break
 
-    ana_data = pd.DataFrame(ana_dic).T
+    ana_data = pd.DataFrame({k: v for k, v in ana_dic.items() if k != 'FactorAnalyzer'}).T
     if plot:
         ana_data.plot(subplots=True, figsize=(9, 6))
         plt.show()
 
-    return ana_data
+    return ana_dic
 
 
 def _test_factor_analysis():
@@ -89,7 +90,7 @@ def _test_factor_analysis():
         "RB.csv", index_col='trade_date', parse_index_to_datetime=True
     ).drop(['instrument_type'], axis=1)
     factor_df = get_factor(df, price_factor_kwargs={'with_diff_n': False}).dropna()
-    ana_data = factor_analysis(factor_df)
+    ana_dic = factor_analysis(factor_df)
 
 
 if __name__ == "__main__":
