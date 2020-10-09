@@ -149,7 +149,8 @@ def add_factor_of_price(df: pd.DataFrame, ohlcav_col_name_list=DEFAULT_OHLCV_COL
     pct_change_columns.append('deal_price')
     # N 阶价差
     if with_diff_n:
-        for _ in range(1, 4):
+        for _ in range(2, 4):
+            # 因为 close diff(1) 已经在前面 ohlcav_col_name_list 中完成了对所有原始数据列的一阶差分，因此无需重复
             df[f'diff{_}'] = close_s.diff(_)
 
     # 均线因子
