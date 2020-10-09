@@ -18,14 +18,17 @@ import ffn
 import matplotlib
 # matplotlib.use('Qt5Agg')  # 需要 pip3 install PyQt5，windows 下無效
 import matplotlib.pyplot as plt
+from matplotlib.cm import get_cmap
+from matplotlib.font_manager import FontProperties
+import statsmodels.api as sm
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+import scipy.stats as scs
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from ibats_utils.mess import date_2_str, is_windows_os, open_file_with_system_app
-from matplotlib.cm import get_cmap
-from matplotlib.font_manager import FontProperties
 from pandas.plotting import register_matplotlib_converters
 from scipy import stats
+from ibats_utils.mess import date_2_str, is_windows_os, open_file_with_system_app
 
 from ibats_common.backend.mess import get_cache_folder_path
 from ibats_common.backend.label import calc_label2, calc_label3
@@ -1008,6 +1011,43 @@ def get_data_range_iter(s: pd.Series, extent_left=False):
     else:
         if not is_new_range:
             yield idx_from, idx_to, data
+
+
+def ts_plot(y, lags=None, figsize=(10, 12), style='bmh', dropna=True, drop_n_std=None):
+    """
+    对时间序列数据进行ACF PACF展示
+    """
+    if not isinstance(y, pd.Series):
+        y = pd.Series(y)
+
+    if dropna:
+        y = y.dropna()
+
+    if drop_n_std is not None:
+        y_std_n = np.std(y) * drop_n_std
+        y = y[np.abs(y) < y_std_n]
+
+    with plt.style.context(style):  # 定义局部样式
+        fig = plt.figure(figsize=figsize)
+        layout = (5, 2)
+        ts_ax = plt.subplot2grid(layout, (0, 0), colspan=2)
+        hist_ax = plt.subplot2grid(layout, (1, 0), colspan=2)
+        acf_ax = plt.subplot2grid(layout, (2, 0), colspan=2)
+        pacf_ax = plt.subplot2grid(layout, (3, 0), colspan=2)
+        qq_ax = plt.subplot2grid(layout, (4, 0))
+        pp_ax = plt.subplot2grid(layout, (4, 1))
+
+        y.plot(ax=ts_ax)
+        ts_ax.set_title('Time Series Analysis Plots[ACF->q, PACF->p]')
+        y.plot(ax=hist_ax, kind='hist', bins=25)
+        plot_acf(y, lags=lags, ax=acf_ax)  # 自相关系数ACF图 , alpha=0.5
+        plot_pacf(y, lags=lags, ax=pacf_ax)  # 偏相关系数PACF图 , alpha=0.5
+        sns.despine()
+        sm.qqplot(y, line='s', ax=qq_ax)  # QQ图检验是否是正太分布
+        qq_ax.set_title('QQ Plot')
+        scs.probplot(y, sparams=(y.mean(), y.std()), plot=pp_ax)
+
+        plt.tight_layout()
 
 
 if __name__ == "__main__":
