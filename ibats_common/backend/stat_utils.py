@@ -6,11 +6,13 @@
 @desc    : 用于提供各种统计学工具
 """
 from typing import Union
+import logging
 import pandas as pd
 import numpy as np
 from statsmodels.tsa.stattools import adfuller, coint
 from scipy.stats import anderson, kstest
 
+logger = logging.getLogger()
 LABEL_T_SMALLER_THAN = 't-statistic Smaller Than'
 LABEL_STATISTIC_LARGER_THAN = 'statistic larger Than'
 LABEL_P_SIGNIFICANT = 'p-value significant'
@@ -139,6 +141,47 @@ def adf_test(data: Union[pd.DataFrame, pd.Series, np.ndarray]) -> Union[pd.Serie
         return output_s
 
 
+def adf_coint_test(x, y, max_diff=4):
+    """
+    集成同阶单整检测，与协整检测。数据只有符合“同阶单整”的情况下才会进行协整检测，否则返回 None
+    :param x:
+    :param y:
+    :param max_diff:
+    :return:
+    """
+    x_name = x.name if isinstance(x, pd.Series) else 'x'
+    y_name = y.name if isinstance(y, pd.Series) else 'y'
+    xy_df = pd.DataFrame({
+        x_name: x,
+        y_name: y,
+    })
+    diff_n = 0
+    for diff_n in range(max_diff + 1):
+        if diff_n > 0:
+            data = xy_df.diff(diff_n)
+        else:
+            data = xy_df
+
+        output_df = adf_test(data.dropna())
+        logger.debug("ADF Test:\n%s", output_df)
+        is_ok = output_df.loc[LABEL_REJECTION_OF_ORIGINAL_HYPOTHESIS, :] == 1
+        if np.all(is_ok):
+            logger.debug("当前数据 %s %s 同时符合 %d阶单整，即：I(%d)", x_name, y_name, diff_n, diff_n)
+            break
+    else:
+        logger.warning("当前数据 %s %s 不存在 同阶单整", x_name, y_name)
+        return None
+
+    if diff_n > 0:
+        x_diff = np.diff(x, diff_n)
+        y_diff = np.diff(y, diff_n)
+    else:
+        x_diff = x
+        y_diff = y
+
+    return coint_test(x_diff, y_diff)
+
+
 def _test_adf_test():
     from ibats_common.example.data import load_data
     folder_path = r'd:\github\IBATS_Common\ibats_common\example\data'
@@ -192,6 +235,25 @@ def _test_coint_test():
     print(coint_test(df['close'], df['open']))
 
 
+def _test_adf_coint_test():
+    from ibats_common.example.data import load_data
+    folder_path = r'c:\github\IBATS_Common\ibats_common\example\data'
+    df = load_data("RB.csv", folder_path=folder_path,
+                   index_col=[0], parse_index_to_datetime=True)
+    del df['instrument_type']
+    # 结果类似如下
+    # Test Statistic                     -23.7895
+    # p-value                              0.0000
+    # p-value significant                  1.0000
+    # t-statistic Smaller Than             0.0100
+    # Critical Value (1%)                 -3.9009
+    # Critical Value (5%)                 -3.3386
+    # Critical Value (10%)                -3.0462
+    # rejection of original hypothesis          1
+    # dtype: object
+    print(adf_coint_test(df['close'], df['open']))
+
+
 def _test_corr():
     from ibats_common.example.data import load_data
     folder_path = r'd:\github\IBATS_Common\ibats_common\example\data'
@@ -240,7 +302,7 @@ def _test_ks_test():
     # Critical Value (2%)                0.9180
     # Critical Value (1%)                1.0920
     # rejection of original hypothesis        0
-    print(ks_test(np.random.normal(0, 1, 10000 )))
+    print(ks_test(np.random.normal(0, 1, 10000)))
 
 
 if __name__ == "__main__":
@@ -248,3 +310,4 @@ if __name__ == "__main__":
     _test_coint_test()
     _test_corr()
     _test_ks_test()
+    _test_adf_coint_test()
