@@ -8,6 +8,7 @@
 @desc    :
 2020-01-22 remove " and is_windows_os()" on if condition of plot_or_show function
 """
+import typing
 import itertools
 import logging
 import os
@@ -144,7 +145,8 @@ def plot_rr_df(df: pd.DataFrame, col_name_list=None, enable_show_plot=True, enab
     # """绘图函数"""
     ax = data_df.plot(grid=True)
     ax.set_title(
-        f"Return Rate " if name is None else f"Return Rate [{name}] "
+        f"Return Rate " if name is None else
+        f"Return Rate [{name}] "
         f"{date_2_str(min(data_df.index))} - {date_2_str(max(data_df.index))} ({data_df.shape[0]} days)")
 
     file_name = get_file_name(f'rr', name=name)
@@ -187,7 +189,8 @@ def plot_scatter_matrix(df: pd.DataFrame, diagonal='hist', col_name_list=None, e
     # """绘图函数"""
     pd.plotting.scatter_matrix(data_df)
     plt.suptitle(
-        f"Scatter Matrix " if name is None else f"Scatter Matrix [{name}] "
+        f"Scatter Matrix " if name is None else
+        f"Scatter Matrix [{name}] "
         f"{date_2_str(min(data_df.index))} - {date_2_str(max(data_df.index))} ({data_df.shape[0]} days)")
 
     file_name = get_file_name('scatter_matrix', name=name)
@@ -945,7 +948,7 @@ def _test_plot_twin():
               y_scales_log=[True, False], in_sample_date_line='2018-02-01')
 
 
-def plot_pair(df, a_label, b_label, ax=None, name=None,
+def plot_pair(df: pd.DataFrame, a_label, b_label, ax=None, name=None,
               enable_save_plot=True, enable_show_plot=True, do_clr=True,
               folder_path=None, figsize=(6, 8)):
     """画出配对交易连个品质的走势图"""
@@ -977,7 +980,50 @@ def _test_plot_pair():
         'instrument1': np.cos(np.linspace(0, 10, 100)) + 9,
         'instrument2': np.cos(np.linspace(1, 11, 100)) + 9
     }, index=date_index)
-    plot_pair(pair_df, a_label='instrument1', b_label='instrument2', name='plot_pair_test',)
+    plot_pair(pair_df, a_label='instrument1', b_label='instrument2', name='plot_pair_test', )
+
+
+def plot_mean_std(s: typing.Union[pd.Series, np.ndarray], std_n=1, ax=None, name=None,
+                  enable_save_plot=True, enable_show_plot=True, do_clr=True,
+                  folder_path=None, figsize=(6, 8)):
+    """画出配对交易连个品质的走势图"""
+    if not isinstance(s, pd.Series):
+        s = pd.Series(s, name='value')
+
+    if ax is None:
+        fig = plt.figure(figsize=figsize)  #
+        ax = fig.add_subplot(111)
+
+    l1 = ax.plot(s, label=s.name, color='r')
+    mean_value = s.mean()
+    mean_s = pd.Series([mean_value for _ in range(s.shape[0])], index=s.index)
+    std = s.std() * std_n
+    l2 = ax.plot(mean_s, label='mean', color='k')
+    l3 = ax.plot(mean_s + std, '--', label=f'mean+std*{std_n}', color='b')
+    l4 = ax.plot(mean_s - std, '--', label=f'mean-std*{std_n}', color='b')
+    lns = l1 + l2 + l3 + l4
+    plt.legend(lns, [_.get_label() for _ in lns], loc=0)
+    plt.grid(True)
+    # 设置 title
+    # plt.suptitle(name)
+    plt.title(name)
+    # 展示
+    return plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, do_clr=do_clr,
+                        file_name=f'{name}.png', folder_path=folder_path)
+
+
+def _test_plot_mean_std():
+    """测试 plot_twin"""
+    date_arr = pd.date_range(pd.to_datetime('2018-01-01'),
+                             pd.to_datetime('2018-01-01') + pd.Timedelta(days=99))
+    date_index = pd.DatetimeIndex(date_arr)
+    close_df = pd.DataFrame({'close': np.sin(np.linspace(0, 10, 100))}, index=date_index)
+    pair_df = pd.DataFrame({
+        'instrument1': np.cos(np.linspace(0, 10, 100)) + 9,
+        'instrument2': np.cos(np.linspace(1, 11, 100)) + 9
+    }, index=date_index)
+    gap_s = pair_df['instrument2'] - pair_df['instrument1']
+    plot_mean_std(gap_s, name='plot_mean_std_test', )
 
 
 @lru_cache()
@@ -1094,4 +1140,5 @@ if __name__ == "__main__":
     # _test_plot_accuracy()
     # _test_show_dl_accuracy()
     # _test_plot_twin()
-    _test_plot_pair()
+    # _test_plot_pair()
+    _test_plot_mean_std()
