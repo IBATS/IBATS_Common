@@ -19,6 +19,7 @@ import ffn
 import matplotlib
 # matplotlib.use('Qt5Agg')  # 需要 pip3 install PyQt5，windows 下無效
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 from matplotlib.cm import get_cmap
 from matplotlib.font_manager import FontProperties
 import statsmodels.api as sm
@@ -199,50 +200,87 @@ def plot_scatter_matrix(df: pd.DataFrame, diagonal='hist', col_name_list=None, e
     return file_path
 
 
-def hist_norm(data, bins=10, enable_show_plot=True, enable_save_plot=False,
-              name=None, stg_run_id=None, do_clr=True, folder_path=None):
+def hist_norm(data, bins=10, ax=None, enable_show_plot=True, enable_save_plot=False,
+              name=None, stg_run_id=None, do_clr=True, folder_path=None, figsize=(6, 8)):
     """
     hist 分布图及正太分布曲线
     :param data:
     :param bins:
+    :param ax:
     :param enable_show_plot:
     :param enable_save_plot:
     :param name:
     :param stg_run_id:
     :param do_clr:
     :param folder_path:
+    :param figsize:
     :return:
     """
-    fig, ax = plt.subplots()
+    if ax is None:
+        fig = plt.figure(figsize=figsize)  #
+        ax = fig.add_subplot(111)
+        if enable_save_plot is None:
+            enable_save_plot = False
+        if enable_show_plot is None:
+            enable_show_plot = False
+        if do_clr is None:
+            do_clr = False
+    else:
+        if enable_save_plot is None:
+            enable_save_plot = True
+        if enable_show_plot is None:
+            enable_show_plot = True
+        if do_clr is None:
+            do_clr = True
+
     # the histogram of the data
     _, _, patches = ax.hist(data, bins, density=True)
-    n, bins_v, mean, std = plot_norm(data, bins=bins, ax=ax)
+    n, bins_v, mean, std = plot_norm(
+        data, bins=bins, ax=ax,
+        enable_show_plot=False, enable_save_plot=False, do_clr=False)
     # ax.set_xlabel('pct change')
     # ax.set_ylabel('change rate')
     ax.set_title(f"{'Data' if name is None else name} Histogram (mean={mean:.4f} std={std:.4f})")
 
     file_name = get_file_name(f'hist', name=name)
-    rr_plot_file_path = plot_or_show(enable_show_plot=enable_show_plot, enable_save_plot=enable_save_plot,
-                                     file_name=file_name, stg_run_id=stg_run_id, do_clr=do_clr, folder_path=folder_path)
+    rr_plot_file_path = plot_or_show(
+        enable_show_plot=enable_show_plot, enable_save_plot=enable_save_plot,
+        file_name=file_name, stg_run_id=stg_run_id, do_clr=do_clr, folder_path=folder_path)
     return n, bins_v, rr_plot_file_path
 
 
-def plot_norm(data: pd.Series, bins=10, ax=None, is_show_plot=None):
+def plot_norm(data: pd.Series, bins=10, ax=None, name=None,
+              enable_save_plot=None, enable_show_plot=None, do_clr=None,
+              folder_path=None, figsize=(6, 8)):
     """
     显示当前数据的正太分布曲线
     :param data:
     :param bins: bar 数量
     :param ax: 如果为None，则新建一个画布
-    :param is_show_plot: 是否展示
+    :param name: 图片 title 以及保存的文件名
+    :param enable_save_plot:
+    :param enable_show_plot:
+    :param folder_path:
+    :param figsize:
+    :param do_clr:
     :return: n, bins_v, mean, std
     """
     if ax is None:
-        fig, ax = plt.subplots()
-        if is_show_plot is None:
-            is_show_plot = True
-
-    if is_show_plot is None:
-        is_show_plot = False
+        fig = plt.figure(figsize=figsize)  #
+        ax = fig.add_subplot(111)
+        if enable_save_plot is None:
+            enable_save_plot = False
+        if enable_show_plot is None:
+            enable_show_plot = False
+        if do_clr is None:
+            do_clr = False
+    else:
+        if enable_save_plot is None:
+            enable_save_plot = True
+        if enable_show_plot is None:
+            enable_show_plot = True
+        if do_clr is None:
+            do_clr = True
 
     n, bins_v = np.histogram(data, bins=bins)
 
@@ -256,22 +294,45 @@ def plot_norm(data: pd.Series, bins=10, ax=None, is_show_plot=None):
     y = stats.norm.pdf(bins_v, loc=mu, scale=sigma)
     ax.plot(bins_v, y, '--')
     plt.grid(True)
-    if is_show_plot:
-        plt.show()
+    file_path = plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, do_clr=do_clr,
+                             file_name=f'{name}.png', folder_path=folder_path)
 
-    return n, bins_v, mu, sigma
+    if enable_save_plot:
+        return n, bins_v, mu, sigma, file_path
+    else:
+        return n, bins_v, mu, sigma
 
 
-def hist_norm_sns(data, bins=10):
+def hist_norm_sns(data, bins=10, ax=None, name=None,
+                  enable_save_plot=None, enable_show_plot=None, do_clr=None,
+                  folder_path=None, figsize=(6, 8)):
     """sns 方式 hist 分布图及正太分布曲线"""
+    if ax is None:
+        fig = plt.figure(figsize=figsize)  #
+        ax = fig.add_subplot(111)
+        if enable_save_plot is None:
+            enable_save_plot = False
+        if enable_show_plot is None:
+            enable_show_plot = False
+        if do_clr is None:
+            do_clr = False
+    else:
+        if enable_save_plot is None:
+            enable_save_plot = True
+        if enable_show_plot is None:
+            enable_show_plot = True
+        if do_clr is None:
+            do_clr = True
+
     sns.set_palette("hls")
     sns.distplot(
-        data, bins=bins,
+        data, bins=bins, ax=ax,
         fit=stats.norm,
         kde_kws={"color": "darkorange", "lw": 1, "label": "KDE", "linestyle": "--"},
         hist_kws={"color": "darkblue"})
     plt.grid(True)
-    plt.show()
+    return plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, do_clr=do_clr,
+                        file_name=f'{name}.png', folder_path=folder_path)
 
 
 def wave_hist(df: pd.DataFrame, columns=None, bins=50, figure_4_each_col=True,
@@ -674,6 +735,15 @@ def show_drl_accuracy(real_label_s, action_s, close_df: pd.DataFrame, split_poin
 
 def plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=None, stg_run_id=None, do_clr=True,
                  folder_path=None):
+    """
+    展示或保存图片
+    :param enable_save_plot:
+    :param enable_show_plot:
+    :param file_name:
+    :param stg_run_id:
+    :param do_clr:
+    :param folder_path:
+    """
     if enable_save_plot:
         if folder_path is None:
             if stg_run_id is None:
@@ -773,8 +843,21 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
     :return:
     """
     if ax is None:
-        fig = plt.figure()
+        fig = plt.figure()  #
         ax = fig.add_subplot(111)
+        if "enable_save_plot" in enable_kwargs:
+            enable_kwargs["enable_save_plot"] = False
+        if "enable_show_plot" in enable_kwargs:
+            enable_kwargs["enable_show_plot"] = False
+        if "do_clr" in enable_kwargs:
+            enable_kwargs["do_clr"] = False
+    else:
+        if "enable_save_plot" in enable_kwargs:
+            enable_kwargs["enable_save_plot"] = True
+        if "enable_show_plot" in enable_kwargs:
+            enable_kwargs["enable_show_plot"] = True
+        if "do_clr" in enable_kwargs:
+            enable_kwargs["do_clr"] = True
 
     accuracy_df = accuracy_df.copy()
     l1 = ax.plot(accuracy_df, color='r', label='accuracy')
@@ -847,12 +930,25 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
     return file_path
 
 
-def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=True, enable_show_plot=True, do_clr=True,
+def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=None, enable_show_plot=None, do_clr=None,
               folder_path=None, y_scales_log=[False, False], in_sample_date_line=None, figsize=(6, 8)):
     """输出双坐标中图像"""
     if ax is None:
         fig = plt.figure(figsize=figsize)  #
         ax = fig.add_subplot(111)
+        if enable_save_plot is None:
+            enable_save_plot = False
+        if enable_show_plot is None:
+            enable_show_plot = False
+        if do_clr is None:
+            do_clr = False
+    else:
+        if enable_save_plot is None:
+            enable_save_plot = True
+        if enable_show_plot is None:
+            enable_show_plot = True
+        if do_clr is None:
+            do_clr = True
 
     ax.set_prop_cycle(color=get_cmap('tab20').colors)
     if not isinstance(df_list, list):
@@ -949,12 +1045,25 @@ def _test_plot_twin():
 
 
 def plot_pair(df: pd.DataFrame, a_label, b_label, ax=None, name=None,
-              enable_save_plot=True, enable_show_plot=True, do_clr=True,
+              enable_save_plot=None, enable_show_plot=None, do_clr=None,
               folder_path=None, figsize=(6, 8)):
     """画出配对交易连个品质的走势图"""
     if ax is None:
         fig = plt.figure(figsize=figsize)  #
         ax = fig.add_subplot(111)
+        if enable_save_plot is None:
+            enable_save_plot = False
+        if enable_show_plot is None:
+            enable_show_plot = False
+        if do_clr is None:
+            do_clr = False
+    else:
+        if enable_save_plot is None:
+            enable_save_plot = True
+        if enable_show_plot is None:
+            enable_show_plot = True
+        if do_clr is None:
+            do_clr = True
 
     l1 = ax.plot(df[a_label], label=a_label, color='r')
     ax2 = ax.twinx()
@@ -984,15 +1093,28 @@ def _test_plot_pair():
 
 
 def plot_mean_std(s: typing.Union[pd.Series, np.ndarray], std_n=1, ax=None, name=None,
-                  enable_save_plot=True, enable_show_plot=True, do_clr=True,
+                  enable_save_plot=None, enable_show_plot=None, do_clr=None,
                   folder_path=None, figsize=(6, 8)):
-    """画出配对交易连个品质的走势图"""
+    """画出走势图同时画出均线以及标准差线"""
     if not isinstance(s, pd.Series):
         s = pd.Series(s, name='value')
 
     if ax is None:
         fig = plt.figure(figsize=figsize)  #
         ax = fig.add_subplot(111)
+        if enable_save_plot is None:
+            enable_save_plot = False
+        if enable_show_plot is None:
+            enable_show_plot = False
+        if do_clr is None:
+            do_clr = False
+    else:
+        if enable_save_plot is None:
+            enable_save_plot = True
+        if enable_show_plot is None:
+            enable_show_plot = True
+        if do_clr is None:
+            do_clr = True
 
     l1 = ax.plot(s, label=s.name, color='r')
     mean_value = s.mean()
@@ -1024,6 +1146,64 @@ def _test_plot_mean_std():
     }, index=date_index)
     gap_s = pair_df['instrument2'] - pair_df['instrument1']
     plot_mean_std(gap_s, name='plot_mean_std_test', )
+
+
+def pair_plots(s1: pd.Series, s2: pd.Series, z_score=True,
+               enable_save_plot=True, enable_show_plot=True, do_clr=True,
+               folder_path=None, figsize=(6, 8)):
+    """
+    将 s1, s2 配对交易图显示
+    """
+    s1_name = s1.name
+    s2_name = s2.name
+    merged_df = pd.merge(s1, s2, left_index=True, right_index=True)
+    logger.info("%s shape %s, %s shape %s, 合并后 %s",
+                s1_name, s1.shape, s2_name, s2.shape, merged_df.shape)
+    plt.figure(figsize=figsize)
+    gs = gridspec.GridSpec(3, 1)
+    ax1 = plt.subplot(gs[0, :])
+    ax2 = plt.subplot(gs[1, :])
+    ax3 = plt.subplot(gs[2, :])
+    # 合并走势图
+    plot_pair(
+        merged_df, s1_name, s2_name,
+        ax=ax1, name=f'{s1_name} & {s2_name}',
+        enable_save_plot=False, enable_show_plot=False, do_clr=False)
+    # 基差走势图
+    gap_s = merged_df[s2_name] - merged_df[s1_name]
+    if z_score:
+        from scipy.stats import zscore
+        gap_s = pd.Series(zscore(gap_s), index=merged_df.index, name=f'{s2_name} - {s1_name}')
+    else:
+        gap_s.name = f'{s2_name} - {s1_name}'
+
+    plot_mean_std(
+        gap_s,
+        ax=ax2, name=f'{s2_name} - {s1_name}',
+        enable_save_plot=False, enable_show_plot=False, do_clr=False)
+
+    # 分布图
+    hist_norm(
+        gap_s, bins=50,
+        ax=ax3, name=f'{s2_name} - {s1_name}{" by z_score" if z_score else ""}',
+        enable_save_plot=False, enable_show_plot=False, do_clr=False
+    )
+    name = 'Pair Plots'
+    return plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, do_clr=do_clr,
+                        file_name=f'{name}.png', folder_path=folder_path)
+
+
+def _test_pair_plot():
+    """测试 plot_twin"""
+    date_arr = pd.date_range(pd.to_datetime('2018-01-01'),
+                             pd.to_datetime('2018-01-01') + pd.Timedelta(days=99))
+    date_index = pd.DatetimeIndex(date_arr)
+    close_df = pd.DataFrame({'close': np.sin(np.linspace(0, 10, 100))}, index=date_index)
+    pair_df = pd.DataFrame({
+        'instrument1': np.cos(np.linspace(0, 10, 100)) + 9,
+        'instrument2': np.cos(np.linspace(1, 11, 100)) + 9
+    }, index=date_index)
+    pair_plots(pair_df['instrument1'], pair_df['instrument2'])
 
 
 @lru_cache()
@@ -1141,4 +1321,5 @@ if __name__ == "__main__":
     # _test_show_dl_accuracy()
     # _test_plot_twin()
     # _test_plot_pair()
-    _test_plot_mean_std()
+    # _test_plot_mean_std()
+    _test_pair_plot()
