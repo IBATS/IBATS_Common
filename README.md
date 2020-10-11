@@ -11,6 +11,9 @@
 IBATS（Integration Backtest Analysis Trade System）的公共模块，所有Feeder, Trader均集成这个模块，并使用其提供的一些公共工具
 
 #### 修改历史：
+- 2020-10-11  v0.20.4
+>feat: add pair plots
+
 - 2020-10-10  v0.20.3
 >feat: add adf_coint_test
 
