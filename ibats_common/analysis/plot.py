@@ -945,6 +945,41 @@ def _test_plot_twin():
               y_scales_log=[True, False], in_sample_date_line='2018-02-01')
 
 
+def plot_pair(df, a_label, b_label, ax=None, name=None,
+              enable_save_plot=True, enable_show_plot=True, do_clr=True,
+              folder_path=None, figsize=(6, 8)):
+    """画出配对交易连个品质的走势图"""
+    if ax is None:
+        fig = plt.figure(figsize=figsize)  #
+        ax = fig.add_subplot(111)
+
+    l1 = ax.plot(df[a_label], label=a_label, color='r')
+    ax2 = ax.twinx()
+    l2 = ax2.plot(df[b_label], label=b_label, color='b')
+    lns = l1 + l2
+    plt.legend(lns, [_.get_label() for _ in lns], loc=0)
+    plt.grid(True)
+    # 设置 title
+    # plt.suptitle(name)
+    plt.title(name)
+    # 展示
+    return plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, do_clr=do_clr,
+                        file_name=f'{name}.png', folder_path=folder_path)
+
+
+def _test_plot_pair():
+    """测试 plot_twin"""
+    date_arr = pd.date_range(pd.to_datetime('2018-01-01'),
+                             pd.to_datetime('2018-01-01') + pd.Timedelta(days=99))
+    date_index = pd.DatetimeIndex(date_arr)
+    close_df = pd.DataFrame({'close': np.sin(np.linspace(0, 10, 100))}, index=date_index)
+    pair_df = pd.DataFrame({
+        'instrument1': np.cos(np.linspace(0, 10, 100)) + 9,
+        'instrument2': np.cos(np.linspace(1, 11, 100)) + 9
+    }, index=date_index)
+    plot_pair(pair_df, a_label='instrument1', b_label='instrument2', name='plot_pair_test',)
+
+
 @lru_cache()
 def get_font_properties():
     is_win = is_windows_os()
@@ -1056,6 +1091,7 @@ if __name__ == "__main__":
     # _test_hist_n_rr()
     # _test_label_distribution()
     # _test_n_days_rr_distribution()
-    _test_plot_accuracy()
+    # _test_plot_accuracy()
     # _test_show_dl_accuracy()
     # _test_plot_twin()
+    _test_plot_pair()
