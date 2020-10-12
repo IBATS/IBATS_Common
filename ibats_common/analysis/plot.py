@@ -1148,17 +1148,23 @@ def _test_plot_mean_std():
     plot_mean_std(gap_s, name='plot_mean_std_test', )
 
 
-def pair_plots(s1: pd.Series, s2: pd.Series, z_score=True,
+def pair_plots(s1: pd.Series, s2: pd.Series, diff_n=0, rr_4_spread=True, z_score=True,
                enable_save_plot=True, enable_show_plot=True, do_clr=True,
                folder_path=None, figsize=(6, 8)):
     """
     将 s1, s2 配对交易图显示
     """
+    if diff_n > 0 and rr_4_spread:
+        logger.warning("diff_n > 0 的情况下，建议 rr_4_spread 不要设置为 True，否则可能出现显示异常")
+
     s1_name = s1.name
     s2_name = s2.name
     merged_df = pd.merge(s1, s2, left_index=True, right_index=True)
     logger.info("%s shape %s, %s shape %s, 合并后 %s",
                 s1_name, s1.shape, s2_name, s2.shape, merged_df.shape)
+    if diff_n > 0:
+        merged_df = merged_df.diff(diff_n).dropna()
+
     plt.figure(figsize=figsize)
     gs = gridspec.GridSpec(3, 1)
     ax1 = plt.subplot(gs[0, :])
@@ -1170,13 +1176,23 @@ def pair_plots(s1: pd.Series, s2: pd.Series, z_score=True,
         ax=ax1, name=f'{s1_name} & {s2_name}',
         enable_save_plot=False, enable_show_plot=False, do_clr=False)
     # 基差走势图
-    gap_s = merged_df[s2_name] - merged_df[s1_name]
+    # 使用直接价差还是收益率的差
+    # 多数时候，两个产品可能价格不在一个数量级，绝对价格相差很远，直接相减没有意义
+    # 因此，使用收益率差更加直观
+    if rr_4_spread:
+        merged_rr_df = merged_df / merged_df.iloc[0, :]
+        gap_s = merged_rr_df[s2_name] - merged_rr_df[s1_name]
+    else:
+        gap_s = merged_df[s2_name] - merged_df[s1_name]
+    # z_score
+    # 归一化操作
     if z_score:
         from scipy.stats import zscore
         gap_s = pd.Series(zscore(gap_s), index=merged_df.index, name=f'{s2_name} - {s1_name}')
     else:
         gap_s.name = f'{s2_name} - {s1_name}'
 
+    gap_s.dropna(inplace=True)
     plot_mean_std(
         gap_s,
         ax=ax2, name=f'{s2_name} - {s1_name}',
@@ -1203,7 +1219,7 @@ def _test_pair_plot():
         'instrument1': np.cos(np.linspace(0, 10, 100)) + 9,
         'instrument2': np.cos(np.linspace(1, 11, 100)) + 9
     }, index=date_index)
-    pair_plots(pair_df['instrument1'], pair_df['instrument2'])
+    pair_plots(pair_df['instrument1'], pair_df['instrument2'], diff_n=1)
 
 
 @lru_cache()
