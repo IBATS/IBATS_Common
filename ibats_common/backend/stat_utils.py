@@ -141,12 +141,13 @@ def adf_test(data: Union[pd.DataFrame, pd.Series, np.ndarray]) -> Union[pd.Serie
         return output_s
 
 
-def adf_coint_test(x, y, max_diff=4):
+def adf_coint_test(x, y, enable_adf_test=True, max_diff=4):
     """
     集成同阶单整检测，与协整检测。数据只有符合“同阶单整”的情况下才会进行协整检测，否则返回 None
     :param x:
     :param y:
-    :param max_diff:
+    :param enable_adf_test: 进行ADF检验通过后，才进行协整检验
+    :param max_diff:最大的差分阶数，0，则为不进行差分处理
     :return:
     """
     x_name = x.name if isinstance(x, pd.Series) else 'x'
@@ -156,21 +157,22 @@ def adf_coint_test(x, y, max_diff=4):
         y_name: y,
     })
     diff_n = 0
-    for diff_n in range(max_diff + 1):
-        if diff_n > 0:
-            data = xy_df.diff(diff_n)
-        else:
-            data = xy_df
+    if enable_adf_test:
+        for diff_n in range(max_diff + 1):
+            if diff_n > 0:
+                data = xy_df.diff(diff_n)
+            else:
+                data = xy_df
 
-        output_df = adf_test(data.dropna())
-        logger.debug("ADF Test:\n%s", output_df)
-        is_ok = output_df.loc[LABEL_REJECTION_OF_ORIGINAL_HYPOTHESIS, :] == 1
-        if np.all(is_ok):
-            logger.debug("当前数据 %s %s 同时符合 %d阶单整，即：I(%d)", x_name, y_name, diff_n, diff_n)
-            break
-    else:
-        logger.warning("当前数据 %s %s 不存在 同阶单整", x_name, y_name)
-        return None
+            output_df = adf_test(data.dropna())
+            logger.debug("ADF Test:\n%s", output_df)
+            is_ok = output_df.loc[LABEL_REJECTION_OF_ORIGINAL_HYPOTHESIS, :] == 1
+            if np.all(is_ok):
+                logger.debug("当前数据 %s %s 同时符合 %d阶单整，即：I(%d)", x_name, y_name, diff_n, diff_n)
+                break
+        else:
+            logger.warning("当前数据 %s %s 不存在 同阶单整", x_name, y_name)
+            return None
 
     if diff_n > 0:
         x_diff = np.diff(x, diff_n)
@@ -241,8 +243,9 @@ def _test_adf_coint_test():
     df = load_data("RB.csv", folder_path=folder_path,
                    index_col=[0], parse_index_to_datetime=True)
     del df['instrument_type']
+    df.dropna(inplace=True)
     # 结果类似如下
-    # Test Statistic                     -23.7895
+    # Test Statistic                     -55.3003
     # p-value                              0.0000
     # p-value significant                  1.0000
     # t-statistic Smaller Than             0.0100
@@ -252,6 +255,17 @@ def _test_adf_coint_test():
     # rejection of original hypothesis          1
     # dtype: object
     print(adf_coint_test(df['close'], df['open']))
+    print('不进行 ADF 检验')
+    # 结果类似如下
+    # Test Statistic                     -23.7895
+    # p-value                              0.0000
+    # p-value significant                  1.0000
+    # t-statistic Smaller Than             0.0100
+    # Critical Value (1%)                 -3.9009
+    # Critical Value (5%)                 -3.3386
+    # Critical Value (10%)                -3.0462
+    # rejection of original hypothesis          1
+    print(adf_coint_test(df['close'], df['open'], enable_adf_test=False))
 
 
 def _test_corr():
@@ -306,8 +320,8 @@ def _test_ks_test():
 
 
 if __name__ == "__main__":
-    _test_adf_test()
-    _test_coint_test()
-    _test_corr()
-    _test_ks_test()
+    # _test_adf_test()
+    # _test_coint_test()
+    # _test_corr()
+    # _test_ks_test()
     _test_adf_coint_test()
