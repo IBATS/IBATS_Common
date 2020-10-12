@@ -12,7 +12,7 @@ IBATS（Integration Backtest Analysis Trade System）的公共模块，所有Fee
 
 #### 修改历史：
 
-- 2020-10-11  v0.20.5
+- 2020-10-12  v0.20.5
 > add enable_adf_test param on adf_coint_test
 > add diff_n param on pair_plots
  
