@@ -330,7 +330,7 @@ def hist_norm_sns(data, bins=10, ax=None, name=None,
         fit=stats.norm,
         kde_kws={"color": "darkorange", "lw": 1, "label": "KDE", "linestyle": "--"},
         hist_kws={"color": "darkblue"})
-    plt.grid(True)
+    ax.grid(True)
     return plot_or_show(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, do_clr=do_clr,
                         file_name=f'{name}.png', folder_path=folder_path)
 
@@ -905,8 +905,8 @@ def plot_accuracy(accuracy_df, close_df, split_point_list=None, ax=None,
     accuracy_df['50%'] = 0.5
     lns += ax.plot(accuracy_df['50%'], color='b', label='train_accuracy')
 
-    plt.legend(lns, [_.get_label() for _ in lns], loc=0)
-    plt.grid(True)
+    ax.legend(lns, [_.get_label() for _ in lns], loc=0)
+    ax.grid(True)
     if name is not None:
         # 解决中文字符无法显示问题，稍后将其范化
         # font = get_font_properties()
@@ -1013,8 +1013,8 @@ def plot_twin(df_list, df2, ax=None, name=None, enable_save_plot=None, enable_sh
     # legend 参数设置
     # https://blog.csdn.net/helunqu2017/article/details/78641290
     # loc 0 best 3 lower left
-    plt.legend(lns, legend, loc=3, frameon=False, ncol=2, fontsize='x-small')  # , framealpha=0.3
-    plt.grid(True, color="gray", linewidth="0.5", alpha=0.3)  # , linestyle="-."
+    ax.legend(lns, legend, loc=3, frameon=False, ncol=2, fontsize='x-small')  # , framealpha=0.3
+    ax.grid(True, color="gray", linewidth="0.5", alpha=0.3)  # , linestyle="-."
     frame = plt.gca()
     frame.axes.get_xaxis().set_visible(True)
     plt.xlim([min_x, max_x])  # x轴边界
@@ -1069,8 +1069,8 @@ def plot_pair(df: pd.DataFrame, a_label, b_label, ax=None, name=None,
     ax2 = ax.twinx()
     l2 = ax2.plot(df[b_label], label=b_label, color='b')
     lns = l1 + l2
-    plt.legend(lns, [_.get_label() for _ in lns], loc=0)
-    plt.grid(True)
+    ax.legend(lns, [_.get_label() for _ in lns], loc=0)
+    ax.grid(True)
     # 设置 title
     # plt.suptitle(name)
     plt.title(name)
@@ -1124,8 +1124,8 @@ def plot_mean_std(s: typing.Union[pd.Series, np.ndarray], std_n=1, ax=None, name
     l3 = ax.plot(mean_s + std, '--', label=f'mean+std*{std_n}', color='b')
     l4 = ax.plot(mean_s - std, '--', label=f'mean-std*{std_n}', color='b')
     lns = l1 + l2 + l3 + l4
-    plt.legend(lns, [_.get_label() for _ in lns], loc=0)
-    plt.grid(True)
+    ax.legend(lns, [_.get_label() for _ in lns], loc=0)
+    ax.grid(True)
     # 设置 title
     # plt.suptitle(name)
     plt.title(name)
