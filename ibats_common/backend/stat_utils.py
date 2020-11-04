@@ -5,12 +5,14 @@
 @contact : mmmaaaggg@163.com
 @desc    : 用于提供各种统计学工具
 """
-from typing import Union
 import logging
-import pandas as pd
+from typing import Union
+
 import numpy as np
-from statsmodels.tsa.stattools import adfuller, coint
+import pandas as pd
 from scipy.stats import anderson, kstest
+from statsmodels.stats.diagnostic import acorr_ljungbox
+from statsmodels.tsa.stattools import adfuller, coint
 
 logger = logging.getLogger()
 LABEL_T_SMALLER_THAN = 't-statistic Smaller Than'
@@ -184,6 +186,38 @@ def adf_coint_test(x, y, enable_adf_test=True, max_diff=4):
     return coint_test(x_diff, y_diff)
 
 
+def lb_test(data: Union[pd.DataFrame, pd.Series, np.ndarray], lags=None) -> Union[pd.Series, pd.DataFrame]:
+    """
+    Ljung-Box test(LB 检验)（白噪声）
+    如果 LABEL_REJECTION_OF_ORIGINAL_HYPOTHESIS 为 1 则代表机器显著的拒绝原假设，该序列为平稳
+    """
+    if isinstance(data, pd.DataFrame):
+        result = {key: lb_test(_, lags=lags) for key, _ in data.items()}
+        output_df = pd.DataFrame(result)
+        return output_df
+    else:
+        result = acorr_ljungbox(data, lags=lags, return_df=False)
+        # lb_value = result[0]
+        p_value = result[1]
+        output_s = pd.Series(p_value)
+        smaller = p_value < 0.05
+        if np.all(smaller):
+            # 全部小于 0.05 显著
+            significant = 1
+        elif np.any(smaller):
+            # 如果有任何一个现实显著，则有待进一步分析
+            significant = np.nan
+        else:
+            # 全部大于，无法拒绝原假设
+            significant = 0
+
+        output_s[LABEL_P_SIGNIFICANT] = significant
+        # 如果p-value 显著，则拒绝原假设
+        output_s[LABEL_REJECTION_OF_ORIGINAL_HYPOTHESIS] = 1 if significant == 1 else 0
+
+        return output_s
+
+
 def _test_adf_test():
     from ibats_common.example.data import load_data
     folder_path = r'd:\github\IBATS_Common\ibats_common\example\data'
@@ -319,9 +353,16 @@ def _test_ks_test():
     print(ks_test(np.random.normal(0, 1, 10000)))
 
 
+def _test_lb_test():
+    df = pd.DataFrame({'a': np.random.random(100), 'b': np.sin(np.linspace(0, np.pi * 5, 100))})
+    result = lb_test(df)
+    print(result)
+
+
 if __name__ == "__main__":
     # _test_adf_test()
     # _test_coint_test()
     # _test_corr()
     # _test_ks_test()
-    _test_adf_coint_test()
+    # _test_adf_coint_test()
+    _test_lb_test()
