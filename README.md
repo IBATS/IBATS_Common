@@ -11,6 +11,8 @@
 IBATS（Integration Backtest Analysis Trade System）的公共模块，所有Feeder, Trader均集成这个模块，并使用其提供的一些公共工具
 
 #### 修改历史：
+- 2020-11-15  v0.20.8
+> add dependency of IBATS-Utils>=1.2.12
 
 - 2020-11-04  v0.20.7
 > add lb_test

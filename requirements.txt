@@ -9,7 +9,7 @@ SQLAlchemy>=1.3.2
 mysqlclient>=1.4.6
 xlrd>=1.1.0
 pytest>=4.3.0
-IBATS-Utils>=1.2.10
+IBATS-Utils>=1.2.12
 matplotlib>=3.0.3,<3.3.0  # ffn==0.3.4 unsupport matplotlib 3.3.0 or later versions
 seaborn>=0.9
 ffn>=0.3.4

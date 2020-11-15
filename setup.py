@@ -13,7 +13,7 @@ with open("README.md", "r", encoding='utf-8') as rm:
     long_description = rm.read()
 
 setup(name='IBATS_Common',
-      version='0.20.7',
+      version='0.20.8',
       description='IBATS（Integration Backtest Analysis Trade System）的公共模块，所有Feeder, Trader均集成这个模块，并使用其提供的一些公共工具',
       long_description=long_description,
       long_description_content_type="text/markdown",
@@ -38,6 +38,7 @@ setup(name='IBATS_Common',
           "Topic :: Software Development",
       ),
       install_requires=[
+          'IBATS-Utils>=1.2.12',
           'numpy<1.19.0',
           'pandas>=0.25.0',
           'scipy>=1.4.1',
